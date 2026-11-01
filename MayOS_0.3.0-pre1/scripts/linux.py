@@ -246,7 +246,7 @@ def fastfetch_loader(path: Path) -> dict:
         raise RuntimeError(f"Fastfetch ELF requests unsupported interpreter: {interpreter}")
     dynamic = subprocess.run(["readelf", "-d", str(path)], capture_output=True, text=True, check=True)
     needed = re.findall(r"Shared library: \[([^\]]+)\]", dynamic.stdout)
-    if set(needed).difference({"libc.so"}):
+    if set(needed).difference({"libc.so", "libc.musl-x86_64.so.1"}):
         raise RuntimeError(f"Fastfetch requires external shared libraries: {needed}")
     loader = Path(interpreter)
     if not loader.is_file():
@@ -341,6 +341,8 @@ def build_initramfs(busybox: Path, fastfetch: Path, version: str) -> dict:
     if (OUT / "fastfetch-loader").is_file():
         entries.append(("lib/ld-musl-x86_64.so.1", stat.S_IFREG | 0o755,
                         (OUT / "fastfetch-loader").read_bytes(), 0, 0))
+        entries.append(("lib/libc.musl-x86_64.so.1", stat.S_IFLNK | 0o777,
+                        b"ld-musl-x86_64.so.1", 0, 0))
     for applet in sorted(set(applets)):
         if re.fullmatch(r"[A-Za-z0-9_.\[\]-]+", applet) and applet != "busybox":
             entries.append(("bin/" + applet, stat.S_IFLNK | 0o777, b"busybox", 0, 0))
