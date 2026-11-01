@@ -225,7 +225,7 @@ def busybox_path(requested: str | None) -> Path:
 def fastfetch_loader(path: Path) -> dict:
     """Allow native static x86_64 ELF or a musl ELF with no extra shared libs."""
     data = path.read_bytes()
-    if len(data) < 64 or data[:7] != b"\\x7fELF\\x02\\x01\\x01" or struct.unpack_from("<H", data, 18)[0] != 62:
+    if len(data) < 64 or data[:7] != b"\x7fELF\x02\x01\x01" or struct.unpack_from("<H", data, 18)[0] != 62:
         raise RuntimeError("Fastfetch must be an x86_64 ELF64 binary")
     phoff = struct.unpack_from("<Q", data, 32)[0]
     phentsize, phnum = struct.unpack_from("<HH", data, 54)
@@ -235,16 +235,17 @@ def fastfetch_loader(path: Path) -> dict:
     for i in range(phnum):
         offset = phoff + i * phentsize
         if struct.unpack_from("<I", data, offset)[0] == 3:
-            start, length = struct.unpack_from("<QQ", data, offset + 8)[0], struct.unpack_from("<QQ", data, offset + 32)[1]
+            start = struct.unpack_from("<Q", data, offset + 8)[0]
+            length = struct.unpack_from("<Q", data, offset + 32)[0]
             if start + length > len(data) or length > 256:
                 raise RuntimeError("Invalid Fastfetch ELF interpreter")
-            interpreter = data[start:start + length].split(b"\\0", 1)[0].decode("ascii")
+            interpreter = data[start:start + length].split(b"\0", 1)[0].decode("ascii")
     if interpreter is None:
         return {"interpreter": None}
     if interpreter != "/lib/ld-musl-x86_64.so.1":
         raise RuntimeError(f"Fastfetch ELF requests unsupported interpreter: {interpreter}")
     dynamic = subprocess.run(["readelf", "-d", str(path)], capture_output=True, text=True, check=True)
-    needed = re.findall(r"Shared library: \\[([^\\]]+)\\]", dynamic.stdout)
+    needed = re.findall(r"Shared library: \[([^\]]+)\]", dynamic.stdout)
     if set(needed).difference({"libc.so"}):
         raise RuntimeError(f"Fastfetch requires external shared libraries: {needed}")
     loader = Path(interpreter)
@@ -260,7 +261,7 @@ def fastfetch_path(requested: str | None, *, offline: bool = False) -> tuple[Pat
     """Obtain real Fastfetch, never a shell script or rebranded builtin.
 
     Default distribution is the checksum-pinned upstream musl release. Explicit
-    --fastfetch must be an executable static x86_64 ELF. The archive itself is
+    --fastfetch must be an x86_64 musl or fully static ELF. The archive itself is
     retained so binary provenance can be audited.
     """
     target = OUT / "fastfetch"
