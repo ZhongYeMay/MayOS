@@ -160,6 +160,7 @@ def main():
     parser.add_argument("--version", default="latest")
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--busybox", type=Path)
+    parser.add_argument("--fastfetch", type=Path)
     parser.add_argument("--grub-mkrescue", default=os.environ.get("GRUB_MKRESCUE", "grub-mkrescue"))
     parser.add_argument("--grub-mkstandalone", default=os.environ.get("GRUB_MKSTANDALONE", "grub-mkstandalone"))
     parser.add_argument("--grub-file", default=os.environ.get("GRUB_FILE", "grub-file"))
@@ -194,11 +195,15 @@ def main():
     rebuild = manifest is None or (args.version != "latest" and manifest["version"] != args.version)
     if args.busybox and manifest and sha256(args.busybox) != manifest["busybox"]["sha256"]:
         rebuild = True
+    if args.fastfetch and manifest and sha256(args.fastfetch) != manifest["fastfetch"]["sha256"]:
+        rebuild = True
     if rebuild:
         command = [sys.executable, str(ROOT / "scripts/linux.py"), "build",
                    "--version", args.version, "--jobs", str(args.jobs)]
         if args.busybox:
             command += ["--busybox", str(args.busybox.resolve())]
+        if args.fastfetch:
+            command += ["--fastfetch", str(args.fastfetch.resolve())]
         subprocess.run(command, cwd=ROOT, check=True)
         manifest = checked_payloads()
 

@@ -13,7 +13,7 @@
 #endif
 static u32 pixels[W * H];
 static u32 bg = 0x101924, panel = 0x18232e, ink = 0xe6eef3, muted = 0x91a3b2, line = 0x2b3945,
-           accent = 0x50c6b3;
+           accent = 0xe95420;
 static int dark = 1;
 static void rect(int x, int y, int w, int h, u32 c) {
     if (x < 0) {
@@ -137,7 +137,7 @@ static int inside(int px, int py, int x, int y, int w, int h) {
 
 static void icon(int x, int y, int kind, int size) {
     u32 c = kind == 0 ? 0xe2b96f : kind == 1 ? 0x83a8cd : kind == 2 ? accent : 0x8cae9f;
-    roundrect(x, y, size, size, dark ? 0x25333f : 0xe2e9ec);
+    roundrect(x, y, size, size, dark ? 0x39323e : 0xf0ecef);
     int k = size / 4;
     if (kind == 0) {
         border(x + k - 1, y + k + 3, size - 2 * k + 2, size / 2, c);
@@ -155,8 +155,8 @@ static void icon(int x, int y, int kind, int size) {
     }
 }
 static void button(int x, int y, int w, const char *s, int primary) {
-    roundrect(x, y, w, 30, primary ? accent : (dark ? 0x253440 : 0xe9eef1));
-    text(x + 12, y + 4, s, primary ? 0x102722 : ink);
+    roundrect(x, y, w, 30, primary ? accent : (dark ? 0x453a49 : 0xf0ecf0));
+    text(x + 12, y + 4, s, primary ? 0xffffff : ink);
 }
 typedef struct {
     int x, y, w, h, open, min, max, ox, oy, ow, oh;
@@ -226,6 +226,7 @@ static void emit(const char *s) {
     scroll = 0;
     dirty = 1;
 }
+#ifndef MAYOS_LINUX
 static void emitnum(const char *label, u32 value, const char *tail) {
     char b[100], n[16];
     copy(b, label, 100);
@@ -234,6 +235,7 @@ static void emitnum(const char *label, u32 value, const char *tail) {
     copy(b + strlen(b), tail, 100 - strlen(b));
     emit(b);
 }
+#endif
 static void terminal_init(void) {
     emit("MayOS Workstation " MAYOS_RELEASE " / MayShell");
     emit(platform_kernel());
@@ -334,7 +336,7 @@ static void shell(void) {
     char *c = argv[0];
     int target = argc > 1 ? resolve(argv[1], cwd) : -1;
     if (!strcmp(c, "help")) {
-        emit("help  neofetch  clear  pwd  ls [path]  cd <path>");
+        emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest");
         emit("theme light|dark  reboot  shutdown");
@@ -423,28 +425,26 @@ static void shell(void) {
 #else
         emit(fs_sync() ? "MayFS: synchronized to ATA disk" : "MayFS: disk unavailable");
 #endif
-    } else if (!strcmp(c, "neofetch")) {
-        emit("MayOS WORKSTATION");
-        emit("OS: MayOS " MAYOS_RELEASE);
+    } else if (!strcmp(c, "fastfetch") || !strcmp(c, "neofetch")) {
 #ifdef MAYOS_LINUX
-        char kernel_line[100] = "Kernel: ";
-        copy(kernel_line + 8, platform_kernel(), sizeof(kernel_line) - 8);
-        emit(kernel_line);
-        emit("Platform: native Linux userspace / x86_64");
+        char result[1536];
+        if (platform_fastfetch(result, sizeof(result))) {
+            emit(result);
+        } else {
+            emit("Fastfetch is not installed in this live image.");
+            emit("Rebuild Linux with a verified static --fastfetch binary.");
+        }
 #else
+        emit("MayOS / native x86 kernel");
+        emit("Fastfetch requires the Linux boot environment.");
+        emit("OS: MayOS " MAYOS_RELEASE);
         emit("Kernel: MayKernel x86 (custom)");
-        emit("Platform: custom x86 kernel / 32-bit");
-#endif
-        emit("Shell: MayShell / desktop command interface");
         emit("Display: 1024 x 768 / 32 bpp");
         emitnum("Memory: ", memory_mb, " MiB");
         emitnum("Uptime: ", ticks / 100, " seconds");
-#ifdef MAYOS_LINUX
-        emit("Disk: RAM session / temporary files");
-#else
         emit(disk_ready ? "Disk: ATA / MayFS" : "Disk: RAM fallback");
-#endif
         emit(cpu_name);
+#endif
     } else if (!strcmp(c, "memtest")) {
         u32 before = free_pages;
         u32 *a = page_alloc(), *b = page_alloc();
@@ -570,62 +570,49 @@ static void accept_modal(void) {
     modal = 0;
 }
 static void palette(void) {
-    bg = dark ? 0x101924 : 0xf0f4f5;
-    panel = dark ? 0x18232e : 0xffffff;
-    ink = dark ? 0xe6eef3 : 0x233640;
-    muted = dark ? 0x91a3b2 : 0x647985;
-    line = dark ? 0x2b3945 : 0xdde5e8;
+    bg = dark ? 0x26212b : 0xf6f4f6;
+    panel = dark ? 0x312b35 : 0xffffff;
+    ink = dark ? 0xf5f1f5 : 0x2c2630;
+    muted = dark ? 0xb8aeba : 0x766c79;
+    line = dark ? 0x4b414e : 0xe5e0e6;
 }
 static void desktop(void) {
+    /* Aubergine workstation wallpaper and a restrained Ubuntu-like dock. */
     for (int y = 0; y < H; y++)
-        rect(0, y, W, 1, blend(0x0b121c, 0x17343d, y * 135 / H));
-    /* A quiet architectural grid and two offset planes, drawn without assets. */
-    for (int x = 360; x < W; x += 56)
-        rect(x, 86, 1, 574, 0x162a35);
-    for (int y = 100; y < 690; y += 56)
-        rect(360, y, W - 360, 1, 0x162a35);
-    for (int y = 140; y < 650; y++) {
-        int x = 700 + (y - 140) / 3;
-        rect(x, y, 3, 1, 0x23454a);
-        if (y > 260)
-            rect(x - 150, y, 1, 1, 0x28434d);
-    }
-    large_text(700, 566, "MayOS", 0x3c5c66);
-    text(702, 611, "WORKSTATION / " MAYOS_RELEASE, 0x55737d);
-    text(34, 633, "MAYOS WORKSPACE", 0x74929d);
-    text(34, 658, "为创造而构建。", 0xa1b8bf);
-
-    /* The top panel stays dark in both appearance modes. */
-    rect(0, 0, W, 38, 0x0b121a);
-    rect(0, 37, W, 1, 0x263743);
-    rect(20, 12, 4, 14, accent);
-    text(33, 9, "MayOS", 0xe7f0f2);
-    text(94, 9, "工作区 01", 0x8da5b0);
-    text(222, 9, "WORKSTATION", 0x63808f);
-    circle(772, 19, 3, accent);
-    text(785, 9, PLATFORM_BADGE, 0xb4c8d1);
-    text(923, 9, "TEST BUILD", 0x75929e);
+        rect(0, y, W, 1, blend(0x231826, 0x4a3044, y * 190 / H));
+    rect(0, 0, W, 38, 0x211b25);
+    rect(0, 37, W, 1, 0x413847);
+    rect(19, 12, 4, 14, accent);
+    text(32, 9, "MayOS", 0xf4f0f4);
+    text(104, 9, "Activities", 0xd7cdd7);
+    text(801, 9, PLATFORM_BADGE, 0xd7cdd7);
+    text(944, 9, "TEST", 0xae9fad);
+    roundrect(10, 51, 78, 490, 0x292330);
+    rect(12, 62, 3, 68, accent);
     const char *names[] = {"文件", "设置", "终端", "回收站"};
     for (int i = 0; i < 4; i++) {
-        icon(34, 83 + i * 100, i, 44);
-        text(i == 3 ? 32 : 40, 132 + i * 100, names[i], 0xc8d9df);
+        icon(32, 83 + i * 100, i, 44);
+        text(i == 3 ? 30 : 38, 132 + i * 100, names[i], 0xdbd2dc);
     }
+    large_text(727, 596, "MayOS", 0x89697c);
+    text(728, 639, "WORKSTATION / " MAYOS_RELEASE, 0xb19cab);
 }
 static void frame(int id) {
     Window *w = &windows[id];
-    rect(w->x + 5, w->y + 7, w->w, w->h, 0x080f16);
+    rect(w->x + 4, w->y + 6, w->w, w->h, 0x17131a);
     roundrect(w->x, w->y, w->w, w->h, panel);
-    rect(w->x + 1, w->y + 1, w->w - 2, 40, dark ? 0x202e3a : 0xf6f8f9);
+    border(w->x, w->y, w->w, w->h, line);
+    rect(w->x + 1, w->y + 1, w->w - 2, 40, dark ? 0x3a333e : 0xf4f1f4);
     rect(w->x + 1, w->y + 41, w->w - 2, 1, line);
-    rect(w->x + 1, w->y + 1, 3, 40, focus == id ? accent : line);
     icon(w->x + 13, w->y + 10, id == 0 ? 0 : id == 1 ? 1 : 2, 22);
     text(w->x + 45, w->y + 10, w->title, focus == id ? ink : muted);
     int controls = w->x + w->w - 119;
     for (int i = 0; i < 3; i++)
-        rect(controls + i * 36 + 2, w->y + 8, 30, 26, dark ? 0x283844 : 0xe9eff1);
-    rect(controls + 11, w->y + 24, 11, 1, muted);
+        circle(controls + i * 36 + 17, w->y + 21, 12,
+               i == 2 ? accent : (dark ? 0x514653 : 0xe4dfe4));
+    rect(controls + 11, w->y + 21, 11, 1, muted);
     border(controls + 48, w->y + 16, 10, 10, muted);
-    text(w->x + w->w - 35, w->y + 10, "×", muted);
+    text(w->x + w->w - 35, w->y + 10, "×", 0xffffff);
 }
 static void settings(Window *w) {
     int x = w->x, y = w->y, cx = x + 204, cy = y + 65, cw = w->w - 234;
@@ -637,7 +624,7 @@ static void settings(Window *w) {
     for (int i = 0; i < 4; i++) {
         int yy = y + 106 + i * 46;
         if (settings_tab == i) {
-            roundrect(x + 12, yy, 152, 36, dark ? 0x223c42 : 0xdeeeea);
+            roundrect(x + 12, yy, 152, 36, dark ? 0x473748 : 0xf8e8e1);
             rect(x + 12, yy + 8, 2, 20, accent);
         }
         text(x + 25, yy + 7, marks[i], settings_tab == i ? accent : muted);
@@ -658,6 +645,28 @@ static void settings(Window *w) {
         text(cx + 78, cy + 117, device, ink);
         text(cx + 78, cy + 146, platform_kernel(), accent);
         text(cx + 78, cy + 170, PLATFORM_ARCH, muted);
+#ifdef MAYOS_LINUX
+        text(cx, cy + 217, "FASTFETCH / SYSTEM", ink);
+        rect(cx, cy + 243, cw, 1, line);
+        char fastfetch_lines[1152];
+        if (platform_fastfetch(fastfetch_lines, sizeof(fastfetch_lines))) {
+            char *start = fastfetch_lines;
+            for (int n = 0; n < 5 && *start; n++) {
+                char *end = start;
+                while (*end && *end != '\n')
+                    end++;
+                char terminator = *end;
+                *end = 0;
+                text(cx, cy + 254 + n * 20, start, ink);
+                if (!terminator)
+                    break;
+                start = end + 1;
+            }
+        } else {
+            text(cx, cy + 266, "Fastfetch not bundled in this Linux image.", muted);
+            text(cx, cy + 294, "Rebuild with --fastfetch /path/to/fastfetch.", muted);
+        }
+#else
         text(cx, cy + 217, "硬件与运行环境", ink);
         rect(cx, cy + 243, cw, 1, line);
         char shortcpu[49];
@@ -669,6 +678,7 @@ static void settings(Window *w) {
         text(cx + 143, cy + 284, "MiB / 实际检测", muted);
         text(cx, cy + 314, "显示", muted);
         text(cx + 94, cy + 314, "1024 × 768 / 32-bit", ink);
+#endif
         rect(cx, cy + 346, cw, 1, line);
         text(cx, cy + 357, "MayOS Team 2023 - 2026.", ink);
         text(cx, cy + 383, "This version of MayOS is for test use only.", 0xd5b583);
@@ -696,7 +706,7 @@ static void settings(Window *w) {
             }
         }
         text(cx, cy + 353, "主题色 / Accent", ink);
-        u32 colors[] = {0x50c6b3, 0x6aa9df, 0xae91da, 0xdab078};
+        u32 colors[] = {0xe95420, 0x6d8ac1, 0x9566a0, 0x7c9d83};
         for (int i = 0; i < 4; i++) {
             circle(cx + 19 + i * 64, cy + 410, 18, colors[i]);
             if (accent == colors[i])
@@ -746,12 +756,12 @@ static void settings(Window *w) {
         large_text(cx, cy + 26, "开源组件", ink);
         text(cx, cy + 77, "感谢以下项目。各组件保留各自许可证。", muted);
         const char *names[] = {"GNU GRUB", "Linux kernel", "BusyBox", "musl libc",
-                                "QEMU + OVMF", "Noto CJK / DejaVu"};
+                                 "Fastfetch", "QEMU + OVMF", "Noto CJK / DejaVu"};
         const char *roles[] = {"启动管理 / GPL-3.0-or-later", "Linux 模式 / GPL-2.0-only",
-                                "Linux 用户空间 / GPL-2.0-only", "Linux C 运行库 / MIT",
-                                "虚拟化与 UEFI 测试工具", "界面字体 / OFL-1.1 与字体许可证"};
-        for (int i = 0; i < 6; i++) {
-            int yy = cy + 118 + i * 53;
+                                 "Linux 用户空间 / GPL-2.0-only", "Linux C 运行库 / MIT",
+                                 "系统信息工具 / MIT", "虚拟化与 UEFI 测试", "界面字体 / OFL-1.1"};
+        for (int i = 0; i < 7; i++) {
+            int yy = cy + 115 + i * 47;
             text(cx, yy, names[i], ink);
             text(cx + 184, yy, roles[i], muted);
             rect(cx, yy + 35, cw, 1, line);
@@ -781,7 +791,7 @@ static void files_draw(Window *w) {
         "文档", "桌面", "回收站"};
     for (int i = 0; i < 4; i++) {
         if (folder == i)
-            roundrect(x + 10, y + 103 + i * 40, 128, 33, dark ? 0x223c42 : 0xdeeeea);
+            roundrect(x + 10, y + 103 + i * 40, 128, 33, dark ? 0x473748 : 0xf8e8e1);
         text(x + 22, y + 109 + i * 40, nav[i], folder == i ? accent : ink);
     }
     text(x + 20, y + w->h - 55,
@@ -820,7 +830,7 @@ static void files_draw(Window *w) {
     for (int k = 0; k + file_scroll < file_count && k < visible; k++) {
         int i = file_list[k + file_scroll], yy = y + 184 + k * 44;
         if (selected == i)
-            roundrect(cx - 4, yy, w->w - 178, 40, dark ? 0x223c42 : 0xdeeeea);
+            roundrect(cx - 4, yy, w->w - 178, 40, dark ? 0x473748 : 0xf8e8e1);
         icon(cx + 7, yy + 8, files[i].dir ? 0 : 2, 24);
         text(cx + 45, yy + 10, files[i].name, ink);
         text(x + w->w - 190, yy + 10, files[i].dir ? "文件夹" : "文本文件", muted);

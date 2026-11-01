@@ -18,6 +18,7 @@ typedef unsigned long long u64;
 #define strcmp mayos_strcmp
 #define reboot mayos_reboot
 const char *platform_kernel(void);
+int platform_fastfetch(char *destination, int capacity);
 void platform_idle(void);
 #else
 static inline const char *platform_kernel(void) { return "MayOS custom x86"; }

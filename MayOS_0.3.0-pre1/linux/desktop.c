@@ -119,6 +119,27 @@ void number(char *buffer, u32 value) {
 
 const char *platform_kernel(void) { return kernel_label; }
 
+/* Fastfetch is an actual executable, never a rebranded built-in mock.
+   Cache its output so repainting the framebuffer cannot repeatedly spawn it. */
+int platform_fastfetch(char *destination, int capacity) {
+    static char cached[2048];
+    static int state = -1;
+    if (capacity <= 0 || !destination)
+        return 0;
+    if (state < 0) {
+        FILE *process = popen("/usr/bin/fastfetch --config none --pipe --logo none --structure os:kernel:cpu:memory:uptime 2>/dev/null", "r");
+        state = 0;
+        if (process) {
+            size_t n = fread(cached, 1, sizeof(cached) - 1, process);
+            cached[n] = 0;
+            if (pclose(process) == 0 && n)
+                state = 1;
+        }
+    }
+    copy(destination, state ? cached : "", capacity);
+    return state;
+}
+
 static void update_ticks(void) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);

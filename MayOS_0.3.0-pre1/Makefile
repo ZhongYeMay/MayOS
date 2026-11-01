@@ -8,6 +8,7 @@ QEMU64 ?= qemu-system-x86_64
 LINUX_VERSION ?= latest
 LINUX_JOBS ?= 4
 BUSYBOX ?=
+FASTFETCH ?=
 BOOT_FIRMWARE ?= hybrid
 OVMF_CODE ?= /usr/share/OVMF/OVMF_CODE_4M.fd
 OVMF_VARS ?= /usr/share/OVMF/OVMF_VARS_4M.fd
@@ -42,11 +43,11 @@ test: all
 # An explicit Linux build resolves latest stable at kernel.org. `dual` reuses
 # verified local payloads; run `linux-update` when a newer stable is wanted.
 linux: | build
-	$(PYTHON) scripts/linux.py build --version "$(LINUX_VERSION)" --jobs "$(LINUX_JOBS)" $(if $(BUSYBOX),--busybox "$(BUSYBOX)")
+	$(PYTHON) scripts/linux.py build --version "$(LINUX_VERSION)" --jobs "$(LINUX_JOBS)" $(if $(BUSYBOX),--busybox "$(BUSYBOX)") $(if $(FASTFETCH),--fastfetch "$(FASTFETCH)")
 linux-update: | build
-	$(PYTHON) scripts/linux.py build --version latest --jobs "$(LINUX_JOBS)" $(if $(BUSYBOX),--busybox "$(BUSYBOX)")
+	$(PYTHON) scripts/linux.py build --version latest --jobs "$(LINUX_JOBS)" $(if $(BUSYBOX),--busybox "$(BUSYBOX)") $(if $(FASTFETCH),--fastfetch "$(FASTFETCH)")
 dual: build/mayos.elf build/mayos-disk.img
-	$(PYTHON) scripts/dual_iso.py --version "$(LINUX_VERSION)" --jobs "$(LINUX_JOBS)" --firmware "$(BOOT_FIRMWARE)" $(if $(BUSYBOX),--busybox "$(BUSYBOX)") --grub-mkrescue '$(GRUB_MKRESCUE)'
+	$(PYTHON) scripts/dual_iso.py --version "$(LINUX_VERSION)" --jobs "$(LINUX_JOBS)" --firmware "$(BOOT_FIRMWARE)" $(if $(BUSYBOX),--busybox "$(BUSYBOX)") $(if $(FASTFETCH),--fastfetch "$(FASTFETCH)") --grub-mkrescue '$(GRUB_MKRESCUE)'
 run-dual: dual
 	$(QEMU64) $(if $(QEMU_DATA_DIR),-L "$(QEMU_DATA_DIR)") -machine pc -accel tcg -cpu max -m 512 -vga std -cdrom build/mayos-dual.iso -drive file=build/mayos-disk.img,format=raw,if=ide,index=0 -boot d -serial stdio -no-reboot
 test-dual: dual
