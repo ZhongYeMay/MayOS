@@ -11,7 +11,7 @@ COM1 / ttyS0 保留独立 BusyBox shell。桌面复用 MayOS 的窗口、文件�
 
 桌面文件保存在该进程的 RAM 对象中，桌面退出即丢失；与 Linux shell 中的
 临时根文件系统是两个独立空间。系统不自动挂载、格式化或写入 MayFS 数据盘。
-Linux 根目录内的临时文件在关机后丢失。尚无桌面文件持久化、包管理器、
+Linux 根目录内的临时文件在关机后丢失。系统信息窗口与 MayShell `fastfetch` 命令由真实的静态 x86_64 Fastfetch 进程生成；自研 MayKernel 分支不具备 Linux 用户态，不会假称运行 Fastfetch。尚无桌面文件持久化、包管理器、
 完整发行版服务或应用沙箱。
 
 启动菜单的 Linux 文本救援项使用 `mayos.desktop=0`，tty1 改为 BusyBox shell。
@@ -37,6 +37,8 @@ python3 scripts/linux.py status
 python3 scripts/linux.py build --version 7.3.1 --jobs 4 \
   --busybox /path/to/busybox
 ```
+
+Fastfetch 默认从官方 `fastfetch-cli/fastfetch` 的 `2.69.0` 发行版下载 musl x86_64 包，并与脚本内固定的官方 SHA-256 比对，提取真实 ELF64 可执行文件到 initramfs 的 `/usr/bin/fastfetch`。也可自行提供已验证的静态二进制：`make linux FASTFETCH=/path/to/fastfetch`。构建时校验 ELF64、无动态解释器并试运行 `--version`。官方 Fastfetch 使用 MIT 许可证，许可原文随系统分发；源码仓库：https://github.com/fastfetch-cli/fastfetch 。
 
 `--desktop-cc /path/to/musl-gcc` 或环境变量 `MAYOS_LINUX_CC` 可指定桌面编译器。
 脚本从实际 Linux 源码导出 UAPI 头文件，并独立编译静态 ELF64 桌面二进制。
