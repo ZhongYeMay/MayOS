@@ -16,12 +16,25 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-24.04
+    outputs:
+      pages_enabled: ${{ steps.pagescheck.outputs.enabled }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
       - name: Check HTML links and truthful release status
         run: python3 website/check_site.py
+      - name: Check whether GitHub Pages has been enabled
+        id: pagescheck
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/pages" >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Website verified, but GitHub Pages is not enabled. Set Settings > Pages > Source to GitHub Actions, then rerun this workflow." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Publish a standalone website artifact
         uses: actions/upload-artifact@v4
         with:
@@ -29,6 +42,7 @@ jobs:
           path: website/
           retention-days: 14
   deploy:
+    if: needs.verify.outputs.pages_enabled == 'true'
     needs: verify
     runs-on: ubuntu-24.04
     environment:
@@ -39,8 +53,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: website
