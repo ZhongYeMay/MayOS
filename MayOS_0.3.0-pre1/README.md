@@ -1,10 +1,10 @@
 # MayOS 0.3.0-pre1 — BIOS / UEFI 双内核工作台
 
-> **仓库版本说明：** 本目录是实验性的现代版本 `MayOS 0.3.0-pre1`。仓库中的 `MayOS_0.1_Eng`、`MayOS_0.2_Eng` 属于历史 16 位版本线；它们与本目录分别保留，不应仅凭版本编号推断源码沿袭或二进制兼容。详见 [版本线说明](docs/repository-lineage.md)。
->
-> 本目录仅包含源码、文档和必要资源。可运行镜像、录像和匹配的完整第三方源码包从 [GitHub Releases](https://github.com/ZhongYeMay/MayOS/releases) 获取；本版说明见 [RELEASE_NOTES.md](RELEASE_NOTES.md)。
+> **当前仓库状态（2026-11-01）：** 本目录源代码已经加入 Ubuntu 风格窗口、真实 Fastfetch 的 Linux 模式集成以及 XRGB8888 图形刷新优化；这些新提交尚未打包成经过验证的新 ISO。原先发行包仍是历史 0.3.0-pre1 测试构建。早期 `MayOS_0.1_Eng` 和 `MayOS_0.2_Eng` 已从工作树删除，可从 Git 提交历史查看。见 [版本说明](docs/repository-lineage.md)。
 
-MayOS 是可启动的桌面操作系统原型。此版本提供同一张 BIOS / **UEFI x64** 混合 ISO，可选择自研 MayKernel、**Linux 7.3.1 图形桌面**或 Linux 救援终端。两种桌面共用专业工作站风格界面：石墨灰底色、青绿色重点色、精简顶栏、应用启动区、窗口控制与清晰的设置侧栏。
+> 源码、文档及许可通知保存在仓库；请到 [GitHub Releases](https://github.com/ZhongYeMay/MayOS/releases) 核对**实际存在**的附件，不要假设新版本已经发布。新版网页源码见 [website/](../website/)。
+
+MayOS 是实验性的双启动桌面操作系统原型。自研 MayKernel 为 x86 32 位；独立 Linux 图形模式为 x86_64。GRUB 负责 BIOS / UEFI x64 引导。最新源码的图形界面采用 Ubuntu 风格的深紫灰底色、橙色重点色、简洁顶栏、应用 Dock 和克制的窗口控件。
 
 **MayOS Team 2023 - 2026.**
 
@@ -20,18 +20,26 @@ MayOS 是可启动的桌面操作系统原型。此版本提供同一张 BIOS / 
 
 Linux 图形模式同时保留串口 BusyBox shell。桌面的 RAM 文件区和 shell 的 Linux 根文件系统是两个独立空间。Linux 默认不挂载、不格式化、不写入 MayFS；尚未实现跨内核共享文件。
 
-本次固定内核为 **Linux 7.3.1**，对应 kernel.org 于 **2026-10-30** 发布、在 **2026-11-01** 查询到的最新稳定版。版本、源码与产物 SHA-256 见 `build/linux/manifest.json`；启动后可用 `uname -r` 或图形终端 `neofetch` 核对。后续执行 `make linux-update` 获取新的稳定版后，需要重新验证。
+本次固定内核为 **Linux 7.3.1**，对应 kernel.org 于 **2026-10-30** 发布、在 **2026-11-01** 查询到的最新稳定版。版本、源码与产物 SHA-256 见 `build/linux/manifest.json`；启动后可用 `uname -r` 或图形终端 `fastfetch`（新源码 Linux 模式） 核对。后续执行 `make linux-update` 获取新的稳定版后，需要重新验证。
 
 ![新版关于界面](docs/desktop.png)
 
-## 本版变化
+## 2026-11-01 源码开发更新（尚未提供新版 ISO）
+
+- 为 Linux x86_64 模式加入真实 Fastfetch 可执行文件打包流程及系统信息窗、命令行集成。
+- 桌面改为更专业、减少卡通感的 Ubuntu 风格深紫灰/橙色界面。
+- Linux framebuffer 对原生 XRGB8888 颜色布局使用逐行拷贝的优化路径，其余支持布局维持通用像素转换。
+- 增加 `website/` 网站源文件，提供网站持续更新和部署工作流。
+- 以上是**仓库源码状态**；下面的旧版发行记录、测试与录屏不等同于新源码的正式验证。
+
+## 本版变化（历史 0.3.0-pre1 发布记录）
 
 - 同一 ISO 包含 GRUB `i386-pc` BIOS 与 `x86_64-efi` 启动程序；标准 EFI 回退路径为 `EFI/BOOT/BOOTX64.EFI`。
 - 自研内核采用 Multiboot 内存映射，避开 UEFI 保留内存；修复只根据连续低地址内存统计导致的可用内存误报。
 - Linux 图形后端使用 fbdev、evdev、Linux 时钟与系统信息，静态链接 musl；保留独立救援项与失败时的明确错误回退。
 - “关于”展示版本、当前真实内核和两句指定声明；“开源组件”列出 Linux、GNU GRUB、BusyBox、musl、字体以及 QEMU / OVMF 的用途与许可。
 - 保留文件管理、编辑器、MayShell、主题切换、窗口操作、应用搜索和猫咪彩蛋。
-- 官网同步发布镜像、源码、校验值、更新记录与两条真实 UEFI 启动录像。
+- 历史官网提供原 0.3.0-pre1 测试包与录屏；本轮新代码尚未制作对应镜像和录屏。
 
 UEFI x64 指固件和 EFI 引导程序架构；**MayKernel 本身仍为 32 位**。Linux 内核和 Linux 桌面为 x86_64。本次没有启用 Secure Boot。
 
@@ -71,7 +79,7 @@ qemu-system-x86_64 -machine pc -accel tcg -cpu max -m 512 -vga std \
 
 ### Linux 串口与救援终端
 
-图形终端中的 MayShell 支持 `help`、`neofetch`、`ls`、`write`、`cat`、`memtest` 等内建命令。它不是 Linux shell；完整 BusyBox shell 可通过上述 QEMU 的串口标准输入输出使用，或选择第三个救援启动项。
+图形终端中的 MayShell 支持 `help`、`fastfetch`、`ls`、`write`、`cat`、`memtest` 等内建命令。它不是 Linux shell；完整 BusyBox shell 可通过上述 QEMU 的串口标准输入输出使用，或选择第三个救援启动项。
 
 ```sh
 uname -r
@@ -131,7 +139,7 @@ python3 scripts/linux.py build --version 7.3.1 --offline --rebuild --jobs 4
 - “设置 → 关于系统”显示当前内核、处理器、内存和测试声明；“开源组件”展示第三方说明。
 
 ```text
-neofetch
+fastfetch
 memtest
 mkdir Projects
 write Projects/hello.txt Hello from MayOS
@@ -162,7 +170,7 @@ python3 scripts/record_boot.py --firmware uefi --kernel linux \
 
 QMP 测试操作真实 PS/2 键鼠，检查客体串口、文件内容、冷启动读回与整个数据盘哈希。BIOS 与 UEFI 报告都绑定同一个最终 ISO SHA-256。Linux 模式额外核对 `/sys/firmware/efi`（UEFI）、`/dev/fb0`、真实桌面进程、鼠标编辑与 Ctrl+S、串口 shell 重生和关机。
 
-录屏从启动前开始连续采样真实 QEMU framebuffer，包含固件、GRUB、桌面、“关于”、开源组件、`neofetch` 与文件写入读回；以 1024×768、10 fps 的 H.264 MP4 输出。无音轨。每个视频旁的 JSON 记录 ISO 和视频哈希、时间、帧数及固件哈希。详见 [验证记录](docs/validation.md)。
+录屏从启动前开始连续采样真实 QEMU framebuffer，包含固件、GRUB、桌面、“关于”、开源组件、 `fastfetch`（新版源码）与文件写入读回；以 1024×768、10 fps 的 H.264 MP4 输出。无音轨。每个视频旁的 JSON 记录 ISO 和视频哈希、时间、帧数及固件哈希。详见 [验证记录](docs/validation.md)。
 
 ## 当前边界
 

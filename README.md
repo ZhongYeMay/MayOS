@@ -1,27 +1,33 @@
 # MayOS
 
-## 当前测试版：0.3.0-pre1
+> 实验性桌面操作系统 · MayKernel x86 / Linux x86_64 · BIOS / UEFI x64
 
-MayOS 是实验性操作系统项目。当前源码提供 **MayKernel 自研 x86 32 位桌面**、**Linux x86_64 图形桌面** 和救援环境，使用 GRUB 在 BIOS / x64 UEFI 下选择启动。UEFI x64 支持不代表自研内核为 64 位，也不代表支持 Secure Boot。
+MayOS 是一个不断迭代的系统开发项目。最新版源码提供自研 x86 32 位 MayKernel 桌面、Linux x86_64 用户态图形桌面、BusyBox 救援终端，以及共享的文件管理器、设置、终端与编辑器。
 
-- [当前源码与构建说明](MayOS_0.3.0-pre1/README.md)
-- [版本更新说明](MayOS_0.3.0-pre1/RELEASE_NOTES.md)
-- [第三方组件及许可](MayOS_0.3.0-pre1/docs/third-party/dual-boot.md)
-- [验证记录](MayOS_0.3.0-pre1/docs/validation.md)
-- [GitHub Releases（请核对附件是否已发布）](https://github.com/ZhongYeMay/MayOS/releases)
-- [MayOS 官网](https://mayos-official.business-tea-9633.chatgpt.site/)
+## 代码和网站
 
-Linux 桌面文件目前仅保存在运行进程的 RAM 中；退出桌面后内容丢失。构建和运行条件、已验证范围与限制请以对应版本文档为准。
+- [当前项目源码与构建说明](MayOS_0.3.0-pre1/README.md)
+- [GitHub 当前源码 ZIP](https://github.com/ZhongYeMay/MayOS/archive/refs/heads/main.zip)
+- [新版网站源码与部署说明](website/README.md)
+- [GitHub Pages 网页版本（以部署成功为准）](https://zhongyemay.github.io/MayOS/)
+- [原 MayOS 站点](https://mayos-official.business-tea-9633.chatgpt.site/)
+- [版本说明](MayOS_0.3.0-pre1/RELEASE_NOTES.md)
+- [测试记录](MayOS_0.3.0-pre1/docs/validation.md)
+- [许可与第三方组件](MayOS_0.3.0-pre1/docs/third-party/dual-boot.md)
+- [GitHub Releases](https://github.com/ZhongYeMay/MayOS/releases)
 
-### 桌面改进（开发中）
+## 2026-11-01 开发快照（未打包成新的正式镜像）
 
-[Fastfetch + Ubuntu 风格桌面开发分支](https://github.com/ZhongYeMay/MayOS/tree/feature/fastfetch-ubuntu-ui) 包含新的窗口外观与 Linux 系统信息集成；未合并或未经验证的功能不视为正式发布内容。Fastfetch 仅适用于 Linux 用户态启动项，自研内核使用原生系统信息输出。
+- 采用 Ubuntu 风格的深紫灰窗口、橙色强调色及扁平化界面，降低卡通感。
+- Linux 会话调用真实 Fastfetch ELF 读取系统信息；自研 MayKernel 不声称能运行 Linux 可执行文件。
+- Linux fbdev 为常见 XRGB8888 布局增加快速逐行拷贝，在其他像素布局下保留转换路径。
+- 新增独立官网源码、静态站点检查和 GitHub Pages 部署尝试。
 
-### 历史说明
+**请区分源码和发布镜像：**上述改动已经进入仓库 `main`，但尚未生成、实测并发布新的匹配 ISO / 视频 / 校验清单。此前 `0.3.0-pre1` 发布包是旧构建，不能据此断言它含这些修改。GitHub Releases 中的旧版本与自动上传失败记录亦须单独核对。
 
-旧版 `MayOS_0.1_Eng/` 与 `MayOS_0.2_Eng/` 文件已从当前工作分支移除，以避免误用早期 16 位实验镜像。它们仍可通过仓库的 Git 提交历史查阅；本次清理**未改写历史提交**。
+MayOS 的 Linux 桌面文件目前存储在进程 RAM 中，关机后不会保留；自研内核运行在 32 位环境。UEFI x64 是固件/引导架构，不等于 64 位自研内核或 Secure Boot 支持。
 
-原仓库 LICENSE 保留；第三方组件遵循各自许可，详见对应声明。清理旧目录不改变任何既有授权。
+仓库早期 16 位 MayOS 0.1 / 0.2 的源文件已从最新工作树删除，但 Git 历史和历史 Release 尚未改写；这不影响当前源码。
 
 MayOS Team 2023 - 2026.  
 This version of MayOS is for test use only.

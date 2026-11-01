@@ -2,6 +2,7 @@ name: MayOS Ubuntu-style desktop and Fastfetch checks
 on:
   push:
     branches:
+      - main
       - feature/fastfetch-ubuntu-ui
   workflow_dispatch:
 permissions:
