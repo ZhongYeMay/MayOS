@@ -27,6 +27,12 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/linux"
 RELEASES_URL = "https://www.kernel.org/releases.json"
+# Pinned official x86_64 musl Fastfetch asset (Fastfetch 2.69.0, MIT license).
+# Its GitHub release asset digest was checked against GitHub release metadata.
+FASTFETCH_VERSION = "2.69.0"
+FASTFETCH_ARCHIVE = "fastfetch-musl-amd64.tar.gz"
+FASTFETCH_URL = f"https://github.com/fastfetch-cli/fastfetch/releases/download/{FASTFETCH_VERSION}/{FASTFETCH_ARCHIVE}"
+FASTFETCH_SHA256 = "e680dd3752472d9042cc297424e80198cea9b258aeecaf8af140b3e48e92689d"
 VERSION_RE = re.compile(r"[1-9][0-9]*\.[0-9]+(?:\.[0-9]+)?\Z")
 INPUT_FILES = {
     "config_sha256": ROOT / "linux/kernel.config",
@@ -43,6 +49,7 @@ INPUT_FILES = {
     "photo_generator_sha256": ROOT / "scripts/photo.py",
     "photo_sha256": ROOT / "assets/easter-cat.jpg",
     "linux_readme_sha256": ROOT / "linux/README.md",
+    "fastfetch_license_sha256": ROOT / "docs/third-party/Fastfetch-MIT.txt",
     "builder_sha256": Path(__file__).resolve(),
 }
 REQUIRED_CONFIG = (
@@ -215,6 +222,65 @@ def busybox_path(requested: str | None) -> Path:
     return cached
 
 
+def fastfetch_path(requested: str | None, *, offline: bool = False) -> tuple[Path, dict]:
+    """Obtain real Fastfetch, never a shell script or rebranded builtin.
+
+    Default distribution is the checksum-pinned upstream musl release. Explicit
+    --fastfetch must be an executable static x86_64 ELF. The archive itself is
+    retained so binary provenance can be audited.
+    """
+    target = OUT / "fastfetch"
+    if requested:
+        supplied = Path(requested).expanduser().resolve()
+        if not supplied.is_file():
+            raise RuntimeError(f"Fastfetch does not exist: {supplied}")
+        validate_static_elf(supplied)
+        if supplied != target:
+            shutil.copyfile(supplied, target)
+        provenance = {"source": "user-provided static binary",
+                      "version": "user-specified", "sha256": sha256(target)}
+    else:
+        archive = OUT / "downloads" / FASTFETCH_ARCHIVE
+        if not archive.is_file():
+            download(FASTFETCH_URL, archive, offline=offline)
+        if sha256(archive) != FASTFETCH_SHA256:
+            raise RuntimeError("Fastfetch official archive SHA-256 mismatch")
+        if not target.exists() or not (OUT / "fastfetch.origin").exists() or (
+                OUT / "fastfetch.origin").read_text().strip() != FASTFETCH_SHA256:
+            # Read a *single regular file*. Do not extract directories,
+            # symlinks, path traversals, or any other entries from upstream.
+            with tarfile.open(archive, "r:gz") as tar:
+                candidates = [m for m in tar if m.isfile() and
+                              (m.name == "fastfetch" or m.name.endswith("/bin/fastfetch"))]
+                if len(candidates) != 1 or candidates[0].size > 60 * 1024 * 1024:
+                    raise RuntimeError("Unexpected Fastfetch archive layout or size")
+                source = tar.extractfile(candidates[0])
+                if source is None:
+                    raise RuntimeError("Unable to read Fastfetch ELF from archive")
+                tmp = target.with_suffix(".tmp")
+                try:
+                    with tmp.open("wb") as dst:
+                        shutil.copyfileobj(source, dst)
+                    validate_static_elf(tmp)
+                    tmp.chmod(0o755)
+                    tmp.replace(target)
+                    (OUT / "fastfetch.origin").write_text(FASTFETCH_SHA256 + "\\n")
+                finally:
+                    tmp.unlink(missing_ok=True)
+        provenance = {"source": FASTFETCH_URL, "archive_sha256": FASTFETCH_SHA256,
+                      "version": FASTFETCH_VERSION, "sha256": sha256(target)}
+    validate_static_elf(target)
+    target.chmod(0o755)
+    try:
+        result = subprocess.run([str(target), "--version"], capture_output=True,
+                                text=True, timeout=15, check=True)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError(f"Fastfetch binary not executable on build host: {exc}") from exc
+    if "fastfetch" not in (result.stdout + result.stderr).lower():
+        raise RuntimeError("Supplied executable did not identify as Fastfetch")
+    return target, provenance
+
+
 def cpio_member(stream: io.BytesIO, inode: int, name: str, mode: int,
                 data: bytes = b"", *, major: int = 0, minor: int = 0) -> None:
     encoded = name.encode() + b"\0"
@@ -227,7 +293,7 @@ def cpio_member(stream: io.BytesIO, inode: int, name: str, mode: int,
     stream.write(b"\0" * (-stream.tell() % 4))
 
 
-def build_initramfs(busybox: Path, version: str) -> dict:
+def build_initramfs(busybox: Path, fastfetch: Path, version: str) -> dict:
     applets, busybox_version = validate_busybox(busybox)
     entries: list[tuple[str, int, bytes, int, int]] = []
     for directory in ("bin", "sbin", "usr", "usr/bin", "usr/sbin", "usr/share", "usr/share/doc",
@@ -236,6 +302,7 @@ def build_initramfs(busybox: Path, version: str) -> dict:
         entries.append((directory, stat.S_IFDIR | (0o1777 if directory == "tmp" else 0o755), b"", 0, 0))
     entries.append(("bin/busybox", stat.S_IFREG | 0o755, busybox.read_bytes(), 0, 0))
     entries.append(("bin/mayos-desktop", stat.S_IFREG | 0o755, (OUT / "mayos-desktop").read_bytes(), 0, 0))
+    entries.append(("usr/bin/fastfetch", stat.S_IFREG | 0o755, fastfetch.read_bytes(), 0, 0))
     for applet in sorted(set(applets)):
         if re.fullmatch(r"[A-Za-z0-9_.\[\]-]+", applet) and applet != "busybox":
             entries.append(("bin/" + applet, stat.S_IFLNK | 0o777, b"busybox", 0, 0))
@@ -256,6 +323,7 @@ def build_initramfs(busybox: Path, version: str) -> dict:
     license_files = list((OUT / "licenses").glob("*"))
     license_files.extend((ROOT / "docs/third-party/dual-boot-licenses").glob("*.txt"))
     license_files.extend((ROOT / "docs/third-party").glob("*-copyright.txt"))
+    license_files.append(ROOT / "docs/third-party/Fastfetch-MIT.txt")
     for path in sorted(license_files):
         if path.is_file():
             entries.append(("usr/share/licenses/" + path.name, stat.S_IFREG | 0o644, path.read_bytes(), 0, 0))
@@ -283,7 +351,7 @@ def verify_manifest(*, check_inputs: bool = True) -> tuple[dict | None, list[str
             errors.append("Unsupported manifest schema or architecture")
         if not VERSION_RE.fullmatch(manifest.get("version", "")):
             errors.append("Invalid kernel version")
-        for name in ("bzImage", "initramfs", "config", "desktop"):
+        for name in ("bzImage", "initramfs", "config", "desktop", "fastfetch"):
             artifact = manifest["artifacts"][name]
             file = (OUT / artifact["path"]).resolve()
             if not file.is_relative_to(OUT.resolve()) or not file.is_file():
@@ -301,9 +369,11 @@ def build(args: argparse.Namespace) -> dict:
     OUT.mkdir(parents=True, exist_ok=True)
     version = selected_version(args.version, offline=args.offline)
     busybox = busybox_path(args.busybox)
+    fastfetch, fastfetch_info = fastfetch_path(args.fastfetch, offline=args.offline)
     manifest, errors = verify_manifest()
     if (not args.rebuild and not errors and manifest and manifest["version"] == version
-            and manifest["busybox"]["sha256"] == sha256(busybox)):
+            and manifest["busybox"]["sha256"] == sha256(busybox)
+            and manifest["fastfetch"]["sha256"] == sha256(fastfetch)):
         print(f"Reusing verified Linux {version} payload", flush=True)
         return manifest
     build_inputs = inputs()
@@ -360,15 +430,16 @@ def build(args: argparse.Namespace) -> dict:
                                 ("LICENSES/preferred/GPL-2.0", "Linux-GPL-2.0"),
                                 ("LICENSES/exceptions/Linux-syscall-note", "Linux-syscall-note")):
         shutil.copyfile(source / source_name, licenses / target)
-    busybox_info = build_initramfs(busybox, version)
+    busybox_info = build_initramfs(busybox, fastfetch, version)
     artifacts = {name: {"path": filename, "sha256": sha256(OUT / filename)}
                  for name, filename in (("bzImage", "bzImage"), ("initramfs", "initramfs.cpio.gz"),
-                                        ("config", "kernel.config"), ("desktop", "mayos-desktop"))}
+                                        ("config", "kernel.config"), ("desktop", "mayos-desktop"),
+                                        ("fastfetch", "fastfetch"))}
     if inputs() != build_inputs:
         raise RuntimeError("Build inputs changed during compilation; rerun to produce a coherent payload")
     manifest = {"schema_version": 1, "version": version, "kernel_release": release,
                 "architecture": "x86_64", "source": source_info, "artifacts": artifacts,
-                "busybox": busybox_info, "inputs": build_inputs,
+                "busybox": busybox_info, "fastfetch": fastfetch_info, "inputs": build_inputs,
                 "desktop": {"process": "mayos-desktop", "linkage": "static musl", "display": "Linux fbdev",
                             "input": "Linux evdev", "filesystem": "process RAM; no block-device writes",
                             "compiler": subprocess.check_output([desktop_compiler, "--version"], text=True).splitlines()[0]},
@@ -386,6 +457,7 @@ def main() -> int:
     command.add_argument("--version", default="latest")
     command.add_argument("--jobs", type=int, default=min(os.cpu_count() or 1, 8))
     command.add_argument("--busybox", help="Path to a static x86_64 BusyBox")
+    command.add_argument("--fastfetch", help="Static x86_64 Fastfetch ELF; defaults to verified upstream musl build")
     command.add_argument("--desktop-cc", help="Path to a static musl userspace compiler (default: musl-gcc)")
     command.add_argument("--offline", action="store_true")
     command.add_argument("--rebuild", action="store_true")
