@@ -28,8 +28,13 @@ jobs:
       - name: Compile statically-linked Linux desktop
         working-directory: MayOS_0.3.0-pre1
         run: |
+          mkdir -p build/uapi-headers/include
+          ln -s /usr/include/linux build/uapi-headers/include/linux
+          ln -s /usr/include/asm-generic build/uapi-headers/include/asm-generic
+          ln -s /usr/include/x86_64-linux-gnu/asm build/uapi-headers/include/asm
           musl-gcc -std=c11 -O2 -Wall -Wextra -Werror -DMAYOS_LINUX \
             -fno-pie -no-pie -static -Ikernel -Ibuild \
+            -isystem build/uapi-headers/include \
             linux/desktop.c kernel/fs.c kernel/gui.c -o build/mayos-desktop-ci
           file build/mayos-desktop-ci
       - name: Download and execute pinned official Fastfetch
