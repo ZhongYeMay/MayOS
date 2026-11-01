@@ -222,6 +222,40 @@ def busybox_path(requested: str | None) -> Path:
     return cached
 
 
+def fastfetch_loader(path: Path) -> dict:
+    """Allow native static x86_64 ELF or a musl ELF with no extra shared libs."""
+    data = path.read_bytes()
+    if len(data) < 64 or data[:7] != b"\\x7fELF\\x02\\x01\\x01" or struct.unpack_from("<H", data, 18)[0] != 62:
+        raise RuntimeError("Fastfetch must be an x86_64 ELF64 binary")
+    phoff = struct.unpack_from("<Q", data, 32)[0]
+    phentsize, phnum = struct.unpack_from("<HH", data, 54)
+    if phentsize < 56 or phoff + phentsize * phnum > len(data):
+        raise RuntimeError("Malformed Fastfetch ELF program headers")
+    interpreter = None
+    for i in range(phnum):
+        offset = phoff + i * phentsize
+        if struct.unpack_from("<I", data, offset)[0] == 3:
+            start, length = struct.unpack_from("<QQ", data, offset + 8)[0], struct.unpack_from("<QQ", data, offset + 32)[1]
+            if start + length > len(data) or length > 256:
+                raise RuntimeError("Invalid Fastfetch ELF interpreter")
+            interpreter = data[start:start + length].split(b"\\0", 1)[0].decode("ascii")
+    if interpreter is None:
+        return {"interpreter": None}
+    if interpreter != "/lib/ld-musl-x86_64.so.1":
+        raise RuntimeError(f"Fastfetch ELF requests unsupported interpreter: {interpreter}")
+    dynamic = subprocess.run(["readelf", "-d", str(path)], capture_output=True, text=True, check=True)
+    needed = re.findall(r"Shared library: \\[([^\\]]+)\\]", dynamic.stdout)
+    if set(needed).difference({"libc.so"}):
+        raise RuntimeError(f"Fastfetch requires external shared libraries: {needed}")
+    loader = Path(interpreter)
+    if not loader.is_file():
+        raise RuntimeError("Install musl runtime to supply the Fastfetch loader")
+    bundled = OUT / "fastfetch-loader"
+    shutil.copyfile(loader, bundled)
+    return {"interpreter": interpreter, "needed": needed,
+            "loader_sha256": sha256(bundled)}
+
+
 def fastfetch_path(requested: str | None, *, offline: bool = False) -> tuple[Path, dict]:
     """Obtain real Fastfetch, never a shell script or rebranded builtin.
 
@@ -234,7 +268,7 @@ def fastfetch_path(requested: str | None, *, offline: bool = False) -> tuple[Pat
         supplied = Path(requested).expanduser().resolve()
         if not supplied.is_file():
             raise RuntimeError(f"Fastfetch does not exist: {supplied}")
-        validate_static_elf(supplied)
+        fastfetch_loader(supplied)
         if supplied != target:
             shutil.copyfile(supplied, target)
         provenance = {"source": "user-provided static binary",
@@ -261,7 +295,7 @@ def fastfetch_path(requested: str | None, *, offline: bool = False) -> tuple[Pat
                 try:
                     with tmp.open("wb") as dst:
                         shutil.copyfileobj(source, dst)
-                    validate_static_elf(tmp)
+                    fastfetch_loader(tmp)
                     tmp.chmod(0o755)
                     tmp.replace(target)
                     (OUT / "fastfetch.origin").write_text(FASTFETCH_SHA256 + "\n")
@@ -269,7 +303,7 @@ def fastfetch_path(requested: str | None, *, offline: bool = False) -> tuple[Pat
                     tmp.unlink(missing_ok=True)
         provenance = {"source": FASTFETCH_URL, "archive_sha256": FASTFETCH_SHA256,
                       "version": FASTFETCH_VERSION, "sha256": sha256(target)}
-    validate_static_elf(target)
+    provenance.update(fastfetch_loader(target))
     target.chmod(0o755)
     try:
         result = subprocess.run([str(target), "--version"], capture_output=True,
@@ -296,13 +330,16 @@ def cpio_member(stream: io.BytesIO, inode: int, name: str, mode: int,
 def build_initramfs(busybox: Path, fastfetch: Path, version: str) -> dict:
     applets, busybox_version = validate_busybox(busybox)
     entries: list[tuple[str, int, bytes, int, int]] = []
-    for directory in ("bin", "sbin", "usr", "usr/bin", "usr/sbin", "usr/share", "usr/share/doc",
+    for directory in ("bin", "sbin", "lib", "usr", "usr/bin", "usr/sbin", "usr/share", "usr/share/doc",
                       "usr/share/doc/mayos", "usr/share/licenses", "etc", "dev",
                       "proc", "sys", "tmp", "run", "root", "mnt"):
         entries.append((directory, stat.S_IFDIR | (0o1777 if directory == "tmp" else 0o755), b"", 0, 0))
     entries.append(("bin/busybox", stat.S_IFREG | 0o755, busybox.read_bytes(), 0, 0))
     entries.append(("bin/mayos-desktop", stat.S_IFREG | 0o755, (OUT / "mayos-desktop").read_bytes(), 0, 0))
     entries.append(("usr/bin/fastfetch", stat.S_IFREG | 0o755, fastfetch.read_bytes(), 0, 0))
+    if (OUT / "fastfetch-loader").is_file():
+        entries.append(("lib/ld-musl-x86_64.so.1", stat.S_IFREG | 0o755,
+                        (OUT / "fastfetch-loader").read_bytes(), 0, 0))
     for applet in sorted(set(applets)):
         if re.fullmatch(r"[A-Za-z0-9_.\[\]-]+", applet) and applet != "busybox":
             entries.append(("bin/" + applet, stat.S_IFLNK | 0o777, b"busybox", 0, 0))
@@ -373,7 +410,8 @@ def build(args: argparse.Namespace) -> dict:
     manifest, errors = verify_manifest()
     if (not args.rebuild and not errors and manifest and manifest["version"] == version
             and manifest["busybox"]["sha256"] == sha256(busybox)
-            and manifest["fastfetch"]["sha256"] == sha256(fastfetch)):
+            and manifest["fastfetch"]["sha256"] == sha256(fastfetch)
+            and manifest["fastfetch"].get("loader_sha256") == fastfetch_info.get("loader_sha256")):
         print(f"Reusing verified Linux {version} payload", flush=True)
         return manifest
     build_inputs = inputs()
@@ -457,7 +495,7 @@ def main() -> int:
     command.add_argument("--version", default="latest")
     command.add_argument("--jobs", type=int, default=min(os.cpu_count() or 1, 8))
     command.add_argument("--busybox", help="Path to a static x86_64 BusyBox")
-    command.add_argument("--fastfetch", help="Static x86_64 Fastfetch ELF; defaults to verified upstream musl build")
+    command.add_argument("--fastfetch", help="x86_64 Fastfetch ELF, static or musl; defaults to checksum-verified upstream musl release")
     command.add_argument("--desktop-cc", help="Path to a static musl userspace compiler (default: musl-gcc)")
     command.add_argument("--offline", action="store_true")
     command.add_argument("--rebuild", action="store_true")
