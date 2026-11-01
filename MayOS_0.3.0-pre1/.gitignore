@@ -1,0 +1,34 @@
+# Generated kernels, ISO images, initramfs, virtual disks, logs and source caches.
+/build/
+/dist/
+/release/
+/releases/
+/recordings/
+/toolchain/
+
+# Python caches and local test sockets.
+__pycache__/
+*.py[cod]
+*.sock
+
+# Generated binary packages and VM state belong in release assets, not source.
+*.o
+*.elf
+*.iso
+*.img
+*.qcow2
+*.fd
+*.mp4
+*.log
+*.zip
+*.tar
+*.tar.gz
+*.tar.xz
+*.tar.bz2
+
+# Local credentials or developer overrides must not be committed.
+.env
+.env.*
+.netrc
+*.pem
+*.key

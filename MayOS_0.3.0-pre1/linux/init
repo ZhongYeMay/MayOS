@@ -1,0 +1,28 @@
+#!/bin/sh
+# Linux early userspace only. MayFS disks are never auto-mounted or formatted.
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+rescue() {
+    printf '\nMayOS Linux: init failure: %s\n' "$*" > /dev/console
+    # PID 1 must never exit, including when a rescue shell is closed.
+    while :; do /bin/sh; done
+}
+mount -t proc proc /proc || rescue 'mount /proc'
+mount -t sysfs sysfs /sys || rescue 'mount /sys'
+mount -t devtmpfs devtmpfs /dev || rescue 'mount /dev'
+mkdir -p /dev/pts /dev/shm /run /tmp
+mount -t devpts devpts /dev/pts || rescue 'mount /dev/pts'
+mount -t tmpfs -o mode=1777,size=64m tmpfs /tmp || rescue 'mount /tmp'
+mount -t tmpfs -o mode=0755,size=8m tmpfs /run || rescue 'mount /run'
+hostname MayOS-Linux
+for terminal in /dev/tty1 /dev/ttyS0; do
+    {
+        printf '\nMayOS Linux: ready\n'
+        printf 'Linux %s (%s)\n' "$(uname -r)" "$(uname -m)"
+        printf 'Live RAM environment. Desktop: tty1; Linux shell: ttyS0.\n'
+        printf 'Use mayos.desktop=0 for a text session. MayFS disks are not mounted.\n'
+        printf 'RAM files disappear after shutdown.\n'
+        printf 'Commands: uname -a | free -m | ls / | reboot -f | poweroff -f\n\n'
+    } > "$terminal"
+done
+# BusyBox init stays PID 1, reaps children and restarts exited console shells.
+exec /bin/init

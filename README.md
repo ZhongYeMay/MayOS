@@ -1,4 +1,27 @@
 # MayOS
+
+## 当前测试版：0.3.0-pre1
+
+同一张 BIOS / UEFI x64 混合 ISO 可选择 **MayOS 自研内核桌面**、**Linux 7.3.1 图形桌面** 或 Linux 救援环境。
+
+- [当前版本源码与构建说明](MayOS_0.3.0-pre1/README.md)
+- [0.3.0-pre1 完整下载与 QEMU 启动录像](https://github.com/ZhongYeMay/MayOS/releases/tag/v0.3.0-pre1)
+- [公开官网](https://mayos-official.business-tea-9633.chatgpt.site/)
+- [本次更新说明](MayOS_0.3.0-pre1/RELEASE_NOTES.md)
+- [第三方组件、来源和许可](MayOS_0.3.0-pre1/docs/third-party/dual-boot.md)
+
+该版本已在 QEMU 的 BIOS 和 OVMF x64 UEFI 环境中验证。MayKernel 仍是 32 位自研内核，Linux 分支为 x86_64；UEFI 测试关闭 Secure Boot。Linux 图形桌面的文件存于进程 RAM，退出桌面后清空。完整范围与验证记录见当前版本文档。
+
+MayOS Team 2023 - 2026.  
+This version of MayOS is for test use only.
+
+## 历史版本
+
+`MayOS_0.1_Eng/` 和 `MayOS_0.2_Eng/` 为此前的 16 位实验版本。以下保留原有说明；它描述的是历史版本，不代表上面的 0.3.0-pre1 图形桌面版本。仓库原有 LICENSE 与各第三方组件许可保持不变；当前源码的许可说明以其自身文档为准。
+
+---
+
+# MayOS
 An operating system that can run on a physical machine.
 
 # MayOS ver0.1 - Simple Operating System | 简单操作系统
@@ -240,3 +263,4 @@ Rebooting system...
 - 文件系统
 - 设备驱动程序
 - 网络支持
+

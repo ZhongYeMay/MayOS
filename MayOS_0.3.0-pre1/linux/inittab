@@ -1,0 +1,6 @@
+# The two explicit terminals work independently. No disk mounts occur here.
+tty1::respawn:/bin/cttyhack /bin/mayos-session
+ttyS0::respawn:/bin/cttyhack /bin/sh -l
+::ctrlaltdel:/bin/reboot
+::shutdown:/bin/sync
+::shutdown:/bin/umount -a -r

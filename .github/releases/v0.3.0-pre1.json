@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "repository": "ZhongYeMay/MayOS",
+  "tag": "v0.3.0-pre1",
+  "title": "MayOS 0.3.0-pre1 · BIOS / UEFI 双内核桌面",
+  "origin": "https://mayos-official.business-tea-9633.chatgpt.site/",
+  "notes_file": ".github/releases/v0.3.0-pre1.md",
+  "checksum_file": "MayOS-0.3.0-pre1-SHA256SUMS.txt",
+  "assets": [
+    {
+      "file": "MayOS-0.3.0-pre1.zip",
+      "path": "downloads/MayOS-0.3.0-pre1.zip",
+      "size": 18196137,
+      "sha256": "1593841dfeb43cc1b4416a8c9f8e7d9ce934d6980493edb04f123b65b71959b1"
+    },
+    {
+      "file": "MayOS-0.3.0-pre1-third-party-sources.zip",
+      "size": 176285903,
+      "sha256": "7a6feff88ec4982b3ef20d118b688809377566ef7054da7f51c53bbc2e2d482c",
+      "parts": [
+        {
+          "path": "downloads/sources/source-part-001.bin",
+          "size": 20971520,
+          "sha256": "cf4955b6bd7847fea059dcdb0660f3409f1e449bd393ae31bfcb32c25221a193"
+        },
+        {
+          "path": "downloads/sources/source-part-002.bin",
+          "size": 20971520,
+          "sha256": "b760f0c6121d2c50d20ff7c71f98cddc1c15e9ef668f3c5ece875239b01a270d"
+        },
+        {
+          "path": "downloads/sources/source-part-003.bin",
+          "size": 20971520,
+          "sha256": "bd6fd82615d23ac232f899b01ddf053b30b28bd3319f123905f98313ceaa3724"
+        },
+        {
+          "path": "downloads/sources/source-part-004.bin",
+          "size": 20971520,
+          "sha256": "4df50eeb2cde732eb3ea09979755afa608203bb81e3ecc7d0ad44ce46552a228"
+        },
+        {
+          "path": "downloads/sources/source-part-005.bin",
+          "size": 20971520,
+          "sha256": "3890ceb1e2d7c4cc0b8305c285cf0daddf5bcf4c60913093ca16d974982727e6"
+        },
+        {
+          "path": "downloads/sources/source-part-006.bin",
+          "size": 20971520,
+          "sha256": "c0dcaf53bf097c447a1a9887adc97e2fc8015c2eaf62e5bc4c7ea57386aab497"
+        },
+        {
+          "path": "downloads/sources/source-part-007.bin",
+          "size": 20971520,
+          "sha256": "65b7ea95ef2905cf12fefbd04da452d20b8f70168617ce79536d66d31f2500b2"
+        },
+        {
+          "path": "downloads/sources/source-part-008.bin",
+          "size": 20971520,
+          "sha256": "9d3b1c0f6599813c3f7d0592eb8055cbca5c89120dc9a410fa9743cf5e65567b"
+        },
+        {
+          "path": "downloads/sources/source-part-009.bin",
+          "size": 8513743,
+          "sha256": "3dabb5ed8794e7047a58a9ba6eff5de047388fa2e5e099d4a8bd7f33c5cd9381"
+        }
+      ]
+    },
+    {
+      "file": "MayOS-0.3.0-pre1-UEFI-MayKernel.mp4",
+      "path": "recordings/MayOS-0.3.0-pre1-UEFI-MayKernel.mp4",
+      "size": 261327,
+      "sha256": "2145cfc66d43318d973ddb226e16d79b7786233712f5dba547b50314700cc0ab"
+    },
+    {
+      "file": "MayOS-0.3.0-pre1-UEFI-Linux.mp4",
+      "path": "recordings/MayOS-0.3.0-pre1-UEFI-Linux.mp4",
+      "size": 427494,
+      "sha256": "54ec71363aa9e4c5a50ba12a73c56037a7e48aa1840fe6dad79127fd42e824a5"
+    },
+    {
+      "file": "mayos-dual.iso",
+      "path": "downloads/mayos-dual.iso",
+      "size": 25772032,
+      "sha256": "d19ee6ed95c153bded249dd82d7ba2c07c4d0626197cb4a7edb008dabd70fe65"
+    },
+    {
+      "file": "MayOS-0.3.0-pre1-SHA256SUMS.txt",
+      "path": "downloads/SHA256SUMS",
+      "size": 475,
+      "sha256": "43829cfaeaa1f4a233fd44a61149a8f7dca9a78b911d59f60348cf7d0201005a"
+    }
+  ]
+}
