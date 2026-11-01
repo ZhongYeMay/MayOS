@@ -1,0 +1,51 @@
+name: MayOS Ubuntu-style desktop and Fastfetch checks
+on:
+  push:
+    branches:
+      - feature/fastfetch-ubuntu-ui
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib musl-tools linux-libc-dev \
+            python3-pil fonts-noto-cjk fonts-dejavu-core grub-common \
+            xorriso mtools grub-pc-bin grub-efi-amd64-bin qemu-system-x86
+      - name: Validate scripts and compile freestanding MayKernel
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          python3 -m py_compile scripts/linux.py scripts/dual_iso.py
+          make build/mayos.elf
+      - name: Compile statically-linked Linux desktop
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          musl-gcc -std=c11 -O2 -Wall -Wextra -Werror -DMAYOS_LINUX \
+            -fno-pie -no-pie -static -Ikernel -Ibuild \
+            linux/desktop.c kernel/fs.c kernel/gui.c -o build/mayos-desktop-ci
+          file build/mayos-desktop-ci
+      - name: Download and execute pinned official Fastfetch
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location("mayos_linux", "scripts/linux.py")
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          exe, info = mod.fastfetch_path(None)
+          print(info)
+          assert exe.is_file()
+          PY
+          ./build/linux/fastfetch --config none --pipe --logo none --structure os:kernel:cpu:memory:uptime
+      - name: QEMU MayKernel regression smoke tests
+        working-directory: MayOS_0.3.0-pre1
+        run: make test
