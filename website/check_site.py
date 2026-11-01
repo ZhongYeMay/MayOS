@@ -34,7 +34,7 @@ assert all(url[1:] in parser.ids for url in parser.links if url.startswith("#"))
 required = (
     "Fastfetch", "Ubuntu", "MayKernel", "0.3.0-pre1",
     "MayOS Team 2023 - 2026.", "This version of MayOS is for test use only.",
-    "开发快照", "新 ISO", "XRGB8888",
+    "开发快照", "Linux 双启动 ISO", "XRGB8888", "v0.3.0-pre1-source.1",
 )
 assert all(text in html for text in required), "Missing project disclosure"
 assert "MayOS_0.1_Eng" not in html
