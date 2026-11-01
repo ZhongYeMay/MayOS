@@ -52,15 +52,15 @@ main section{padding:80px 0}.section-tag{font-size:12px;color:#ff9975;text-trans
 </div></div></section>
 <section class="muted-section" id="progress"><div class="container"><span class="section-tag">Development status · 2026-11-01</span><h2 class="section-title">开发进度公开透明。</h2><p class="intro">代码更新不等于发布了新的 ISO。下面区分已提交的功能与仍需通过的发布验证。</p>
 <div class="status-grid">
-<div class="status-panel"><span class="kicker">开发快照 · 尚非新 Release</span><h3 style="font-size:27px;margin-top:14px">Ubuntu 风格 + Fastfetch + 图形优化</h3>
+<div class="status-panel"><span class="kicker">开发快照 · 源码预发布已上线</span><h3 style="font-size:27px;margin-top:14px">Ubuntu 风格 + Fastfetch + 图形优化</h3>
 <p>已在 GitHub 当前源码中集成真实 Fastfetch 可执行文件的打包流程、系统信息桥接及新窗口配色。</p><p>最新开发改进：Linux XRGB8888 framebuffer 提供逐行复制快路径，非匹配格式保留像素转换。</p>
-<div class="notice"><b>发布状态：</b>当前网页展示源码开发进度。上述新增内容尚未有单独经过 QEMU 完整验证的公开 ISO；不要将历史下载包视为包含这些变更。</div></div>
-<div class="status-panel"><h3>下一步验证</h3><ul class="timeline"><li><b>✓</b> 自研内核及 Linux GUI 编译检查</li><li><b>✓</b> Fastfetch 下载、验证与打包构建流程</li><li><b>进行中</b> 新 framebuffer 快路径回归检查</li><li><b>待验证</b> 新版 BIOS / UEFI QEMU 全流程启动</li><li><b>待发布</b> 新 ISO、哈希、源码与实机录屏</li></ul></div>
+<div class="notice"><b>发布状态：</b><a href="https://github.com/ZhongYeMay/MayOS/releases/tag/v0.3.0-pre1-source.1" style="text-decoration:underline">源码预发布 v0.3.0-pre1-source.1</a> 已提供 ZIP 和 SHA-256 校验；上述新增内容仍没有完整验证的新版 Linux 双启动 ISO。历史启动镜像不包含新功能。</div></div>
+<div class="status-panel"><h3>下一步验证</h3><ul class="timeline"><li><b>✓</b> 自研内核及 Linux GUI 编译检查</li><li><b>✓</b> Fastfetch 下载、验证与打包构建流程</li><li><b>✓</b> 新 framebuffer 快路径已通过编译与源码回归检查</li><li><b>✓</b> MayKernel QEMU 回归检查通过（新 Linux 双启动 ISO 待验证）</li><li><b>✓</b> 新源码预发布及 SHA-256 校验已上传 GitHub</li><li><b>待发布</b> Linux 双启动 ISO、全量校验、启动录像</li></ul></div>
 </div></div></section>
 <section id="download"><div class="container"><span class="section-tag">Downloads & source</span><h2 class="section-title">下载与构建。</h2><p class="intro">此处保留既有版本的下载入口。新特性对应的启动镜像尚未发布，源码始终可查看。</p>
 <div class="downloads">
 <article class="download-box"><span class="chip">历史测试包 · 0.3.0-pre1</span><h3>原有 MayOS 预发布包</h3><p>使用原先官网的存档下载地址。该构建早于本轮 Ubuntu 风格与 Fastfetch 代码修改，请勿混淆。</p><a class="btn secondary" href="https://mayos-official.business-tea-9633.chatgpt.site/downloads/MayOS-0.3.0-pre1.zip" target="_blank" rel="noopener noreferrer">下载历史测试包 ↗</a></article>
-<article class="download-box"><span class="chip">持续更新 · GitHub main</span><h3>最新 MayOS 源码</h3><p>获取当前 C 内核、Linux 桌面、Fastfetch 集成、构建脚本、测试说明与第三方许可文本。</p><a class="btn primary" href="https://github.com/ZhongYeMay/MayOS/archive/refs/heads/main.zip">下载源码 ZIP ↗</a><p class="small">构建说明：<a href="https://github.com/ZhongYeMay/MayOS/blob/main/MayOS_0.3.0-pre1/README.md" style="text-decoration:underline">MayOS README</a></p></article>
+<article class="download-box"><span class="chip">新源码预发布 · v0.3.0-pre1-source.1</span><h3>开发源码 ZIP + SHA-256</h3><p>包含真实 Fastfetch 集成、Ubuntu 风格窗口、图形刷新优化、测试与许可文件。此附件是源码快照，不是可启动 ISO。</p><a class="btn primary" href="https://github.com/ZhongYeMay/MayOS/releases/download/v0.3.0-pre1-source.1/MayOS-0.3.0-pre1-source-update1.zip">下载源码预发布 ZIP ↗</a><p class="small">同时提供 <a href="https://github.com/ZhongYeMay/MayOS/releases/download/v0.3.0-pre1-source.1/MayOS-0.3.0-pre1-source-update1-SHA256SUMS.txt" style="text-decoration:underline">SHA-256 校验</a> · <a href="https://github.com/ZhongYeMay/MayOS/archive/refs/heads/main.zip" style="text-decoration:underline">最新 main 源码</a> · <a href="https://github.com/ZhongYeMay/MayOS/blob/main/MayOS_0.3.0-pre1/README.md" style="text-decoration:underline">构建说明</a></p></article>
 </div><p class="small" style="margin-top:25px">第三方软件（Linux、GNU GRUB、BusyBox、Fastfetch、musl 等）遵循各自许可证。此页面不表示已完成新发行版的完整对应源码分发或实体硬件验证。</p>
 </div></section>
 </main>
