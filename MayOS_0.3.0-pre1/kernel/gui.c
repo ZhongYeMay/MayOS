@@ -438,10 +438,11 @@ static void shell(void) {
         emit("MayOS / native x86 kernel");
         emit("Fastfetch requires the Linux boot environment.");
         emit("OS: MayOS " MAYOS_RELEASE);
-        emit("Kernel: MayKernel x86");
+        emit("Kernel: MayKernel x86 (custom)");
         emit("Display: 1024 x 768 / 32 bpp");
         emitnum("Memory: ", memory_mb, " MiB");
         emitnum("Uptime: ", ticks / 100, " seconds");
+        emit(disk_ready ? "Disk: ATA / MayFS" : "Disk: RAM fallback");
         emit(cpu_name);
 #endif
     } else if (!strcmp(c, "memtest")) {
