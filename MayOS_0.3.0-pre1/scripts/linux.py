@@ -264,7 +264,7 @@ def fastfetch_path(requested: str | None, *, offline: bool = False) -> tuple[Pat
                     validate_static_elf(tmp)
                     tmp.chmod(0o755)
                     tmp.replace(target)
-                    (OUT / "fastfetch.origin").write_text(FASTFETCH_SHA256 + "\\n")
+                    (OUT / "fastfetch.origin").write_text(FASTFETCH_SHA256 + "\n")
                 finally:
                     tmp.unlink(missing_ok=True)
         provenance = {"source": FASTFETCH_URL, "archive_sha256": FASTFETCH_SHA256,
