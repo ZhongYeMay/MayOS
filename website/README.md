@@ -10,6 +10,10 @@
 - 现有 `0.3.0-pre1` 链接明确标记为历史构建；更新源代码不自动更新镜像。
 - 最新源码统一链接至 `ZhongYeMay/MayOS` 的 `main` 分支。
 
+## 当前源码预发布
+
+最新源码预发布为 [v0.3.0-pre1-source.1](https://github.com/ZhongYeMay/MayOS/releases/tag/v0.3.0-pre1-source.1)，包含 Ubuntu 风格、Fastfetch 与 Linux framebuffer 性能优化的源码和 SHA-256 校验。它**不是新版可启动 ISO**。网站下载区将源码与旧版测试镜像分开标注。
+
 ## 部署
 
 `website/index.html` 为单文件静态站点，可部署到任意静态网页主机。仓库含 GitHub Pages Action（`.github/workflows/website-pages.yml`）；使用前可能需要在 **Settings → Pages → Build and deployment → Source** 选择 GitHub Actions。仅当该 Action 的部署步骤成功时，才能使用 Pages 地址。
