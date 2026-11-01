@@ -38,7 +38,7 @@ python3 scripts/linux.py build --version 7.3.1 --jobs 4 \
   --busybox /path/to/busybox
 ```
 
-Fastfetch 默认从官方 `fastfetch-cli/fastfetch` 的 `2.69.0` 发行版下载 musl x86_64 包，并与脚本内固定的官方 SHA-256 比对，提取真实 ELF64 可执行文件到 initramfs 的 `/usr/bin/fastfetch`。也可自行提供已验证的静态二进制：`make linux FASTFETCH=/path/to/fastfetch`。构建时校验 ELF64、无动态解释器并试运行 `--version`。官方 Fastfetch 使用 MIT 许可证，许可原文随系统分发；源码仓库：https://github.com/fastfetch-cli/fastfetch 。
+Fastfetch 默认从官方 `fastfetch-cli/fastfetch` 的 `2.69.0` 发行版下载 musl x86_64 包，并与脚本内固定的官方 SHA-256 比对，提取真实 ELF64 可执行文件到 initramfs 的 `/usr/bin/fastfetch`。官方 musl 包需要 `/lib/ld-musl-x86_64.so.1`，构建时核查 ELF 解释器及其共享库依赖，并将兼容的 musl 加载器打包。也可自行提供静态或 musl 二进制：`make linux FASTFETCH=/path/to/fastfetch`。构建会在宿主机运行 `--version` 验证可执行性。官方 Fastfetch 使用 MIT 许可证，许可原文随系统分发；源码仓库：https://github.com/fastfetch-cli/fastfetch 。
 
 `--desktop-cc /path/to/musl-gcc` 或环境变量 `MAYOS_LINUX_CC` 可指定桌面编译器。
 脚本从实际 Linux 源码导出 UAPI 头文件，并独立编译静态 ELF64 桌面二进制。
