@@ -226,6 +226,7 @@ static void emit(const char *s) {
     scroll = 0;
     dirty = 1;
 }
+#ifndef MAYOS_LINUX
 static void emitnum(const char *label, u32 value, const char *tail) {
     char b[100], n[16];
     copy(b, label, 100);
@@ -234,6 +235,7 @@ static void emitnum(const char *label, u32 value, const char *tail) {
     copy(b + strlen(b), tail, 100 - strlen(b));
     emit(b);
 }
+#endif
 static void terminal_init(void) {
     emit("MayOS Workstation " MAYOS_RELEASE " / MayShell");
     emit(platform_kernel());
