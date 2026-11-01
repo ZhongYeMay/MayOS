@@ -650,7 +650,7 @@ static void settings(Window *w) {
             char *start = fastfetch_lines;
             for (int n = 0; n < 5 && *start; n++) {
                 char *end = start;
-                while (*end && *end != '\\n')
+                while (*end && *end != '\n')
                     end++;
                 char terminator = *end;
                 *end = 0;
