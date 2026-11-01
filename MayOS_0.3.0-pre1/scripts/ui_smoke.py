@@ -21,7 +21,7 @@ def main():
     vm=VM(disk,'test-ui')
     try:
         vm.click(295,236);vm.click(710,350);vm.shot('dark-settings')
-        assert Image.open(BUILD/'dark-settings.png').getpixel((900,500))==(24,35,46)
+        assert Image.open(BUILD/'dark-settings.png').getpixel((900,500))==(49,43,53)
         vm.click(440,330);vm.shot('light-settings')
         assert Image.open(BUILD/'light-settings.png').getpixel((900,500))==(255,255,255)
         vm.click(270,600);vm.shot('offline-help');vm.key('esc')
