@@ -314,7 +314,27 @@ void hardware_init(u32 magic, u32 info) {
 void present(u32 *pixels) {
     u32 x_origin = variable.xoffset + (variable.xres - W) / 2;
     u32 y_origin = variable.yoffset + (variable.yres - H) / 2;
-    u32 alpha = variable.transp.length == 8 && variable.transp.offset <= 24 ? 255u << variable.transp.offset : 0;
+    /*
+     * The internal pixel layout is already 0x00RRGGBB. QEMU std VGA often
+     * exposes exactly that XRGB8888 layout. A scanline copy avoids hundreds
+     * of thousands of per-channel shifts every time the cursor moves.
+     *
+     * Keep the original conversion for BGR, alpha-bearing and other valid
+     * framebuffer layouts. Both paths honor the actual line stride and
+     * virtual framebuffer offsets validated during hardware_init().
+     */
+    int direct_copy = variable.red.offset == 16 && variable.green.offset == 8 &&
+                      variable.blue.offset == 0 && variable.transp.length == 0;
+    if (direct_copy) {
+        for (u32 y = 0; y < H; y++) {
+            void *destination = framebuffer + (y + y_origin) * fixed.line_length +
+                                x_origin * sizeof(u32);
+            memcpy(destination, pixels + y * W, W * sizeof(u32));
+        }
+        return;
+    }
+    u32 alpha = variable.transp.length == 8 && variable.transp.offset <= 24
+                    ? 255u << variable.transp.offset : 0;
     for (u32 y = 0; y < H; y++) {
         u32 *destination = (u32 *)(framebuffer + (y + y_origin) * fixed.line_length) + x_origin;
         for (u32 x = 0; x < W; x++) {
