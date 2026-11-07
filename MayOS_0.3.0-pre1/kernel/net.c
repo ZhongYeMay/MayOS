@@ -460,7 +460,10 @@ void net_init(void) {
     outl((u16)(nic_io + 0x30), (u32)rx_ring);
     outw((u16)(nic_io + 0x3c), 0);
     outw((u16)(nic_io + 0x3e), 0xffffu);
-    outl((u16)(nic_io + 0x44), 0xf);
+    /* RTL8139 RCR[12:11] = 3 selects the 64 KiB receive buffer.
+       The previous 0x000f selected 8 KiB while rx_at used a 64 KiB
+       modulo, causing long HTTP sessions to lose RX descriptors. */
+    outl((u16)(nic_io + 0x44), 0x180fu);
     outb((u16)(nic_io + 0x37), 0x0c);
     link_ready = 1;
     dhcp_phase = 1;
