@@ -193,10 +193,11 @@ def main() -> None:
         vm.hold(2)
         vm.key("esc")
         done("Window overview/Alt-Tab", "Guest opened/dismissed real window overview")
-        vm.click(700, 485, button="right")
+        vm.click(987, 648, button="right")
+        vm.wait("Desktop: context menu", timeout=25)
         vm.hold(2)
         vm.key("esc")
-        done("Desktop context menu", "Guest received real right-click and dismissed menu")
+        done("Desktop context menu", "Actual desktop context-menu serial event after right-click")
 
         vm.click(346, 717)    # Files
         vm.hold(1)
