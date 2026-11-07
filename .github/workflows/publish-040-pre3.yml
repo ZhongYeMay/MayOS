@@ -1,0 +1,142 @@
+name: Publish QEMU-verified MayOS 0.4.0-pre3 browser preview
+
+on:
+  push:
+    branches:
+      - develop/mayos-0.4.0-browser-pre3
+    paths:
+      - '.github/workflows/publish-040-pre3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: mayos-pre3-preview-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'ZhongYeMay/MayOS'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERIFIED_RUN: '42393210528'
+      SOURCE_SHA: d0095bbeec73def3abe5daa39b04c7e4f8fe64a6
+      RELEASE_TAG: v0.4.0-pre3
+    steps:
+      - name: Require exactly the validated MayOS pre3 code and green full QEMU matrix
+        run: |
+          set -euo pipefail
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN" --jq .head_sha)"
+          test "$actual" = "$SOURCE_SHA"
+          for attempt in $(seq 1 240); do
+            state="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN" --jq .status)"
+            if [ "$state" = completed ]; then break; fi
+            sleep 10
+          done
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN" --jq .conclusion)" = success || {
+            echo "Required QEMU browser/BIOS/UEFI/video verification failed; refusing prerelease." >&2
+            exit 1
+          }
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo 'Historical version already exists; refusing overwrite.' >&2
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Download binary and MP4 artifacts from the exact successful run
+        run: |
+          set -euo pipefail
+          test "$(git show "$SOURCE_SHA:MayOS_0.3.0-pre1/VERSION")" = '0.4.0-pre3'
+          mkdir -p native dual videos dist
+          gh run download "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name MayOS-0.4.0-pre3-browser-native --dir native
+          gh run download "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name MayOS-0.4.0-pre3-dual-verified --dir dual
+          gh run download "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name MayOS-0.4.0-pre3-full-feature-QEMU-videos --dir videos
+          test -s native/mayos.iso
+          test -s dual/mayos-dual.iso
+          (cd dual && sha256sum -c SHA256SUMS.txt)
+          cp native/mayos.iso dist/MayOS-0.4.0-pre3-MayKernel.iso
+          cp dual/mayos-dual.iso dist/MayOS-0.4.0-pre3-dual-boot.iso
+          for kernel in MayKernel Linux; do
+            file="$(find videos -type f -name "MayOS-0.4.0-pre3-all-features-$kernel.mp4" -print -quit)"
+            meta="$(find videos -type f -name "MayOS-0.4.0-pre3-all-features-$kernel.json" -print -quit)"
+            test -n "$file" && test -n "$meta"
+            test -s "$file" && test -s "$meta"
+            cp "$file" dist/
+            cp "$meta" dist/
+          done
+          shot="$(find native -type f -name 'browser-material-tabs.png' -print -quit)"
+          test -n "$shot" && test -s "$shot"
+          cp "$shot" dist/MayOS-0.4.0-pre3-browser.png
+          (cd dist && sha256sum *.iso *.mp4 > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+      - name: Tag only the unchanged exact tested system source, no workflow changes
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git restore --source="$SOURCE_SHA" --staged --worktree -- MayOS_0.3.0-pre1
+          git diff --cached --quiet && { echo 'No tested source delta' >&2; exit 1; }
+          git commit -m 'release: exact tested MayOS 0.4.0-pre3 browser source'
+          git diff --quiet "$SOURCE_SHA" HEAD -- MayOS_0.3.0-pre1
+          git push origin HEAD:refs/heads/release/source-0.4.0-pre3
+          git tag -a "$RELEASE_TAG" -m 'Verified MayOS 0.4.0-pre3'
+          git push origin "refs/tags/$RELEASE_TAG"
+          git archive HEAD | gzip -9 > dist/MayOS-0.4.0-pre3-source.tar.gz
+          test -s dist/MayOS-0.4.0-pre3-source.tar.gz
+      - name: Document supported browser capabilities and limitations
+        run: |
+          cat > dist/RELEASE_NOTES.md <<'EOF'
+          # MayOS 0.4.0-pre3
+
+          Experimental QEMU-only MayKernel / Linux 7.3.1 desktop preview.
+
+          ## Browser
+          - Redesigned Material 3 browser with four independent tabs, native
+            top tabstrip, address bar, back/forward, reload and home.
+          - Session bookmarks, HTTP reading mode, clickable HTML anchors,
+            UTF-8 text, in-page search, page scrolling and error messages.
+          - Keyboard shortcuts: Ctrl+L/T/W/F/R.
+          - MayKernel: experimental RTL8139 DHCP/IPv4/TCP/HTTP.
+          - Linux: e1000 DHCP/DNS and IPv4 HTTP.
+
+          Browser limitations: This is a native HTTP HTML-to-text reader, not
+          Chromium/Firefox/WebKit. HTTPS/TLS, CSS layout, JavaScript execution,
+          media playback, arbitrary modern websites and browser extensions
+          are not implemented. HTTPS is refused, not insecurely downgraded.
+
+          ## Test results
+          Native MayKernel browser integration and UI/disk/network regression;
+          Linux and MayKernel BIOS/UEFI boot; and real full-feature QEMU
+          recordings must all pass before this preview becomes available.
+
+          Two ISO images, two downloadable real QEMU walkthrough MP4s, their
+          JSON/ISO SHA-256 checksums, a screenshot and matching MayOS source are
+          attached. Earlier GitHub Releases are unchanged.
+
+          This is a 1024x768 CPU framebuffer experiment, not suitable for
+          normal physical hardware or production use. Linux upstream and
+          BusyBox source/attribution instructions are in the source archive.
+          EOF
+      - name: Publish only validated pre3 binaries, source and real videos
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            dist/MayOS-0.4.0-pre3-dual-boot.iso \
+            dist/MayOS-0.4.0-pre3-MayKernel.iso \
+            dist/MayOS-0.4.0-pre3-browser.png \
+            dist/MayOS-0.4.0-pre3-all-features-MayKernel.mp4 \
+            dist/MayOS-0.4.0-pre3-all-features-Linux.mp4 \
+            dist/MayOS-0.4.0-pre3-all-features-MayKernel.json \
+            dist/MayOS-0.4.0-pre3-all-features-Linux.json \
+            dist/MayOS-0.4.0-pre3-source.tar.gz \
+            dist/SHA256SUMS.txt \
+            --verify-tag --title 'MayOS 0.4.0-pre3' \
+            --notes-file dist/RELEASE_NOTES.md --prerelease
