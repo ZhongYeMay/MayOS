@@ -1,6 +1,7 @@
 #include "cat_image.h"
 #include "core.h"
 #include "font.h"
+#include "material_icons.h"
 #define MAYOS_RELEASE "0.4.0-pre1"
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
@@ -174,6 +175,20 @@ static void ring(int cx, int cy, int r, int thickness, u32 c) {
         }
 }
 static void symbol(int x, int y, int kind, int size, u32 c) {
+#if MAYOS_MATERIAL_ICONS
+    if (kind >= 0 && kind < 10 && size > 0) {
+        for (int j = 0; j < size; j++)
+            for (int i = 0; i < size; i++) {
+                int px = x + i, py = y + j;
+                if (px >= 0 && px < W && py >= 0 && py < H) {
+                    u8 opacity = material_icons[kind][(j * 48 / size) * 48 + i * 48 / size];
+                    if (opacity)
+                        pixels[py * W + px] = blend(pixels[py * W + px], c, opacity);
+                }
+            }
+        return;
+    }
+#endif
     int cx = x + size / 2, cy = y + size / 2;
     int m = size / 5, thick = size >= 30 ? 3 : 2;
     if (kind == 0) {
