@@ -35,6 +35,17 @@ int main(void) {
     assert(!strcmp(buf, "Network not ready"));
     browse_preview("", buf, sizeof(buf));
     assert(!strcmp(buf, ""));
+    BrowserLink links[6];
+    const char *anchors = "<html><body><a href=\"/second\">Next page</a>"
+                          "<a href=\"https://example.com/info\">Secure page</a>"
+                          "<a href=\"javascript:alert(1)\">BAD</a>"
+                          "<a href=\"file:///etc/passwd\">BAD</a></body></html>";
+    int count = browse_collect_links(anchors, "http://10.0.2.2:8000/",
+                                     links, 6);
+    assert(count == 2);
+    assert(!strcmp(links[0].url, "http://10.0.2.2:8000/second"));
+    assert(!strcmp(links[0].title, "Next page"));
+    assert(!strcmp(links[1].url, "https://example.com/info"));
     puts("PASS: HTTP status, header stripping, safe HTML text, entities, no scripts, bounds");
     return 0;
 }
