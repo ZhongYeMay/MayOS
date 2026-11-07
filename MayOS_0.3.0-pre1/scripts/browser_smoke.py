@@ -23,7 +23,8 @@ class Pages(BaseHTTPRequestHandler):
             ) + b"</body></html>"
         else:
             body = (b"<html><body><h1>FIRST_PAGE_OK &amp; Explorer</h1>"
-                    b"<script>DO_NOT_RENDER_SCRIPT</script><p>QEMU HTTP works</p></body></html>")
+                    b"<script>DO_NOT_RENDER_SCRIPT</script><p>QEMU HTTP works</p>"
+                    b"<a href=\"/second\">Read second page</a></body></html>")
         self.send_response(200)
         self.send_header("Content-Type", "text/html")
         self.send_header("Content-Length", str(len(body)))
@@ -74,6 +75,16 @@ def main():
         wait_more(vm, "MayNet: HTTP response received", previous)
         first = snapshot(vm, "browser-http-first")
         assert ImageChops.difference(home, first).getbbox(), "HTTP page did not alter display"
+
+        previous = count(vm, "MayNet: HTTP response received")
+        vm.click(798, 211)   # actual HTML links panel
+        vm.wait("Explorer: links opened")
+        vm.click(705, 354)   # open <a href="/second"> from the page
+        vm.wait("Explorer: link opened")
+        wait_more(vm, "MayNet: HTTP response received", previous)
+        vm.click(214, 211)   # restore first page via history
+        vm.wait("Explorer: history back")
+        snapshot(vm, "browser-clickable-http-links")
 
         vm.click(925, 211)  # toggle current page bookmark
         vm.wait("Explorer: bookmark added")
