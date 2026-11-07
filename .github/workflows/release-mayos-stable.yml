@@ -1,0 +1,143 @@
+name: Verify and publish MayOS 0.3.0 stable ISO
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-mayos-stable.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mayos-stable-0-3-0
+  cancel-in-progress: false
+
+jobs:
+  stable:
+    if: github.repository == 'ZhongYeMay/MayOS' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: 0.3.0
+      LINUX_VERSION: 7.3.1
+    steps:
+      - name: Checkout complete source
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Ensure stable version not yet published
+        run: |
+          set -eu
+          if gh release view "v${RELEASE_VERSION}" >/dev/null 2>&1; then
+            echo "Release v${RELEASE_VERSION} already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Stage stable version in working tree
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          version_file = Path("MayOS_0.3.0-pre1/VERSION")
+          gui = Path("MayOS_0.3.0-pre1/kernel/gui.c")
+          version = version_file.read_text().strip()
+          if version != "0.3.0" and re.fullmatch(r"0\.3\.0-pre\d+", version) is None:
+              raise SystemExit(f"Unexpected source version: {version}")
+          text = gui.read_text()
+          text, count = re.subn(r'#define MAYOS_RELEASE "0\.3\.0(?:-pre\d+)?"',
+                                '#define MAYOS_RELEASE "0.3.0"', text, count=1)
+          if count != 1:
+              raise SystemExit("Missing GUI release version constant")
+          gui.write_text(text)
+          version_file.write_text("0.3.0\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MayOS_0.3.0-pre1/VERSION MayOS_0.3.0-pre1/kernel/gui.c
+          if ! git diff --cached --quiet; then
+            git commit -m "release: MayOS 0.3.0 stable [skip ci]"
+          fi
+      - name: Install reproducible build and QEMU dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools dosfstools \
+            qemu-system-x86 ovmf python3 python3-pil fonts-noto-cjk \
+            fonts-dejavu-core flex bison bc libelf-dev libssl-dev \
+            xz-utils busybox-static musl-tools rsync
+      - name: Build custom ISO
+        working-directory: MayOS_0.3.0-pre1
+        run: make all
+      - name: Test Material GUI and native MayKernel filesystem
+        working-directory: MayOS_0.3.0-pre1
+        run: make test
+      - name: Build dual-kernel ISO
+        working-directory: MayOS_0.3.0-pre1
+        run: make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+      - name: Verify BIOS and Linux DHCP/DNS
+        working-directory: MayOS_0.3.0-pre1
+        run: make test-dual LINUX_VERSION=7.3.1
+      - name: Verify both UEFI boot paths and persistence
+        working-directory: MayOS_0.3.0-pre1
+        run: make test-uefi LINUX_VERSION=7.3.1
+      - name: Prepare validated ISO, checksums and release notes
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp MayOS_0.3.0-pre1/build/mayos-dual.iso dist/MayOS-0.3.0-dual-boot-x86_64.iso
+          cp MayOS_0.3.0-pre1/build/mayos.iso dist/MayOS-0.3.0-MayKernel-x86.iso
+          cp MayOS_0.3.0-pre1/build/desktop.png dist/MayOS-0.3.0-desktop.png
+          (cd dist && sha256sum *.iso > SHA256SUMS.txt)
+          cat > dist/RELEASE_NOTES.md <<'EOF'
+          # MayOS 0.3.0
+          Stable release candidate validated by GitHub Actions on Ubuntu 24.04.
+          
+          - Material Design 3-inspired shared desktop UI, tonal dark/light
+            themes, navigation, controls and locally drawn outline icons.
+          - MayKernel x86 and Linux 7.3.1 x86_64 dual boot via GRUB.
+          - Basic Linux Ethernet (QEMU e1000), DHCP, DNS, IP/route diagnostics
+            via MayShell `net` and limited `http://` text preview in Explorer.
+          - BIOS and UEFI QEMU boot checks, GUI/input tests, and MayFS disk isolation.
+          
+          **Known limits:** No HTTPS/TLS browser, Wi-Fi manager or MayKernel
+          TCP/IP stack. Secure Boot and physical hardware have not been validated.
+          This is still an experimental operating system; back up any important files.
+          
+          The dual-boot ISO is the primary download. Check its SHA-256 against
+          `SHA256SUMS.txt`. Historical Releases are preserved.
+          EOF
+          test -s dist/MayOS-0.3.0-dual-boot-x86_64.iso
+          sha256sum -c dist/SHA256SUMS.txt --ignore-missing || (
+            cd dist && sha256sum -c SHA256SUMS.txt
+          )
+      - name: Upload validated release files as a fallback artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-0.3.0-verified-ISO
+          path: dist/
+          retention-days: 30
+      - name: Publish stable source tag and GitHub Release
+        run: |
+          set -euo pipefail
+          if gh release view "v${RELEASE_VERSION}" >/dev/null 2>&1; then
+            echo "Stable release appeared during build, refusing to overwrite it."
+            exit 1
+          fi
+          # No force pushes. Reject a concurrent source change rather than
+          # publishing a binary against a different source commit.
+          git push origin HEAD:refs/heads/main
+          git tag -a "v${RELEASE_VERSION}" -m "Verified MayOS ${RELEASE_VERSION}"
+          git push origin "refs/tags/v${RELEASE_VERSION}"
+          gh release create "v${RELEASE_VERSION}" \
+            dist/MayOS-0.3.0-dual-boot-x86_64.iso \
+            dist/MayOS-0.3.0-MayKernel-x86.iso \
+            dist/MayOS-0.3.0-desktop.png \
+            dist/SHA256SUMS.txt \
+            --title "MayOS 0.3.0" \
+            --notes-file dist/RELEASE_NOTES.md \
+            --latest
