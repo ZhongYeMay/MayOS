@@ -22,7 +22,7 @@ static u32 offered_ip, last_dhcp, last_arp, identifier;
 static int link_ready, lease_ready, gateway_ready, dhcp_phase;
 static int ping_replies, dns_replies;
 static u32 http_ip, http_seq, http_ack, http_started;
-static u16 http_port;
+static u16 http_port, http_source_port;
 static int http_stage, http_used;
 static char http_path[240], http_host[64], http_response[8192];
 
@@ -243,7 +243,7 @@ static void tcp_send(u8 flags, const u8 *data, u16 length) {
     u8 segment[768], pseudo[12 + sizeof(segment)];
     if (length > sizeof(segment) - 20 || !gateway_ready) return;
     memset(segment, 0, 20);
-    wr16(segment, 53001); wr16(segment + 2, http_port);
+    wr16(segment, http_source_port); wr16(segment + 2, http_port);
     wr32(segment + 4, http_seq); wr32(segment + 8, http_ack);
     segment[12] = 0x50; segment[13] = flags;
     wr16(segment + 14, 4096);
@@ -258,7 +258,7 @@ static void tcp_send(u8 flags, const u8 *data, u16 length) {
 }
 static void tcp_receive(const u8 *p, u16 length, u32 source) {
     if (!http_stage || http_stage == 3 || source != http_ip ||
-        length < 20 || be16(p) != http_port || be16(p + 2) != 53001)
+        length < 20 || be16(p) != http_port || be16(p + 2) != http_source_port)
         return;
     u32 seq = be32(p + 4);
     u32 hlen = (u32)(p[12] >> 4) * 4;
@@ -379,7 +379,10 @@ int net_http_start(const char *url) {
             copy(http_response, "Invalid HTTP path.", sizeof(http_response));
             return 0;
         }
-    http_seq = 0x504d4159u;
+    /* Each new connection needs a distinct TCP source port / initial sequence.
+       Reusing a 4-tuple immediately after FIN may be rejected by NAT TIME_WAIT. */
+    http_source_port = (u16)(53000u + (++identifier % 2000u));
+    http_seq = 0x504d4159u ^ ticks ^ identifier;
     http_ack = 0;
     http_stage = 1;
     http_started = ticks;
