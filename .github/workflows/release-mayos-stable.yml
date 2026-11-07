@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: mayos-stable-0-3-0
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   stable:
@@ -112,9 +112,7 @@ jobs:
           `SHA256SUMS.txt`. Historical Releases are preserved.
           EOF
           test -s dist/MayOS-0.3.0-dual-boot-x86_64.iso
-          sha256sum -c dist/SHA256SUMS.txt --ignore-missing || (
-            cd dist && sha256sum -c SHA256SUMS.txt
-          )
+          (cd dist && sha256sum -c SHA256SUMS.txt)
       - name: Upload validated release files as a fallback artifact
         uses: actions/upload-artifact@v4
         with:
@@ -128,9 +126,9 @@ jobs:
             echo "Stable release appeared during build, refusing to overwrite it."
             exit 1
           fi
-          # No force pushes. Reject a concurrent source change rather than
-          # publishing a binary against a different source commit.
-          git push origin HEAD:refs/heads/main
+          # The stable tag points to the exact locally staged source commit
+          # that produced the verified ISO. Do not advance the rolling
+          # prerelease main branch or race its automatic pre-number updates.
           git tag -a "v${RELEASE_VERSION}" -m "Verified MayOS ${RELEASE_VERSION}"
           git push origin "refs/tags/v${RELEASE_VERSION}"
           gh release create "v${RELEASE_VERSION}" \
