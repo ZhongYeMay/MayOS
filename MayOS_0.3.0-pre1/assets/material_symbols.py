@@ -92,7 +92,7 @@ def main() -> None:
             "/* Upstream: google/material-design-icons, pinned commit "
             f"{COMMIT}. */\n"
             "#define MAYOS_MATERIAL_ICONS 1\n"
-            "static const unsigned char material_icons[{len(ICONS)}][2304] = {\n"
+            "static const unsigned char material_icons[" + str(len(ICONS)) + "][2304] = {\n"
         )
         for bitmap in bitmaps:
             out.write("{" + ",".join(str(pixel) for pixel in bitmap) + "},\n")
