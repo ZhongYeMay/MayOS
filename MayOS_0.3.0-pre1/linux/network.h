@@ -61,7 +61,7 @@ static void web_child(const char *host, const char *port, const char *path) {
         if (n > 7800 - total) n = 7800 - total;
         for (ssize_t i = 0; i < n; i++)
             if ((unsigned char)buffer[i] < 32 && buffer[i] != '\n') buffer[i] = ' ';
-            else if ((unsigned char)buffer[i] > 126) buffer[i] = '?';
+            /* Preserve UTF-8 bytes for the native multilingual font renderer. */
         if (write(1, buffer, (size_t)n) != n) break;
         total += (int)n;
     }
