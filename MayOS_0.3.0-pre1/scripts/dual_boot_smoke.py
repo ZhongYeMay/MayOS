@@ -44,7 +44,7 @@ class BootVM:
                 '-drive', f'file={disk},format=raw,if=ide,index=0',
                 '-serial', f'unix:{self.serial_path},server=on,wait=off',
                 '-qmp', f'unix:{self.qmp_path},server=on,wait=off',
-                '-no-reboot', '-S']
+                '-nic', 'user,model=e1000', '-no-reboot', '-S']
         if (ovmf_code is None) != (ovmf_vars is None):
             raise ValueError('OVMF_CODE and an independent writable OVMF_VARS copy are both required')
         if ovmf_code is not None:
@@ -330,6 +330,13 @@ def main():
         vm.shell_check('test -r /run/mayos-desktop.pid '
                        '&& test "$(cat /proc/$(cat /run/mayos-desktop.pid)/comm)" = mayos-desktop',
                        'GUI_PROCESS')
+        # QEMU user-mode NAT supplies DHCP and DNS without outside Internet
+        # access. Verify the actual guest lease, route, and resolver.
+        vm.shell_check(
+            'n=0; while ! ip -4 addr show | grep -q "10.0.2."; do '
+            'n=$((n+1)); [ "$n" -lt 30 ] || exit 1; sleep 1; done; '
+            'ip route | grep -q default && grep -q "^nameserver" /etc/resolv.conf',
+            'NETWORK_DHCP_DNS')
         vm.shot('test-dual-linux-about')
         # PS/2 input targets the real Linux GUI, while the independent BusyBox
         # serial shell above probes the Linux rootfs. The GUI has its own RAM
