@@ -54,7 +54,7 @@ def wait_hits(vm: Session, before: int, seconds: float = 25) -> None:
 
 
 def type_url(vm: Session, url: str) -> None:
-    vm.click(548, 171)     # browser address bar / replace existing URL
+    vm.click(548, 211)     # browser address bar / replace existing URL
     vm.command(url)
 
 
@@ -142,7 +142,19 @@ def main() -> None:
         vm.hold(2)
         done("Browser HTTP/HTML", "Guest fetched real local HTTP HTML via QEMU NIC")
 
-        vm.click(925, 171)    # bookmark
+        vm.key("ctrl-t")       # new independent tab
+        vm.wait("Explorer: new tab", timeout=25)
+        before = Site.hits
+        vm.command(url + "/second")
+        wait_hits(vm, before)
+        vm.click(235, 165)     # return to first tab, preserving page
+        vm.wait("Explorer: tab switch", timeout=25)
+        vm.click(399, 165)     # second tab
+        vm.key("ctrl-w")       # close without closing the browser app
+        vm.wait("Explorer: tab close", timeout=25)
+        done("Browser multi-tab", "Ctrl+T, independent HTTP page, tab switch and Ctrl+W")
+
+        vm.click(925, 211)    # bookmark
         vm.wait("Explorer: bookmark added", timeout=25)
         done("Browser bookmarks", "Real session favorite added")
 
@@ -150,17 +162,23 @@ def main() -> None:
         type_url(vm, url + "/second")
         wait_hits(vm, before)
         vm.hold(1)
-        vm.click(214, 171)   # history back
+        vm.click(214, 211)   # history back
         vm.wait("Explorer: history back", timeout=25)
-        vm.click(256, 171)   # forward
+        vm.click(256, 211)   # forward
         vm.wait("Explorer: history forward", timeout=25)
-        vm.click(298, 171)   # refresh
+        vm.click(298, 211)   # refresh
         vm.wait("Explorer: reload", timeout=25)
+        vm.key("ctrl-f")
+        vm.wait("Explorer: find opened", timeout=25)
+        vm.command("History works")
+        vm.wait("Explorer: find match", timeout=25)
+        vm.key("esc")
+        done("Browser find-in-page", "Ctrl+F and actual text match scrolled into view")
         vm.click(915, 583)   # next page of text
         vm.wait("Explorer: page down", timeout=25)
-        vm.click(340, 171)   # home
+        vm.click(340, 211)   # home
         vm.wait("Explorer: home", timeout=25)
-        vm.click(310, 215)   # saved bookmark
+        vm.click(310, 255)   # saved bookmark
         vm.hold(1)
         done("Browser navigation/history/scroll", "Back, forward, reload, page down, home and saved favorite")
 
