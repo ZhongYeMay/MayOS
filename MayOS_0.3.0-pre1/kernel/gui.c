@@ -12,9 +12,10 @@
 #define PLATFORM_ARCH "x86 / 32-bit"
 #endif
 static u32 pixels[W * H];
-static u32 bg = 0x141619, panel = 0x22252a, ink = 0xf2f3f5, muted = 0xb0b5bd, line = 0x41464d,
-           accent = 0xc8cdd3;
-static int dark = 1;
+/* Material Design 3 color roles, tuned for the 1024x768 framebuffer. */
+static u32 bg = 0x141218, panel = 0x211f26, ink = 0xe6e1e5, muted = 0xcac4d0, line = 0x49454f,
+           accent = 0xd0bcff, surface_high = 0x2b2930, on_accent = 0x381e72, selected_fill = 0x4f378b;
+static int dark = 1, accent_choice = 0;
 static void rect(int x, int y, int w, int h, u32 c) {
     if (x < 0) {
         w += x;
@@ -41,10 +42,25 @@ static void border(int x, int y, int w, int h, u32 c) {
     rect(x + w - 1, y, 1, h, c);
 }
 static void roundrect(int x, int y, int w, int h, u32 c) {
-    /* Precise two-pixel corners instead of soft pill styling. */
-    rect(x + 2, y, w - 4, h, c);
-    rect(x, y + 2, w, h - 4, c);
-    rect(x + 1, y + 1, w - 2, h - 2, c);
+    /* M3 medium-radius surface. No anti-aliasing or external dependencies. */
+    int r = 10;
+    if (w < 2 * r || h < 2 * r) {
+        r = (w < h ? w : h) / 4;
+    }
+    if (r < 1) { rect(x, y, w, h, c); return; }
+    rect(x + r, y, w - 2 * r, h, c);
+    rect(x, y + r, r, h - 2 * r, c);
+    rect(x + w - r, y + r, r, h - 2 * r, c);
+    for (int yy = 0; yy < r; yy++)
+        for (int xx = 0; xx < r; xx++) {
+            int dx = r - xx - 1, dy = r - yy - 1;
+            if (dx * dx + dy * dy <= r * r) {
+                rect(x + xx, y + yy, 1, 1, c);
+                rect(x + w - 1 - xx, y + yy, 1, 1, c);
+                rect(x + xx, y + h - 1 - yy, 1, 1, c);
+                rect(x + w - 1 - xx, y + h - 1 - yy, 1, 1, c);
+            }
+        }
 }
 static void circle(int cx, int cy, int r, u32 c) {
     for (int y = -r; y <= r; y++)
@@ -133,32 +149,79 @@ static void numtext(int x, int y, u32 n, u32 c) {
 static int inside(int px, int py, int x, int y, int w, int h) {
     return px >= x && py >= y && px < x + w && py < y + h;
 }
-/* Icons are drawn directly by the kernel. */
-
-static void icon(int x, int y, int kind, int size) {
-    u32 c = dark ? 0xd4d8dd : 0x3c4249;
-    roundrect(x, y, size, size, dark ? 0x2b2e32 : 0xe9ebed);
-    border(x, y, size, size, dark ? 0x454a50 : 0xcbd0d5);
-    int k = size / 4;
-    if (kind == 0) {
-        border(x + k - 1, y + k + 3, size - 2 * k + 2, size / 2, c);
-        rect(x + k - 1, y + k, size / 3, 4, c);
-    } else if (kind == 2) {
-        text(x + k - 2, y + size / 2 - 10, ">_", c);
-    } else if (kind == 1) {
-        circle(x + size / 2, y + size / 2, size / 4, c);
-        circle(x + size / 2, y + size / 2, size / 8, dark ? 0x25333f : 0xe2e9ec);
-        rect(x + size / 2 - 1, y + k - 2, 3, 4, c);
-        rect(x + size / 2 - 1, y + size - k - 2, 3, 4, c);
-    } else {
-        border(x + k, y + k + 4, size - 2 * k, size / 2, c);
-        rect(x + k - 2, y + k + 1, size - 2 * k + 4, 2, c);
+/* Locally rasterized Material-style outline symbols. No emoji or icon font. */
+static void stroke(int x0, int y0, int x1, int y1, int thickness, u32 c) {
+    int dx = x1 > x0 ? x1 - x0 : x0 - x1;
+    int dy = y1 > y0 ? y1 - y0 : y0 - y1;
+    int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    int err = dx - dy;
+    for (;;) {
+        rect(x0 - thickness / 2, y0 - thickness / 2, thickness, thickness, c);
+        if (x0 == x1 && y0 == y1) break;
+        int e2 = err * 2;
+        if (e2 > -dy) { err -= dy; x0 += sx; }
+        if (e2 < dx) { err += dx; y0 += sy; }
     }
 }
+static void ring(int cx, int cy, int r, int thickness, u32 c) {
+    if (r < 1) return;
+    int inner = r - thickness, rr = r * r, ii = inner * inner;
+    for (int yy = -r; yy <= r; yy++)
+        for (int xx = -r; xx <= r; xx++) {
+            int d = xx * xx + yy * yy;
+            if (d <= rr && (inner < 0 || d >= ii))
+                rect(cx + xx, cy + yy, 1, 1, c);
+        }
+}
+static void symbol(int x, int y, int kind, int size, u32 c) {
+    int cx = x + size / 2, cy = y + size / 2;
+    int m = size / 5, thick = size >= 30 ? 3 : 2;
+    if (kind == 0) {
+        /* folder */
+        stroke(x + m, y + m + 3, x + m + size / 3, y + m + 3, thick, c);
+        stroke(x + m + size / 3, y + m + 3, x + m + size / 3 + size / 8, y + m + 7, thick, c);
+        stroke(x + m, y + m + 3, x + m, y + size - m, thick, c);
+        stroke(x + m, y + size - m, x + size - m, y + size - m, thick, c);
+        stroke(x + size - m, y + m + 7, x + size - m, y + size - m, thick, c);
+        stroke(x + m, y + m + 7, x + size - m, y + m + 7, thick, c);
+    } else if (kind == 1) {
+        /* settings */
+        ring(cx, cy, size / 4, thick, c);
+        ring(cx, cy, size / 9, thick, c);
+        for (int n = -1; n <= 1; n += 2) {
+            stroke(cx + n * size / 3, cy, cx + n * size / 4, cy, thick, c);
+            stroke(cx, cy + n * size / 3, cx, cy + n * size / 4, thick, c);
+        }
+    } else if (kind == 2) {
+        /* terminal */
+        stroke(x + m, y + m, x + size - m, y + m, thick, c);
+        stroke(x + size - m, y + m, x + size - m, y + size - m, thick, c);
+        stroke(x + size - m, y + size - m, x + m, y + size - m, thick, c);
+        stroke(x + m, y + size - m, x + m, y + m, thick, c);
+        stroke(x + m + 4, cy - 4, x + m + 9, cy, thick, c);
+        stroke(x + m + 9, cy, x + m + 4, cy + 4, thick, c);
+        stroke(cx, cy + 6, cx + size / 5, cy + 6, thick, c);
+    } else if (kind == 3) {
+        /* delete */
+        stroke(x + m, y + m + 4, x + size - m, y + m + 4, thick, c);
+        stroke(cx - size / 6, y + m, cx + size / 6, y + m, thick, c);
+        stroke(x + m + 3, y + m + 5, x + m + 5, y + size - m, thick, c);
+        stroke(x + size - m - 3, y + m + 5, x + size - m - 5, y + size - m, thick, c);
+        stroke(x + m + 5, y + size - m, x + size - m - 5, y + size - m, thick, c);
+    } else {
+        /* network / globe */
+        ring(cx, cy, size / 3, thick, c);
+        stroke(x + m, cy, x + size - m, cy, thick, c);
+        stroke(cx, y + m, cx, y + size - m, thick, c);
+    }
+}
+static void icon(int x, int y, int kind, int size) {
+    roundrect(x, y, size, size, surface_high);
+    symbol(x, y, kind, size, ink);
+}
 static void button(int x, int y, int w, const char *s, int primary) {
-    roundrect(x, y, w, 30, primary ? (dark ? 0xd2d5da : 0x30343a) : (dark ? 0x33373c : 0xe9ebed));
-    border(x, y, w, 30, dark ? 0x596069 : 0xc6cbd0);
-    text(x + 12, y + 4, s, primary ? (dark ? 0x111315 : 0xffffff) : ink);
+    roundrect(x, y, w, 30, primary ? accent : surface_high);
+    text(x + 12, y + 4, s, primary ? on_accent : ink);
 }
 typedef struct {
     int x, y, w, h, open, min, max, ox, oy, ow, oh;
@@ -574,50 +637,55 @@ static void accept_modal(void) {
     modal = 0;
 }
 static void palette(void) {
-    bg = dark ? 0x141619 : 0xf2f3f5;
-    panel = dark ? 0x22252a : 0xffffff;
-    ink = dark ? 0xf2f3f5 : 0x20242a;
-    muted = dark ? 0xb0b5bd : 0x626971;
-    line = dark ? 0x41464d : 0xd9dde1;
+    const u32 dark_primary[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6};
+    const u32 light_primary[] = {0x6750a4, 0x006a64, 0x415f91, 0x904b40};
+    bg = dark ? 0x141218 : 0xfffbfe;
+    panel = dark ? 0x211f26 : 0xfff7ff;
+    surface_high = dark ? 0x2b2930 : 0xf3edf7;
+    ink = dark ? 0xe6e1e5 : 0x1d1b20;
+    muted = dark ? 0xcac4d0 : 0x49454f;
+    line = dark ? 0x49454f : 0xcac4d0;
+    accent = dark ? dark_primary[accent_choice] : light_primary[accent_choice];
+    on_accent = dark ? 0x381e72 : 0xffffff;
+    selected_fill = dark ? 0x4f378b : 0xeaddff;
 }
 static void desktop(void) {
-    /* Graphite workstation: neutral materials, clear alignment, no illustration. */
+    /* Material 3: tonal canvas, navigation rail, compact status area. */
     for (int y = 0; y < H; y++)
-        rect(0, y, W, 1, blend(0x16191d, 0x23272d, y * 150 / H));
-    rect(0, 0, W, 38, 0x101215);
-    rect(0, 37, W, 1, 0x41464c);
-    rect(19, 12, 3, 14, 0xc7cbd0);
-    text(32, 9, "MayOS", 0xf4f5f6);
-    text(104, 9, "Workspace", 0xbcc3ca);
-    text(801, 9, PLATFORM_BADGE, 0xbcc3ca);
-    text(944, 9, "TEST", 0x929aa4);
-    roundrect(10, 51, 78, 514, 0x1e2226);
-    border(10, 51, 78, 514, 0x3d4248);
-    rect(12, 62, 2, 68, 0xc7cbd0);
+        rect(0, y, W, 1, blend(dark ? 0x15131b : 0xf6f1fa,
+                               dark ? 0x211e29 : 0xece6f3, (u32)y * 130 / H));
+    rect(0, 0, W, 46, dark ? 0x211f26 : 0xf3edf7);
+    rect(0, 45, W, 1, line);
+    ring(30, 23, 10, 3, accent);
+    text(50, 13, "MayOS", ink);
+    text(157, 13, "Workspace", muted);
+    text(786, 13, PLATFORM_BADGE, muted);
+    roundrect(14, 60, 76, 508, panel);
     const char *names[] = {"文件", "设置", "终端", "回收站"};
     for (int i = 0; i < 4; i++) {
-        icon(32, 83 + i * 100, i, 44);
-        text(i == 3 ? 30 : 38, 132 + i * 100, names[i], 0xd9dde1);
+        int top = 77 + i * 100;
+        if (windows[i == 3 ? 0 : i].open && focus == (i == 3 ? 0 : i) && !windows[focus].min)
+            roundrect(22, top + 3, 60, 58, selected_fill);
+        icon(32, top + 8, i, 44);
+        text(i == 3 ? 30 : 38, top + 58, names[i], muted);
     }
-    border(35, 494, 28, 28, 0xcbd0d6);
-    text(39, 497, ">_", 0xcbd0d6);
-    text(17, 533, "Explorer", 0xd9dde1);
-    large_text(727, 596, "MayOS", 0x818b96);
-    text(728, 639, "WORKSTATION / " MAYOS_RELEASE, 0x9ea7b1);
+    symbol(35, 489, 4, 28, ink);
+    text(17, 535, "Explorer", muted);
+    large_text(728, 594, "MayOS", muted);
+    text(729, 640, "MATERIAL WORKSPACE / " MAYOS_RELEASE, muted);
 }
 static void frame(int id) {
     Window *w = &windows[id];
-    rect(w->x + 4, w->y + 6, w->w, w->h, 0x0c0e11);
+    rect(w->x + 5, w->y + 7, w->w, w->h, dark ? 0x141218 : 0xd8d1df);
     roundrect(w->x, w->y, w->w, w->h, panel);
-    border(w->x, w->y, w->w, w->h, line);
-    rect(w->x + 1, w->y + 1, w->w - 2, 40, dark ? 0x2b2f34 : 0xf4f5f6);
+    rect(w->x + 1, w->y + 1, w->w - 2, 40, surface_high);
     rect(w->x + 1, w->y + 41, w->w - 2, 1, line);
-    icon(w->x + 13, w->y + 10, id == 0 ? 0 : id == 1 ? 1 : 2, 22);
+    symbol(w->x + 13, w->y + 10, id == 0 ? 0 : id == 1 ? 1 : id == 4 ? 4 : 2, 22, ink);
     text(w->x + 45, w->y + 10, w->title, focus == id ? ink : muted);
     int controls = w->x + w->w - 119;
     for (int i = 0; i < 3; i++)
         circle(controls + i * 36 + 17, w->y + 21, 12,
-               dark ? 0x3a3f45 : 0xe5e8eb);
+               surface_high);
     rect(controls + 11, w->y + 21, 11, 1, muted);
     border(controls + 48, w->y + 16, 10, 10, muted);
     text(w->x + w->w - 35, w->y + 10, "×", muted);
@@ -632,7 +700,7 @@ static void settings(Window *w) {
     for (int i = 0; i < 4; i++) {
         int yy = y + 106 + i * 46;
         if (settings_tab == i) {
-            roundrect(x + 12, yy, 152, 36, dark ? 0x473748 : 0xf8e8e1);
+            roundrect(x + 12, yy, 152, 36, selected_fill);
             rect(x + 12, yy + 8, 2, 20, accent);
         }
         text(x + 25, yy + 7, marks[i], settings_tab == i ? accent : muted);
@@ -714,10 +782,10 @@ static void settings(Window *w) {
             }
         }
         text(cx, cy + 353, "主题色 / Accent", ink);
-        u32 colors[] = {0xc8cdd3, 0x939ba5, 0x626a74, 0xe2e5e8};
+        u32 colors[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6};
         for (int i = 0; i < 4; i++) {
             circle(cx + 19 + i * 64, cy + 410, 18, colors[i]);
-            if (accent == colors[i])
+            if (accent_choice == i)
                 circle(cx + 19 + i * 64, cy + 410, 6, 0xffffff);
         }
         text(cx, cy + 471, "外观设置在本次会话内生效。", muted);
@@ -799,7 +867,7 @@ static void files_draw(Window *w) {
         "文档", "桌面", "回收站"};
     for (int i = 0; i < 4; i++) {
         if (folder == i)
-            roundrect(x + 10, y + 103 + i * 40, 128, 33, dark ? 0x473748 : 0xf8e8e1);
+            roundrect(x + 10, y + 103 + i * 40, 128, 33, selected_fill);
         text(x + 22, y + 109 + i * 40, nav[i], folder == i ? accent : ink);
     }
     text(x + 20, y + w->h - 55,
@@ -838,7 +906,7 @@ static void files_draw(Window *w) {
     for (int k = 0; k + file_scroll < file_count && k < visible; k++) {
         int i = file_list[k + file_scroll], yy = y + 184 + k * 44;
         if (selected == i)
-            roundrect(cx - 4, yy, w->w - 178, 40, dark ? 0x473748 : 0xf8e8e1);
+            roundrect(cx - 4, yy, w->w - 178, 40, selected_fill);
         icon(cx + 7, yy + 8, files[i].dir ? 0 : 2, 24);
         text(cx + 45, yy + 10, files[i].name, ink);
         text(x + w->w - 190, yy + 10, files[i].dir ? "文件夹" : "文本文件", muted);
@@ -859,7 +927,7 @@ static void files_draw(Window *w) {
 }
 static void terminal_draw(Window *w) {
     int x = w->x + 1, y = w->y + 43;
-    rect(x, y, w->w - 2, w->h - 44, 0x0c151f);
+    rect(x, y, w->w - 2, w->h - 44, dark ? 0x19161f : 0x2b2930);
     int rows = (w->h - 108) / 21;
     int end = out_count - scroll;
     if (end < 0)
@@ -962,24 +1030,24 @@ static void explorer_draw(Window *w) {
 #endif
 }
 static void taskbar(void) {
-    rect(0, H - 46, W, 46, 0x111418);
-    rect(0, H - 46, W, 1, 0x484d54);
-    roundrect(12, H - 38, 84, 31, start_open ? 0x363b41 : 0x252a30);
+    rect(0, H - 46, W, 46, dark ? 0x211f26 : 0xf3edf7);
+    rect(0, H - 46, W, 1, line);
+    roundrect(12, H - 38, 84, 31, start_open ? selected_fill : surface_high);
     for (int y = 0; y < 2; y++)
         for (int x = 0; x < 2; x++)
             rect(24 + x * 7, H - 29 + y * 7, 4, 4, accent);
-    text(46, H - 34, "应用", 0xe2edf0);
+    text(46, H - 34, "应用", ink);
     for (int i = 0; i < WINDOW_COUNT; i++)
         if (windows[i].open) {
             int x = 110 + i * 126;
             int active = focus == i && !windows[i].min;
-            rect(x, H - 38, 118, 31, active ? 0x343940 : 0x1b2026);
+            rect(x, H - 38, 118, 31, active ? selected_fill : surface_high);
             text(x + 14, H - 34,
                  i == 0   ? "文件"
                  : i == 1 ? "系统设置"
                  : i == 2 ? ">_ 终端"
                           : i == 3 ? "文本编辑器" : "Explorer",
-                 active ? 0xd5e9e7 : 0x88a3b0);
+                 active ? ink : muted);
             if (active)
                 rect(x + 12, H - 6, 94, 2, accent);
         }
@@ -1022,7 +1090,7 @@ static int search_match(int id) {
 }
 static void start_draw(void) {
     int x = 12, y = H - 424;
-    roundrect(x + 3, y + 4, 326, 366, dark ? 0x0e1726 : 0xc8d6e1);
+    roundrect(x + 3, y + 4, 326, 366, dark ? 0x141218 : 0xd8d1df);
     roundrect(x, y, 326, 366, panel);
     text(x + 22, y + 19, "应用程序 / Applications", ink);
     roundrect(x + 18, y + 57, 290, 34, bg);
@@ -1042,7 +1110,7 @@ static void start_draw(void) {
     text(x + 270, y + 328, "关机", ink);
 }
 static void context_draw(void) {
-    roundrect(ctxx + 3, ctxy + 3, 184, 320, dark ? 0x0f1929 : 0xcad5df);
+    roundrect(ctxx + 3, ctxy + 3, 184, 320, dark ? 0x141218 : 0xd8d1df);
     roundrect(ctxx, ctxy, 184, 320, panel);
     const char *items[] = {"打开", "新建文件", "新建文件夹",        "重命名", "复制",
                            "粘贴", "剪切",     "移到回收站 / 删除", "属性"};
@@ -1051,7 +1119,7 @@ static void context_draw(void) {
 }
 static void modal_draw(void) {
     int x = 308, y = 262;
-    roundrect(x + 5, y + 6, 408, 202, dark ? 0x101a29 : 0xb9c8d7);
+    roundrect(x + 5, y + 6, 408, 202, dark ? 0x141218 : 0xd8d1df);
     roundrect(x, y, 408, 202, panel);
     const char *title = modal == 1   ? "新建文本文件"
                         : modal == 2 ? "新建文件夹"
@@ -1132,7 +1200,7 @@ static void render(void) {
     if (context_open)
         context_draw();
     if (notice_until > ticks) {
-        roundrect(300, H - 104, 520, 40, dark ? 0x2d424b : 0xffffff);
+        roundrect(300, H - 104, 520, 40, surface_high);
         text(316, H - 95, notice, ink);
     }
     if (modal)
@@ -1393,9 +1461,8 @@ static void left_click(void) {
                 }
                 if (ry >= 457 && ry <= 493 && rx >= 204) {
                     int i = (rx - 204) / 64;
-                    u32 colors[] = {0xc8cdd3, 0x939ba5, 0x626a74, 0xe2e5e8};
-                    if (i < 4)
-                        accent = colors[i];
+                    if (i >= 0 && i < 4)
+                        accent_choice = i;
                 }
             } else if (settings_tab == 2 && inside(rx, ry, 204, 501, 126, 30))
                 notify(fs_sync() ? "已同步到磁盘" : "磁盘不可写");
