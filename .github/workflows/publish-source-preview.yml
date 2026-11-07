@@ -1,82 +1,112 @@
-name: Publish MayOS source-only development snapshot
+name: Publish MayOS source prerelease
+
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/publish-source-preview.yml"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Prerelease version without v, for example 0.3.0-pre2"
+        required: true
+        type: string
+      summary:
+        description: "Short release highlight"
+        required: true
+        type: string
+
 permissions:
   contents: read
+
+concurrency:
+  group: publish-mayos-prerelease
+  cancel-in-progress: false
+
 jobs:
   prerelease:
     if: github.repository == 'ZhongYeMay/MayOS' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Validate source documentation and the website
-        run: |
-          python3 website/check_site.py
-          python3 -m py_compile MayOS_0.3.0-pre1/scripts/linux.py
-          test -f MayOS_0.3.0-pre1/docs/third-party/Fastfetch-MIT.txt
-          grep -q 'platform_fastfetch' MayOS_0.3.0-pre1/linux/desktop.c
-          grep -q 'direct_copy' MayOS_0.3.0-pre1/linux/desktop.c
-      - name: Archive this exact source revision
+
+      - name: Validate version, source and website
         env:
-          RELEASE_TAG: v0.3.0-pre1-source.1
+          VERSION: ${{ inputs.version }}
         run: |
           set -eu
-          mkdir -p "$RUNNER_TEMP/release"
-          git archive --format=zip HEAD -o "$RUNNER_TEMP/release/MayOS-0.3.0-pre1-source-update1.zip"
-          (
-            cd "$RUNNER_TEMP/release"
-            sha256sum MayOS-0.3.0-pre1-source-update1.zip > MayOS-0.3.0-pre1-source-update1-SHA256SUMS.txt
-          )
-          cat > "$RUNNER_TEMP/release/NOTES.md" <<'NOTES'
-          ## MayOS 0.3.0-pre1 · Source update 1 (development prerelease)
+          printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-pre[1-9][0-9]*$'
+          grep -Fq "#define MAYOS_RELEASE \"$VERSION\"" MayOS_0.3.0-pre1/kernel/gui.c
+          grep -Fq "VERSION=\"$VERSION\"" MayOS_0.3.0-pre1/scripts/linux.py
+          grep -Fq ">$VERSION<" website/download.html
+          python3 website/check_site.py
+          python3 -m py_compile MayOS_0.3.0-pre1/scripts/linux.py
+          sh -n MayOS_0.3.0-pre1/linux/network-start MayOS_0.3.0-pre1/linux/dhcp-hook
 
-          **Source-only development snapshot. No updated bootable ISO or new QEMU recordings are included.**
+      - name: Require successful source CI for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          conclusion="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
+            --jq '[.check_runs[] | select(.name == "build") | .conclusion] | first // ""')"
+          test "$conclusion" = success
 
-          Changes since the historical MayOS 0.3.0-pre1 binary:
-          - Ubuntu-like aubergine windows, orange controls and a less cartoonish interface.
-          - Real Fastfetch executable integration for the Linux x86_64 boot environment.
-          - Optimized native XRGB8888 scanline copying in the Linux framebuffer backend.
-          - Updated responsive MayOS website source and corrected release documentation.
-          - Old MayOS 0.1 / 0.2 files removed from the current working tree; history remains.
+      - name: Create exact source archive and notes
+        env:
+          VERSION: ${{ inputs.version }}
+          SUMMARY: ${{ inputs.summary }}
+        run: |
+          set -eu
+          release_dir="$RUNNER_TEMP/release"
+          archive="MayOS-$VERSION-source.zip"
+          mkdir -p "$release_dir"
+          git archive --format=zip HEAD -o "$release_dir/$archive"
+          (cd "$release_dir" && sha256sum "$archive" > "MayOS-$VERSION-SHA256SUMS.txt")
+          {
+            printf '## MayOS %s · source prerelease\n\n' "$VERSION"
+            printf '**Source-only development snapshot. No newly verified bootable ISO is included.**\n\n'
+            printf '%s\n\n' "$SUMMARY"
+            printf 'Commit: `%s`\n\n' "$GITHUB_SHA"
+            printf 'The archive contains the source, scripts, website and notices. '
+            printf 'A formal release requires matching bootable artifacts, checksums and boot validation.\n\n'
+            printf 'MayOS Team 2023 - 2026.\n'
+            printf 'This version of MayOS is for test use only.\n'
+          } > "$release_dir/NOTES.md"
 
-          Existing tests: MayKernel QEMU regression suite, Linux desktop build and real Fastfetch execution passed in the source CI. **The new Linux dual-boot ISO itself has NOT been built or boot-tested in this release.**
-
-          The archive contains the source code, scripts, website and notices. Read the build instructions in `MayOS_0.3.0-pre1/README.md`. Original Linux/GRUB/BusyBox third-party sources must be obtained/provided as documented when distributing a rebuilt ISO.
-
-          MayOS Team 2023 - 2026.
-          This version of MayOS is for test use only.
-          NOTES
-      - name: Preserve downloadable snapshot even if publishing is blocked
-        uses: actions/upload-artifact@v4
-        with:
-          name: MayOS-0.3.0-pre1-source-update1
-          path: |
-            ${{ runner.temp }}/release/MayOS-0.3.0-pre1-source-update1.zip
-            ${{ runner.temp }}/release/MayOS-0.3.0-pre1-source-update1-SHA256SUMS.txt
-            ${{ runner.temp }}/release/NOTES.md
-          retention-days: 30
-      - name: Publish source-only GitHub prerelease
+      - name: Publish prerelease and retain only the newest Release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_PROMPT_DISABLED: "1"
+          VERSION: ${{ inputs.version }}
         run: |
           set -eu
-          if gh release view v0.3.0-pre1-source.1 >/dev/null 2>&1; then
-            echo "Release already exists; refusing to overwrite published assets."
+          tag="v$VERSION"
+          release_dir="$RUNNER_TEMP/release"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; refusing to overwrite it."
             exit 1
           fi
-          gh release create v0.3.0-pre1-source.1 \
-            "$RUNNER_TEMP/release/MayOS-0.3.0-pre1-source-update1.zip" \
-            "$RUNNER_TEMP/release/MayOS-0.3.0-pre1-source-update1-SHA256SUMS.txt" \
+          gh release create "$tag" \
+            "$release_dir/MayOS-$VERSION-source.zip" \
+            "$release_dir/MayOS-$VERSION-SHA256SUMS.txt" \
             --target "$GITHUB_SHA" --prerelease --latest=false \
-            --title "MayOS 0.3.0-pre1 · source update 1 (no ISO)" \
-            --notes-file "$RUNNER_TEMP/release/NOTES.md"
+            --title "MayOS $VERSION · source prerelease" \
+            --notes-file "$release_dir/NOTES.md"
+          current_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .id)"
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
+            --jq ".[] | select(.id != $current_id) | .id" |
+          while read -r release_id; do
+            [ -z "$release_id" ] || gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$release_id"
+          done
+
+      - name: Preserve workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-${{ inputs.version }}-source
+          path: |
+            ${{ runner.temp }}/release/MayOS-${{ inputs.version }}-source.zip
+            ${{ runner.temp }}/release/MayOS-${{ inputs.version }}-SHA256SUMS.txt
+            ${{ runner.temp }}/release/NOTES.md
+          retention-days: 30

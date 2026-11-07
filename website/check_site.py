@@ -32,9 +32,9 @@ assert len(parser.links) >= 8
 assert all(not url.startswith("javascript:") for url in parser.links)
 assert all(url[1:] in parser.ids for url in parser.links if url.startswith("#")), "Broken in-page link"
 required = (
-    "Fastfetch", "Ubuntu", "MayKernel", "0.3.0-pre1",
+    "Fastfetch", "Ubuntu", "MayKernel", "0.3.0-pre2",
     "MayOS Team 2023 - 2026.", "This version of MayOS is for test use only.",
-    "开发快照", "Linux 双启动 ISO", "XRGB8888", "v0.3.0-pre1-source.1",
+    "开发快照", "Linux 双启动 ISO", "XRGB8888", "network preview",
 )
 assert all(text in html for text in required), "Missing project disclosure"
 assert "MayOS_0.1_Eng" not in html

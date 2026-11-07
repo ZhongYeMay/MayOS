@@ -1,4 +1,4 @@
-# MayOS 0.3.0-pre1 — BIOS / UEFI 双内核工作台
+# MayOS 0.3.0-pre2 — BIOS / UEFI 双内核工作台
 
 > **当前仓库状态（2026-11-01）：** 本目录源代码已经加入 Ubuntu 风格窗口、真实 Fastfetch 的 Linux 模式集成以及 XRGB8888 图形刷新优化；这些新提交尚未打包成经过验证的新 ISO。原先发行包仍是历史 0.3.0-pre1 测试构建。早期 `MayOS_0.1_Eng` 和 `MayOS_0.2_Eng` 已从工作树删除，可从 Git 提交历史查看。见 [版本说明](docs/repository-lineage.md)。
 

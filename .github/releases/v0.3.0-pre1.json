@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "repository": "ZhongYeMay/MayOS",
+  "prerelease": true,
   "tag": "v0.3.0-pre1",
   "title": "MayOS 0.3.0-pre1 · BIOS / UEFI 双内核桌面",
   "origin": "https://mayos-official.business-tea-9633.chatgpt.site/",

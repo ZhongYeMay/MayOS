@@ -1,17 +1,17 @@
-name: Publish MayOS 0.3.0-pre1
+name: Publish verified MayOS release
 
 on:
-  push:
-    paths:
-      - .github/releases/v0.3.0-pre1.json
-      - .github/releases/v0.3.0-pre1.md
-      - .github/workflows/publish-mayos-release.yml
-      - scripts/publish_github_release.py
   workflow_dispatch:
+    inputs:
+      manifest:
+        description: "Version-specific release manifest"
+        required: true
+        default: ".github/releases/v0.3.0-pre1.json"
+        type: string
 
 permissions: {}
 concurrency:
-  group: publish-mayos-v0.3.0-pre1
+  group: publish-mayos-verified-release
   cancel-in-progress: false
 
 jobs:
@@ -29,13 +29,31 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - name: Verify downloads and publish the prerelease
+      - name: Verify downloads and publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_PROMPT_DISABLED: "1"
-        run: >-
-          python3 scripts/publish_github_release.py
-          --manifest .github/releases/v0.3.0-pre1.json
-          --output "$RUNNER_TEMP/mayos-release-assets"
-          --target "$GITHUB_SHA"
-          --publish
+          RELEASE_MANIFEST: ${{ inputs.manifest }}
+        run: |
+          set -eu
+          version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["tag"].removeprefix("v"))' "$RELEASE_MANIFEST")"
+          grep -Fq "#define MAYOS_RELEASE \"$version\"" MayOS_0.3.0-pre1/kernel/gui.c
+          grep -Fq "VERSION=\"$version\"" MayOS_0.3.0-pre1/scripts/linux.py
+          python3 scripts/publish_github_release.py \
+            --manifest "$RELEASE_MANIFEST" \
+            --output "$RUNNER_TEMP/mayos-release-assets" \
+            --target "$GITHUB_SHA" \
+            --publish
+      - name: Retain only the newly published Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_MANIFEST: ${{ inputs.manifest }}
+        run: |
+          set -eu
+          tag="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["tag"])' "$RELEASE_MANIFEST")"
+          current_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .id)"
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
+            --jq ".[] | select(.id != $current_id) | .id" |
+          while read -r release_id; do
+            [ -z "$release_id" ] || gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$release_id"
+          done

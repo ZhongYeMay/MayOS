@@ -32,7 +32,12 @@ def load_manifest(path):
     manifest = json.loads(path.read_text(encoding="utf-8"))
     require(manifest["schema_version"] == 1, "Unsupported manifest schema")
     require(manifest["repository"] == "ZhongYeMay/MayOS", "Unexpected repository")
-    require(manifest["tag"] == "v0.3.0-pre1", "Unexpected release tag")
+    prerelease = manifest.get("prerelease", True)
+    require(type(prerelease) is bool, "prerelease must be a boolean")
+    tag_pattern = r"v[0-9]+\.[0-9]+\.[0-9]+-pre[1-9][0-9]*" if prerelease else r"v[0-9]+\.[0-9]+\.[0-9]+"
+    require(bool(re.fullmatch(tag_pattern, manifest["tag"])),
+            "Release tag does not match its prerelease channel")
+    manifest["prerelease"] = prerelease
     origin = urllib.parse.urlsplit(manifest["origin"])
     require(origin.scheme == "https" and origin.hostname and not origin.username
             and not origin.password and origin.path in ("", "/")
@@ -148,9 +153,13 @@ def publish(manifest, output, notes, target):
     repository, tag = manifest["repository"], manifest["tag"]
     require(os.environ.get("GITHUB_REPOSITORY", repository) == repository, "Wrong workflow repository")
     ensure_unused(manifest)
+    create_flags = ["--draft"]
+    if manifest["prerelease"]:
+        create_flags.extend(("--prerelease", "--latest=false"))
+    else:
+        create_flags.append("--latest")
     gh("release", "create", tag, "--repo", repository, "--target", target,
-       "--title", manifest["title"], "--notes-file", str(notes),
-       "--draft", "--prerelease", "--latest=false")
+       "--title", manifest["title"], "--notes-file", str(notes), *create_flags)
     try:
         created = [r for r in releases(repository) if r["tag_name"] == tag]
         require(len(created) == 1 and created[0]["draft"], "Cannot identify the new draft release")
@@ -159,7 +168,8 @@ def publish(manifest, output, notes, target):
            *(str(output / a["file"]) for a in manifest["assets"]))
         release = json.loads(gh("api", f"repos/{repository}/releases/{release_id}"))
         expected = {a["file"]: a for a in manifest["assets"]}
-        require(release["draft"] and release["prerelease"] and release["tag_name"] == tag,
+        require(release["draft"] and release["prerelease"] == manifest["prerelease"]
+                and release["tag_name"] == tag,
                 "Draft release metadata changed during upload")
         require(len(release["assets"]) == len(expected)
                 and {a["name"] for a in release["assets"]} == set(expected), "Wrong uploaded asset set")
@@ -169,9 +179,12 @@ def publish(manifest, output, notes, target):
                     f"Uploaded asset mismatch: {asset['name']}")
             if asset.get("digest"):
                 require(asset["digest"] == "sha256:" + pinned["sha256"], "GitHub asset digest mismatch")
-        gh("release", "edit", tag, "--repo", repository, "--draft=false", "--prerelease", "--latest=false")
+        publish_flags = (["--prerelease", "--latest=false"] if manifest["prerelease"]
+                         else ["--prerelease=false", "--latest"])
+        gh("release", "edit", tag, "--repo", repository, "--draft=false", *publish_flags)
         release = json.loads(gh("api", f"repos/{repository}/releases/{release_id}"))
-        require(not release["draft"] and release["prerelease"], "Publication status could not be confirmed")
+        require(not release["draft"] and release["prerelease"] == manifest["prerelease"],
+                "Publication status could not be confirmed")
         print("Published " + release["html_url"], flush=True)
     except Exception:
         print("Publication did not complete cleanly. Inspect the new release/draft before retrying; "
