@@ -208,11 +208,37 @@ static void symbol(int x, int y, int kind, int size, u32 c) {
         stroke(x + m + 3, y + m + 5, x + m + 5, y + size - m, thick, c);
         stroke(x + size - m - 3, y + m + 5, x + size - m - 5, y + size - m, thick, c);
         stroke(x + m + 5, y + size - m, x + size - m - 5, y + size - m, thick, c);
-    } else {
-        /* network / globe */
+    } else if (kind == 4) {
         ring(cx, cy, size / 3, thick, c);
         stroke(x + m, cy, x + size - m, cy, thick, c);
         stroke(cx, y + m, cx, y + size - m, thick, c);
+    } else if (kind == 5) {
+        stroke(x + m, y + m, x + size - m, y + m, thick, c);
+        stroke(x + m, y + m, x + m, y + size - m, thick, c);
+        stroke(x + size - m, y + m, x + size - m, y + size - m, thick, c);
+        stroke(x + m, y + size - m, x + size - m, y + size - m, thick, c);
+        for (int row = 0; row < 3; row++)
+            stroke(x + m + 5, y + m + 7 + row * (size / 7),
+                   x + size - m - 5, y + m + 7 + row * (size / 7), thick, c);
+    } else if (kind == 6) {
+        for (int row = 0; row < 3; row++)
+            for (int col = 0; col < 3; col++)
+                roundrect(x + m + col * (size / 5),
+                          y + m + row * (size / 5), size / 8, size / 8, c);
+    } else if (kind == 7) {
+        ring(cx, cy, size / 4, thick, c);
+        rect(cx - size / 4, cy + size / 9, size / 2, thick, c);
+        circle(cx, cy + size / 4 + thick, thick, c);
+    } else if (kind == 8) {
+        stroke(x + m, cy, cx, y + m, thick, c);
+        stroke(cx, y + m, x + size - m, cy, thick, c);
+        stroke(cx - size / 7, cy + 2, cx, cy - size / 8, thick, c);
+        stroke(cx, cy - size / 8, cx + size / 7, cy + 2, thick, c);
+        circle(cx, y + size - m, thick, c);
+    } else {
+        ring(cx, cy, size / 4, thick, c);
+        stroke(cx, y + m, cx, cy - size / 4, thick, c);
+        stroke(cx, cy + size / 4, cx, y + size - m, thick, c);
     }
 }
 static void icon(int x, int y, int kind, int size) {
@@ -659,30 +685,61 @@ static void palette(void) {
     on_accent = dark ? 0x381e72 : 0xffffff;
     selected_fill = dark ? 0x4f378b : 0xeaddff;
 }
-static void desktop(void) {
-    /* Material 3: tonal canvas, navigation rail, compact status area. */
-    for (int y = 0; y < H; y++)
-        rect(0, y, W, 1, blend(dark ? 0x15131b : 0xf6f1fa,
-                               dark ? 0x211e29 : 0xece6f3, (u32)y * 130 / H));
-    rect(0, 0, W, 46, dark ? 0x211f26 : 0xf3edf7);
-    rect(0, 45, W, 1, line);
-    ring(30, 23, 10, 3, accent);
-    text(50, 13, "MayOS", ink);
-    text(157, 13, "Workspace", muted);
-    text(786, 13, PLATFORM_BADGE, muted);
-    roundrect(14, 60, 76, 508, panel);
-    const char *names[] = {"文件", "设置", "终端", "回收站"};
-    for (int i = 0; i < 4; i++) {
-        int top = 77 + i * 100;
-        if (windows[i == 3 ? 0 : i].open && focus == (i == 3 ? 0 : i) && !windows[focus].min)
-            roundrect(22, top + 3, 60, 58, selected_fill);
-        icon(32, top + 8, i, 44);
-        text(i == 3 ? 30 : 38, top + 58, names[i], muted);
+static int quick_open, notifications_open, overview_open, desktop_context_open, wallpaper_mode;
+static int brightness_level = 100, desktop_x, desktop_y;
+static int notification_count;
+static char notification_log[4][120];
+static int desktop_icon_at(int px, int py) {
+    int item = 0;
+    for (int i = 4; i < FS_MAX; i++) {
+        if (!files[i].used || files[i].parent != 2) continue;
+        int x = 125 + (item % 5) * 124;
+        int y = 96 + (item / 5) * 100;
+        if (inside(px, py, x, y, 104, 90)) return i;
+        item++;
+        if (item >= 15) break;
     }
-    symbol(35, 489, 4, 28, ink);
-    text(17, 535, "Explorer", muted);
-    large_text(728, 594, "MayOS", muted);
-    text(729, 640, "MATERIAL WORKSPACE / " MAYOS_RELEASE, muted);
+    return -1;
+}
+static void desktop(void) {
+    /* Native grayscale wallpaper and macOS-style top application bar.
+       Components use Material 3 tonal surfaces and local vector symbols. */
+    for (int y = 0; y < H; y++) {
+        u32 first = wallpaper_mode ? 0x27272b : 0x17181b;
+        u32 last = wallpaper_mode ? 0x47464a : 0x303036;
+        rect(0, y, W, 1, blend(first, last, (u32)y * 175 / H));
+    }
+    for (int i = 0; i < 7; i++)
+        rect(310 + i * 42, 110 + i * 38, 1, 400, 0x3f4044);
+    rect(0, 0, W, 42, dark ? 0x211f26 : 0xf6f4f7);
+    rect(0, 41, W, 1, line);
+    text(24, 10, "MayOS", ink);
+    text(126, 10, "文件", muted);
+    text(200, 10, "窗口", muted);
+    text(274, 10, "应用", muted);
+    text(348, 10, "终端", muted);
+#ifdef MAYOS_LINUX
+    char state[180];
+    int online = platform_network_status(state, sizeof(state));
+#else
+    int online = net_online();
+#endif
+    symbol(708, 8, 8, 27, online ? ink : muted);
+    text(742, 10, online ? "NET" : "OFF", muted);
+    text(802, 10, "亮度", muted);
+    symbol(880, 9, 7, 23, notification_count ? ink : muted);
+    text(911, 10, "通知", muted);
+    text(961, 10, "设置", ink);
+    /* Real files from the Desktop folder; double-click opens via the editor. */
+    int count = 0;
+    for (int i = 4; i < FS_MAX && count < 15; i++) {
+        if (!files[i].used || files[i].parent != 2) continue;
+        int x = 125 + (count % 5) * 124;
+        int y = 96 + (count / 5) * 100;
+        icon(x + 21, y, files[i].dir ? 0 : 5, 50);
+        text(x, y + 58, files[i].name, 0xf3f2f4);
+        count++;
+    }
 }
 static void frame(int id) {
     Window *w = &windows[id];
@@ -1044,46 +1101,21 @@ static void explorer_draw(Window *w) {
 #endif
 }
 static void taskbar(void) {
-    rect(0, H - 46, W, 46, dark ? 0x211f26 : 0xf3edf7);
-    rect(0, H - 46, W, 1, line);
-    roundrect(12, H - 38, 84, 31, start_open ? selected_fill : surface_high);
-    for (int y = 0; y < 2; y++)
-        for (int x = 0; x < 2; x++)
-            rect(24 + x * 7, H - 29 + y * 7, 4, 4, accent);
-    text(46, H - 34, "应用", ink);
-    for (int i = 0; i < WINDOW_COUNT; i++)
-        if (windows[i].open) {
-            int x = 110 + i * 126;
-            int active = focus == i && !windows[i].min;
-            rect(x, H - 38, 118, 31, active ? selected_fill : surface_high);
-            text(x + 14, H - 34,
-                 i == 0   ? "文件"
-                 : i == 1 ? "系统设置"
-                 : i == 2 ? ">_ 终端"
-                          : i == 3 ? "文本编辑器" : "Explorer",
-                 active ? ink : muted);
-            if (active)
-                rect(x + 12, H - 6, 94, 2, accent);
-        }
-    circle(772, H - 23, 3, disk_ready ? accent : 0x86a5b2);
-    text(785, H - 33,
-#ifdef MAYOS_LINUX
-         "RAM SESSION",
-#else
-         disk_ready ? "MayFS / disk" : "RAM / session",
-#endif
-         0x87a0ae);
-    u32 sec = ticks / 100;
-    char clock[32], n[12];
-    number(n, sec / 3600);
-    copy(clock, n, 32);
-    copy(clock + strlen(clock), ":", 32 - strlen(clock));
-    u32 min = sec / 60 % 60;
-    number(n, min);
-    if (min < 10)
-        copy(clock + strlen(clock), "0", 32 - strlen(clock));
-    copy(clock + strlen(clock), n, 32 - strlen(clock));
-    text(923, H - 33, clock, 0xc8dce4);
+    /* macOS placement; Material 3 tonal dock, rounded icon containers. */
+    int left = 210, top = H - 84;
+    roundrect(left, top, 604, 76, dark ? 0x211f26 : 0xf3edf7);
+    for (int i = 0; i < 6; i++) {
+        int x = left + 16 + i * 98;
+        int id = i - 1;
+        int selected = i == 0 ? start_open :
+                       (id >= 0 && windows[id].open && !windows[id].min);
+        if (selected)
+            roundrect(x - 4, top + 3, 56, 58, selected_fill);
+        int kind = i == 0 ? 6 : id == 3 ? 5 : id;
+        icon(x, top + 7, kind, 44);
+        if (selected)
+            circle(x + 22, top + 65, 3, accent);
+    }
 }
 static int contains(const char *a, const char *b) {
     if (!*b)
