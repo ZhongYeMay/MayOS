@@ -32,7 +32,8 @@ class Site(BaseHTTPRequestHandler):
             body = b"<html><body><h1>SECOND_PAGE_OK</h1><p>History works</p></body></html>"
         else:
             body = (b"<html><body><h1>MAYOS_BROWSER_OK</h1>"
-                    b"<script>NOT_EXECUTABLE</script>" + items + b"</body></html>")
+                    b"<script>NOT_EXECUTABLE</script>" + items +
+                    b"<a href=\"/second\">Second page</a></body></html>")
         self.send_response(200)
         self.send_header("Content-Type", "text/html")
         self.send_header("Content-Length", str(len(body)))
@@ -141,6 +142,18 @@ def main() -> None:
         wait_hits(vm, before)
         vm.hold(2)
         done("Browser HTTP/HTML", "Guest fetched real local HTTP HTML via QEMU NIC")
+
+        vm.click(798, 211)   # open actual links parsed from returned HTML
+        vm.wait("Explorer: links opened", timeout=25)
+        vm.hold(1)
+        before = Site.hits
+        vm.click(710, 354)   # follow <a href="/second"> in QEMU
+        vm.wait("Explorer: link opened", timeout=25)
+        wait_hits(vm, before)
+        vm.click(214, 211)   # back to first page
+        vm.wait("Explorer: history back", timeout=25)
+        vm.hold(1)
+        done("Browser clickable links", "Followed a real HTML anchor through TCP/HTTP")
 
         vm.key("ctrl-t")       # new independent tab
         vm.wait("Explorer: new tab", timeout=25)
