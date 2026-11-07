@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 60
     env:
       GH_TOKEN: ${{ github.token }}
-      SOURCE_SHA: 408d8816bf74a00d23c810142b8bc44fbe52f6cf
+      SOURCE_SHA: 9ba9dab8e283d2fdfc22b2d5446e34fe59bc7c68
       VERIFIED_RUN: '42387470897'
     steps:
       - name: Wait for exact pinned native and BIOS/UEFI verification
