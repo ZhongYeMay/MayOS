@@ -44,7 +44,7 @@ class BootVM:
                 '-drive', f'file={disk},format=raw,if=ide,index=0',
                 '-serial', f'unix:{self.serial_path},server=on,wait=off',
                 '-qmp', f'unix:{self.qmp_path},server=on,wait=off',
-                '-nic', 'user,model=e1000', '-no-reboot', '-S']
+                '-nic', 'user,model=e1000', '-nic', 'user,model=rtl8139', '-no-reboot', '-S']
         if (ovmf_code is None) != (ovmf_vars is None):
             raise ValueError('OVMF_CODE and an independent writable OVMF_VARS copy are both required')
         if ovmf_code is not None:
@@ -283,6 +283,7 @@ def main():
         vm.menu_shot('test-dual-menu')
         # No keypress: exercise the configured default and its visible countdown.
         vm.wait('MayOS: desktop ready', timeout=30)
+        vm.wait('MayNet: DHCP ready', timeout=30)
         vm.shot('test-dual-desktop')
         vm.key('f1')
         vm.keyboard_command('neofetch')
