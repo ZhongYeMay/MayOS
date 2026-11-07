@@ -52,7 +52,7 @@ def snapshot(vm, name):
 
 
 def type_url(vm, url):
-    vm.click(550, 171)  # address bar selects/replaces the URL
+    vm.click(550, 211)  # address bar selects/replaces the URL
     vm.type(url + "\n")
 
 
@@ -75,7 +75,7 @@ def main():
         first = snapshot(vm, "browser-http-first")
         assert ImageChops.difference(home, first).getbbox(), "HTTP page did not alter display"
 
-        vm.click(925, 171)  # toggle current page bookmark
+        vm.click(925, 211)  # toggle current page bookmark
         vm.wait("Explorer: bookmark added")
 
         previous = count(vm, "MayNet: HTTP response received")
@@ -84,24 +84,42 @@ def main():
         second = snapshot(vm, "browser-http-second")
         assert ImageChops.difference(first, second).getbbox(), "Second page did not change UI"
 
-        vm.click(214, 171)   # back
+        vm.key('ctrl-t')
+        vm.wait("Explorer: new tab")
+        vm.type(url + '/long\n')
+        wait_more(vm, "MayNet: HTTP response received",
+                  count(vm, "MayNet: HTTP response received") - 1)
+        vm.click(235, 165)
+        vm.wait("Explorer: tab switch")
+        vm.click(399, 165)
+        vm.key('ctrl-w')
+        vm.wait("Explorer: tab close")
+        snapshot(vm, "browser-material-tabs")
+
+        vm.click(214, 211)   # back
         vm.wait("Explorer: history back")
-        vm.click(256, 171)   # forward
+        vm.click(256, 211)   # forward
         vm.wait("Explorer: history forward")
-        vm.click(298, 171)   # reload
+        vm.click(298, 211)   # reload
         vm.wait("Explorer: reload")
 
         previous = count(vm, "MayNet: HTTP response received")
         type_url(vm, url + "/long")
         wait_more(vm, "MayNet: HTTP response received", previous)
+        vm.key("ctrl-f")
+        vm.wait("Explorer: find opened")
+        vm.type("Scroll row 015\n")
+        vm.wait("Explorer: find match")
+        snapshot(vm, "browser-find-in-page")
+        vm.key("esc")
         vm.click(916, 583)    # scroll down (actual viewer page)
         vm.wait("Explorer: page down")
         snapshot(vm, "browser-long-page")
 
-        vm.click(340, 171)    # home
+        vm.click(340, 211)    # home
         vm.wait("Explorer: home")
         previous = count(vm, "Explorer: HTTP navigation")
-        vm.click(310, 215)    # return via first bookmark
+        vm.click(310, 255)    # return via first bookmark
         wait_more(vm, "Explorer: HTTP navigation", previous)
 
         type_url(vm, "https://example.com")
