@@ -2,7 +2,7 @@
 """Generate native icon bitmaps from Apache-2.0 Google Material Symbols Rounded.
 
 The exact upstream Git commit is pinned for reproducibility. The OS embeds only
-ten 48x48 grayscale glyph bitmaps; it never fetches fonts/CDNs at runtime.
+twenty 48x48 grayscale glyph bitmaps; it never fetches fonts/CDNs at runtime.
 If the build is offline without cached assets, the existing native vector
 symbols remain available. Release CI must verify that real glyphs were built.
 """
@@ -37,6 +37,16 @@ ICONS = (
     ("notifications", 0xe7f5),
     ("wifi", 0xe63e),
     ("brightness_6", 0xe3ab),
+    ("schedule", 0xefd6),          # 10 - system clock
+    ("tune", 0xe429),              # 11 - controls
+    ("power_settings_new", 0xf8c7),# 12 - power menu
+    ("wifi_off", 0xe648),          # 13 - offline
+    ("close", 0xe5cd),             # 14 - window close
+    ("minimize", 0xe931),          # 15 - window minimize
+    ("open_in_full", 0xf1ce),      # 16 - window maximize
+    ("dark_mode", 0xe51c),        # 17 - dark mode
+    ("light_mode", 0xe518),       # 18 - light mode
+    ("search", 0xe8b6),           # 19 - search
 )
 
 def main() -> None:
@@ -82,12 +92,12 @@ def main() -> None:
             "/* Upstream: google/material-design-icons, pinned commit "
             f"{COMMIT}. */\n"
             "#define MAYOS_MATERIAL_ICONS 1\n"
-            "static const unsigned char material_icons[10][2304] = {\n"
+            "static const unsigned char material_icons[{len(ICONS)}][2304] = {\n"
         )
         for bitmap in bitmaps:
             out.write("{" + ",".join(str(pixel) for pixel in bitmap) + "},\n")
         out.write("};\n")
-    print("Material Symbols Rounded: 10 licensed glyphs rasterized", flush=True)
+    print(f"Material Symbols Rounded: {len(ICONS)} licensed glyphs rasterized", flush=True)
 
 if __name__ == "__main__":
     main()
