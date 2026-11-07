@@ -100,8 +100,8 @@ def main():
 
         vm.click(340, 171)    # home
         vm.wait("Explorer: home")
-        vm.click(310, 215)    # return via first bookmark
         previous = count(vm, "Explorer: HTTP navigation")
+        vm.click(310, 215)    # return via first bookmark
         wait_more(vm, "Explorer: HTTP navigation", previous)
 
         type_url(vm, "https://example.com")
