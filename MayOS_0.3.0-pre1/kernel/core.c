@@ -282,6 +282,33 @@ void present(u32 *p) {
                 ((c >> 16 & 255) << redpos) | ((c >> 8 & 255) << greenpos) | ((c & 255) << bluepos);
         }
 }
+static u8 cmos_read(u8 register_number) {
+    outb(0x70, (u8)(register_number | 0x80));
+    return inb(0x71);
+}
+static u8 from_bcd(u8 value) {
+    return (u8)((value >> 4) * 10 + (value & 15));
+}
+void platform_clock(char *buffer) {
+    u8 flags = cmos_read(0x0b);
+    u8 minute = cmos_read(0x02);
+    u8 hour = cmos_read(0x04);
+    int pm = !!(hour & 0x80);
+    hour &= 0x7f;
+    if (!(flags & 0x04)) {
+        hour = from_bcd(hour);
+        minute = from_bcd(minute);
+    }
+    if (!(flags & 0x02)) {
+        hour = (u8)(hour % 12 + (pm ? 12 : 0));
+    }
+    buffer[0] = (char)('0' + hour / 10);
+    buffer[1] = (char)('0' + hour % 10);
+    buffer[2] = ':';
+    buffer[3] = (char)('0' + minute / 10);
+    buffer[4] = (char)('0' + minute % 10);
+    buffer[5] = 0;
+}
 void poweroff(void) {
     serial("MayOS: power off\n");
     outw(0x604, 0x2000);
@@ -297,7 +324,7 @@ static const char shifted[] =
     "\0\033!@#$%^&*()_+\b\tQWERTYUIOP{}\n\0ASDFGHJKL:\"~\0|ZXCVBNM<>?\0*\0 ";
 int input_poll(int *mx, int *my, int *buttons, int *key) {
     static u8 packet[3], n = 0;
-    static int shift = 0, ext = 0, ctrl = 0;
+    static int shift = 0, ext = 0, ctrl = 0, alt = 0;
     *key = 0;
     int changed = 0;
     for (int k = 0; k < 128 && (inb(0x64) & 1); k++) {
@@ -329,6 +356,12 @@ int input_poll(int *mx, int *my, int *buttons, int *key) {
             if (v == 0xe0) {
                 ext = 1;
                 continue;
+            }
+            if (v == 56) { alt = 1; continue; }
+            if (v == 184) { alt = 0; continue; }
+            if (alt && v == 15) {
+                *key = 0x107;  /* Alt+Tab: window overview */
+                return 1;
             }
             if (v == 29) {
                 ctrl = 1;
@@ -368,6 +401,11 @@ int input_poll(int *mx, int *my, int *buttons, int *key) {
                 *key = shift ? shifted[v] : normal[v];
             if (ctrl && *key == 's')
                 *key = 0x106;
+            if (ctrl && *key == 'l') *key = 0x108;
+            if (ctrl && *key == 't') *key = 0x109;
+            if (ctrl && *key == 'w') *key = 0x10a;
+            if (ctrl && *key == 'f') *key = 0x10b;
+            if (ctrl && *key == 'r') *key = 0x10c;
             if (*key)
                 return 1;
         }

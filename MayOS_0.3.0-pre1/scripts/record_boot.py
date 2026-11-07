@@ -46,11 +46,21 @@ class Session:
         with disk.open('wb') as handle:
             handle.truncate(8 * 1024 * 1024)
         command = [args.qemu, '-machine', 'pc', '-accel', 'tcg', '-cpu', 'max',
-                   '-m', '512', '-vga', 'std', '-display', 'none', '-nic', 'none',
+                   '-m', '512', '-vga', 'std', '-display', 'none',
                    '-cdrom', str(args.iso), '-boot', 'd', '-no-reboot', '-S',
                    '-drive', f'file={disk},format=raw,if=ide,index=0',
                    '-serial', f'file:{self.log}',
                    '-qmp', f'unix:{self.sock},server=on,wait=off']
+        # Recorders may choose both QEMU NAT NICs for real network tests.
+        # The earlier historical recordings remain isolated with -nic none.
+        network_models = getattr(args, 'network_models', ())
+        if network_models:
+            for model in network_models:
+                if model not in ('e1000', 'rtl8139'):
+                    raise ValueError('Unsupported recording NIC model: ' + model)
+                command += ['-nic', 'user,model=' + model]
+        else:
+            command += ['-nic', 'none']
         if os.environ.get('QEMU_DATA_DIR'):
             command += ['-L', os.environ['QEMU_DATA_DIR']]
         if args.firmware == 'uefi':
@@ -118,7 +128,7 @@ class Session:
         for character in text + '\n':
             self.key(names.get(character, ('shift-' + character.lower()) if character.isupper() else character))
 
-    def click(self, x, y):
+    def click(self, x, y, button='left'):
         while (self.mx, self.my) != (x, y):
             dx, dy = max(-50, min(50, x-self.mx)), max(-50, min(50, y-self.my))
             events = []
@@ -131,7 +141,7 @@ class Session:
             self.my += dy
             self.hold(.05)
         for down in (True, False):
-            self.q('input-send-event', {'events':[{'type':'btn','data':{'button':'left','down':down}}]})
+            self.q('input-send-event', {'events':[{'type':'btn','data':{'button':button,'down':down}}]})
             self.hold(.1)
 
     def start_recording(self):

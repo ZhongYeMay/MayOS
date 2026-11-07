@@ -10,7 +10,7 @@
 static pid_t web_pid = -1;
 static int web_fd = -1, web_used;
 static time_t web_started;
-static char web_result[2048];
+static char web_result[8192];
 
 static void web_stop(void) {
     if (web_pid > 0) {
@@ -42,7 +42,8 @@ static void web_child(const char *host, const char *port, const char *path) {
     freeaddrinfo(addresses);
     if (sock < 0) { dprintf(1, "Connection failed. Check interface and route."); _exit(1); }
     char request[1024];
-    int count = snprintf(request, sizeof(request), "GET %s HTTP/1.0\r\nHost: %s:%s\r\nConnection: close\r\nUser-Agent: MayOS-Orange/0.1\r\n\r\n", path, host, port);
+    int count = snprintf(request, sizeof(request), "GET %s HTTP/1.0\r\nHost: %s:%s\r\nConnection: close\r\nUser-Agent: MayOS-Explorer/0.4\r\nAccept: text/plain, text/html\r\nAccept-Encoding: identity\r\n\r\n", path, host, port);
+    if (count < 0 || count >= (int)sizeof(request)) { dprintf(1, "HTTP request too long."); _exit(1); }
     int sent = 0;
     while (sent < count) {
         ssize_t n = send(sock, request + sent, (size_t)(count - sent), MSG_NOSIGNAL);
@@ -51,20 +52,20 @@ static void web_child(const char *host, const char *port, const char *path) {
     }
     char buffer[512];
     int total = 0;
-    while (total < 1800) {
+    while (total < 7800) {
         ssize_t n = recv(sock, buffer, sizeof(buffer), 0);
         if (n <= 0) {
             if (!total) dprintf(1, "Empty response or read timeout.");
             break;
         }
-        if (n > 1800 - total) n = 1800 - total;
+        if (n > 7800 - total) n = 7800 - total;
         for (ssize_t i = 0; i < n; i++)
             if ((unsigned char)buffer[i] < 32 && buffer[i] != '\n') buffer[i] = ' ';
-            else if ((unsigned char)buffer[i] > 126) buffer[i] = '?';
+            /* Preserve UTF-8 bytes for the native multilingual font renderer. */
         if (write(1, buffer, (size_t)n) != n) break;
         total += (int)n;
     }
-    if (total >= 1800) dprintf(1, "\n[Preview truncated at 1800 bytes]");
+    if (total >= 7800) dprintf(1, "\n[Preview truncated at 7800 bytes]");
     close(sock);
     _exit(0);
 }
