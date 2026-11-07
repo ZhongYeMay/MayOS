@@ -1090,8 +1090,12 @@ static void explorer_draw(Window *w) {
     text(x + 114, y + 272, explorer_query[0] ? explorer_query : "http://example.com/", ink);
     button(x + w->w - 92, y + 267, 65, "转到", 1);
     text(x + 100, y + 337, "网络 / HTTP 文本预览。HTTPS 与完整浏览器尚未支持。", muted);
+#ifdef MAYOS_LINUX
     char network_report[384];
     int has_network = platform_network_status(network_report, sizeof(network_report));
+#else
+    int has_network = net_online();
+#endif
     text(x + 100, y + 358, has_network ? "IP 已获取 · DHCP 网络可用" : "网络初始化中 · 检查 DHCP 或网卡", muted);
 
     text(x + 100, y + 383, explorer_loading ? "HTTP 正在加载" : "HTTP 文本预览 / 不支持 HTTPS 与脚本", accent);
