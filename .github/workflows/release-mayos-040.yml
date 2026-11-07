@@ -1,37 +1,43 @@
-name: Build and publish MayOS 0.4.0 stable ISO
+name: Verify and publish MayOS 0.4.0
 
 on:
   push:
-    branches: [develop/mayos-0.4.0]
-    paths: ['MayOS_0.3.0-pre1/VERSION']
+    branches:
+      - develop/mayos-0.4.0
+    paths:
+      - 'MayOS_0.3.0-pre1/VERSION'
+      - '.github/workflows/release-mayos-040.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: mayos-stable-040
+  group: verified-mayos-040
   cancel-in-progress: false
 
 jobs:
-  gate:
+  readiness:
+    if: github.repository == 'ZhongYeMay/MayOS'
     runs-on: ubuntu-24.04
     outputs:
       ready: ${{ steps.version.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
-      - name: Verify release version
+      - name: Require explicit 0.4.0 stable version
         id: version
         run: |
-          if [ "$(cat MayOS_0.3.0-pre1/VERSION)" = "0.4.0" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+          if [ "$(cat MayOS_0.3.0-pre1/VERSION)" = 0.4.0 ] && \
+             grep -q '^#define MAYOS_RELEASE "0.4.0"$' MayOS_0.3.0-pre1/kernel/gui.c; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
           else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "Still a prerelease; publication disabled."
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'Release gated: version is still a preview'
           fi
-  release:
-    needs: gate
-    if: needs.gate.outputs.ready == 'true'
+
+  publish:
+    needs: readiness
+    if: needs.readiness.outputs.ready == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
@@ -40,96 +46,102 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Refuse to overwrite a historical Release
+      - name: Prevent accidental overwrites
         run: |
-          ! gh release view v0.4.0 >/dev/null 2>&1
-          test "$(cat MayOS_0.3.0-pre1/VERSION)" = "0.4.0"
-          grep -q '^#define MAYOS_RELEASE "0.4.0"$' MayOS_0.3.0-pre1/kernel/gui.c
-      - name: Install exact build and test dependencies
+          set -euo pipefail
+          if gh release view v0.4.0 >/dev/null 2>&1; then
+            echo 'v0.4.0 already published; refusing to overwrite' >&2
+            exit 1
+          fi
+          test "$(cat MayOS_0.3.0-pre1/VERSION)" = 0.4.0
+      - name: Install Linux, EFI, font and QEMU dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential gcc-multilib \
             grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools dosfstools \
-            qemu-system-x86 ovmf python3 python3-pil fonts-noto-cjk fonts-dejavu-core \
-            flex bison bc libelf-dev libssl-dev xz-utils busybox-static musl-tools \
-            rsync dpkg-dev
-      - name: Build and run MayKernel GUI, filesystem and networking regressions
+            qemu-system-x86 ovmf python3 python3-pil fonts-noto-cjk \
+            fonts-dejavu-core flex bison bc libelf-dev libssl-dev \
+            xz-utils busybox-static musl-tools rsync dpkg-dev
+      - name: Compile and validate native MayKernel
         working-directory: MayOS_0.3.0-pre1
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           make all
-          grep -q '^#define MAYOS_MATERIAL_ICONS 1
+          grep -q '^#define MAYOS_MATERIAL_ICONS 1$' build/material_icons.h
+          make test
           make test-net
           make test-material
-      - name: Build Linux 7.3.1 dual-kernel ISO
+      - name: Build and test BIOS/UEFI dual-kernel ISO
         working-directory: MayOS_0.3.0-pre1
         run: |
+          set -euo pipefail
           make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
-          grep -q '^#define MAYOS_MATERIAL_ICONS 1
-      - name: Verify BIOS, Linux DHCP and UEFI boot matrix
-        working-directory: MayOS_0.3.0-pre1
-        run: |
-          set -euxo pipefail
           make test-dual LINUX_VERSION=7.3.1
           make test-uefi LINUX_VERSION=7.3.1
-      - name: Package verified ISO images
+      - name: Stage ISO images, screenshot and checksums
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           mkdir -p dist
-          cp MayOS_0.3.0-pre1/build/mayos-dual.iso dist/MayOS-0.4.0-dual-boot.iso
           cp MayOS_0.3.0-pre1/build/mayos.iso dist/MayOS-0.4.0-MayKernel.iso
+          cp MayOS_0.3.0-pre1/build/mayos-dual.iso dist/MayOS-0.4.0-dual-boot.iso
           cp MayOS_0.3.0-pre1/build/desktop.png dist/MayOS-0.4.0-desktop.png
           (cd dist && sha256sum *.iso > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
           test -s MayOS_0.3.0-pre1/build/linux/downloads/linux-7.3.1.tar.xz
-      - name: Package corresponding MayOS, Linux, and BusyBox source
+      - name: Include corresponding GPL source and scripts
         run: |
-          set -euxo pipefail
-          mkdir -p /tmp/mayos-040-source/MayOS /tmp/mayos-040-source/upstream
-          git archive HEAD | tar -xf - -C /tmp/mayos-040-source/MayOS
-          cp MayOS_0.3.0-pre1/build/linux/downloads/linux-7.3.1.tar.xz /tmp/mayos-040-source/upstream/
+          set -euo pipefail
+          mkdir -p /tmp/mayos-040-sources/MayOS /tmp/mayos-040-sources/upstream
+          git archive HEAD | tar -xf - -C /tmp/mayos-040-sources/MayOS
+          cp MayOS_0.3.0-pre1/build/linux/downloads/linux-7.3.1.tar.xz /tmp/mayos-040-sources/upstream/
           sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
           sudo apt-get update
-          (cd /tmp/mayos-040-source/upstream && apt-get source busybox)
-          tar -C /tmp -czf dist/MayOS-0.4.0-sources.tar.gz mayos-040-source
+          (cd /tmp/mayos-040-sources/upstream && apt-get source busybox)
+          tar -C /tmp -czf dist/MayOS-0.4.0-sources.tar.gz mayos-040-sources
           test -s dist/MayOS-0.4.0-sources.tar.gz
           (cd dist && sha256sum MayOS-0.4.0-sources.tar.gz >> SHA256SUMS.txt)
-      - name: Prepare release notes
+      - name: Create release notes
         run: |
           cat > dist/RELEASE_NOTES.md <<'EOF'
           # MayOS 0.4.0
 
-          Experimental dual-kernel desktop: MayKernel x86 and Linux 7.3.1 x86_64.
+          Experimental dual-kernel desktop, with native MayKernel and Linux 7.3.1.
+          New Material Design 3 grayscale visual system with rounded iconography,
+          macOS-like top menu and Dock, app launcher, window overview, notifications
+          and quick settings.
 
-          - Native Material 3-style neutral desktop with macOS-like top bar and Dock.
-          - App launcher/search, window overview, notifications, quick settings,
-            context menus, real clock, brightness and native file interaction.
-          - MayKernel RTL8139 IPv4 with DHCP, ARP, Ping, DNS and basic TCP/HTTP/1.0
-            text transport using numeric IP hosts.
-          - Linux e1000 DHCP/DNS and HTTP text preview, BIOS/UEFI QEMU validation.
+          MayKernel networking: RTL8139 with DHCP, ARP, IPv4, ICMP, DNS A queries
+          and a limited HTTP/1.0 TCP plaintext preview for numeric IP addresses.
+          Linux networking: e1000 DHCP/DNS and HTTP text preview.
 
-          Limits: CPU framebuffer, 1024x768, no audio mixer, GPU acceleration,
-          Wi-Fi manager, HTTPS, Secure Boot, arbitrary hardware or full TCP API.
-          Linux desktop files remain RAM-only, whereas native MayFS persists.
+          BIOS and UEFI QEMU startup, GUI interaction, native storage,
+          Linux disk isolation and networking are validated in GitHub Actions.
 
-          Includes two ISO images, SHA256SUMS and corresponding source bundle.
-          QEMU-only experimental build, not recommended for production computers.
+          Limitations: QEMU 1024x768 CPU framebuffer, experimental software.
+          No audio mixer, Wi-Fi manager, TLS/HTTPS browser, arbitrary physical
+          hardware, GPU acceleration or Secure Boot. Linux desktop files are
+          RAM-only while MayKernel MayFS can persist files.
+
+          Includes source archive, SHA-256 checksums and required licenses.
           EOF
-      - name: Preserve the validated Release archive
+      - name: Preserve verified release files
         uses: actions/upload-artifact@v4
         with:
-          name: MayOS-0.4.0-verified-release
+          name: MayOS-0.4.0-verified-assets
           path: dist/
           retention-days: 30
-      - name: Publish only the exact tested source and ISO
+      - name: Create immutable GitHub release
         run: |
           set -euo pipefail
-          ! gh release view v0.4.0 >/dev/null 2>&1
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if gh release view v0.4.0 >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to overwrite.' >&2
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           if git ls-remote --exit-code origin refs/tags/v0.4.0 >/dev/null 2>&1; then
             test "$(git rev-list -n 1 v0.4.0)" = "$GITHUB_SHA"
           else
-            git tag -a v0.4.0 -m "Tested MayOS 0.4.0"
+            git tag -a v0.4.0 -m 'Verified MayOS 0.4.0'
             git push origin refs/tags/v0.4.0
           fi
           gh release create v0.4.0 \
@@ -138,238 +150,6 @@ jobs:
             dist/MayOS-0.4.0-desktop.png \
             dist/MayOS-0.4.0-sources.tar.gz \
             dist/SHA256SUMS.txt \
-            --title "MayOS 0.4.0" --notes-file dist/RELEASE_NOTES.md --latest
- build/material_icons.h
-          make test
-          make test-net
-          make test-material
-      - name: Build Linux 7.3.1 dual-kernel ISO
-        working-directory: MayOS_0.3.0-pre1
-        run: make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
-      - name: Verify BIOS, Linux DHCP and UEFI boot matrix
-        working-directory: MayOS_0.3.0-pre1
-        run: |
-          set -euxo pipefail
-          make test-dual LINUX_VERSION=7.3.1
-          make test-uefi LINUX_VERSION=7.3.1
-      - name: Package verified ISO images
-        run: |
-          set -euxo pipefail
-          mkdir -p dist
-          cp MayOS_0.3.0-pre1/build/mayos-dual.iso dist/MayOS-0.4.0-dual-boot.iso
-          cp MayOS_0.3.0-pre1/build/mayos.iso dist/MayOS-0.4.0-MayKernel.iso
-          cp MayOS_0.3.0-pre1/build/desktop.png dist/MayOS-0.4.0-desktop.png
-          (cd dist && sha256sum *.iso > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
-          test -s MayOS_0.3.0-pre1/build/linux/downloads/linux-7.3.1.tar.xz
-      - name: Package corresponding MayOS, Linux, and BusyBox source
-        run: |
-          set -euxo pipefail
-          mkdir -p /tmp/mayos-040-source/MayOS /tmp/mayos-040-source/upstream
-          git archive HEAD | tar -xf - -C /tmp/mayos-040-source/MayOS
-          cp MayOS_0.3.0-pre1/build/linux/downloads/linux-7.3.1.tar.xz /tmp/mayos-040-source/upstream/
-          sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
-          sudo apt-get update
-          (cd /tmp/mayos-040-source/upstream && apt-get source busybox)
-          tar -C /tmp -czf dist/MayOS-0.4.0-sources.tar.gz mayos-040-source
-          test -s dist/MayOS-0.4.0-sources.tar.gz
-          (cd dist && sha256sum MayOS-0.4.0-sources.tar.gz >> SHA256SUMS.txt)
-      - name: Prepare release notes
-        run: |
-          cat > dist/RELEASE_NOTES.md <<'EOF'
-          # MayOS 0.4.0
-
-          Experimental dual-kernel desktop: MayKernel x86 and Linux 7.3.1 x86_64.
-
-          - Native Material 3-style neutral desktop with macOS-like top bar and Dock.
-          - App launcher/search, window overview, notifications, quick settings,
-            context menus, real clock, brightness and native file interaction.
-          - MayKernel RTL8139 IPv4 with DHCP, ARP, Ping, DNS and basic TCP/HTTP/1.0
-            text transport using numeric IP hosts.
-          - Linux e1000 DHCP/DNS and HTTP text preview, BIOS/UEFI QEMU validation.
-
-          Limits: CPU framebuffer, 1024x768, no audio mixer, GPU acceleration,
-          Wi-Fi manager, HTTPS, Secure Boot, arbitrary hardware or full TCP API.
-          Linux desktop files remain RAM-only, whereas native MayFS persists.
-
-          Includes two ISO images, SHA256SUMS and corresponding source bundle.
-          QEMU-only experimental build, not recommended for production computers.
-          EOF
-      - name: Preserve the validated Release archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: MayOS-0.4.0-verified-release
-          path: dist/
-          retention-days: 30
-      - name: Publish only the exact tested source and ISO
-        run: |
-          set -euo pipefail
-          ! gh release view v0.4.0 >/dev/null 2>&1
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git ls-remote --exit-code origin refs/tags/v0.4.0 >/dev/null 2>&1; then
-            test "$(git rev-list -n 1 v0.4.0)" = "$GITHUB_SHA"
-          else
-            git tag -a v0.4.0 -m "Tested MayOS 0.4.0"
-            git push origin refs/tags/v0.4.0
-          fi
-          gh release create v0.4.0 \
-            dist/MayOS-0.4.0-dual-boot.iso \
-            dist/MayOS-0.4.0-MayKernel.iso \
-            dist/MayOS-0.4.0-desktop.png \
-            dist/MayOS-0.4.0-sources.tar.gz \
-            dist/SHA256SUMS.txt \
-            --title "MayOS 0.4.0" --notes-file dist/RELEASE_NOTES.md --latest
- build/material_icons.h
-      - name: Verify BIOS, Linux DHCP and UEFI boot matrix
-        working-directory: MayOS_0.3.0-pre1
-        run: |
-          set -euxo pipefail
-          make test-dual LINUX_VERSION=7.3.1
-          make test-uefi LINUX_VERSION=7.3.1
-      - name: Package verified ISO images
-        run: |
-          set -euxo pipefail
-          mkdir -p dist
-          cp MayOS_0.3.0-pre1/build/mayos-dual.iso dist/MayOS-0.4.0-dual-boot.iso
-          cp MayOS_0.3.0-pre1/build/mayos.iso dist/MayOS-0.4.0-MayKernel.iso
-          cp MayOS_0.3.0-pre1/build/desktop.png dist/MayOS-0.4.0-desktop.png
-          (cd dist && sha256sum *.iso > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
-          test -s MayOS_0.3.0-pre1/build/linux/downloads/linux-7.3.1.tar.xz
-      - name: Package corresponding MayOS, Linux, and BusyBox source
-        run: |
-          set -euxo pipefail
-          mkdir -p /tmp/mayos-040-source/MayOS /tmp/mayos-040-source/upstream
-          git archive HEAD | tar -xf - -C /tmp/mayos-040-source/MayOS
-          cp MayOS_0.3.0-pre1/build/linux/downloads/linux-7.3.1.tar.xz /tmp/mayos-040-source/upstream/
-          sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
-          sudo apt-get update
-          (cd /tmp/mayos-040-source/upstream && apt-get source busybox)
-          tar -C /tmp -czf dist/MayOS-0.4.0-sources.tar.gz mayos-040-source
-          test -s dist/MayOS-0.4.0-sources.tar.gz
-          (cd dist && sha256sum MayOS-0.4.0-sources.tar.gz >> SHA256SUMS.txt)
-      - name: Prepare release notes
-        run: |
-          cat > dist/RELEASE_NOTES.md <<'EOF'
-          # MayOS 0.4.0
-
-          Experimental dual-kernel desktop: MayKernel x86 and Linux 7.3.1 x86_64.
-
-          - Native Material 3-style neutral desktop with macOS-like top bar and Dock.
-          - App launcher/search, window overview, notifications, quick settings,
-            context menus, real clock, brightness and native file interaction.
-          - MayKernel RTL8139 IPv4 with DHCP, ARP, Ping, DNS and basic TCP/HTTP/1.0
-            text transport using numeric IP hosts.
-          - Linux e1000 DHCP/DNS and HTTP text preview, BIOS/UEFI QEMU validation.
-
-          Limits: CPU framebuffer, 1024x768, no audio mixer, GPU acceleration,
-          Wi-Fi manager, HTTPS, Secure Boot, arbitrary hardware or full TCP API.
-          Linux desktop files remain RAM-only, whereas native MayFS persists.
-
-          Includes two ISO images, SHA256SUMS and corresponding source bundle.
-          QEMU-only experimental build, not recommended for production computers.
-          EOF
-      - name: Preserve the validated Release archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: MayOS-0.4.0-verified-release
-          path: dist/
-          retention-days: 30
-      - name: Publish only the exact tested source and ISO
-        run: |
-          set -euo pipefail
-          ! gh release view v0.4.0 >/dev/null 2>&1
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git ls-remote --exit-code origin refs/tags/v0.4.0 >/dev/null 2>&1; then
-            test "$(git rev-list -n 1 v0.4.0)" = "$GITHUB_SHA"
-          else
-            git tag -a v0.4.0 -m "Tested MayOS 0.4.0"
-            git push origin refs/tags/v0.4.0
-          fi
-          gh release create v0.4.0 \
-            dist/MayOS-0.4.0-dual-boot.iso \
-            dist/MayOS-0.4.0-MayKernel.iso \
-            dist/MayOS-0.4.0-desktop.png \
-            dist/MayOS-0.4.0-sources.tar.gz \
-            dist/SHA256SUMS.txt \
-            --title "MayOS 0.4.0" --notes-file dist/RELEASE_NOTES.md --latest
- build/material_icons.h
-          make test
-          make test-net
-          make test-material
-      - name: Build Linux 7.3.1 dual-kernel ISO
-        working-directory: MayOS_0.3.0-pre1
-        run: make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
-      - name: Verify BIOS, Linux DHCP and UEFI boot matrix
-        working-directory: MayOS_0.3.0-pre1
-        run: |
-          set -euxo pipefail
-          make test-dual LINUX_VERSION=7.3.1
-          make test-uefi LINUX_VERSION=7.3.1
-      - name: Package verified ISO images
-        run: |
-          set -euxo pipefail
-          mkdir -p dist
-          cp MayOS_0.3.0-pre1/build/mayos-dual.iso dist/MayOS-0.4.0-dual-boot.iso
-          cp MayOS_0.3.0-pre1/build/mayos.iso dist/MayOS-0.4.0-MayKernel.iso
-          cp MayOS_0.3.0-pre1/build/desktop.png dist/MayOS-0.4.0-desktop.png
-          (cd dist && sha256sum *.iso > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
-          test -s MayOS_0.3.0-pre1/build/linux/downloads/linux-7.3.1.tar.xz
-      - name: Package corresponding MayOS, Linux, and BusyBox source
-        run: |
-          set -euxo pipefail
-          mkdir -p /tmp/mayos-040-source/MayOS /tmp/mayos-040-source/upstream
-          git archive HEAD | tar -xf - -C /tmp/mayos-040-source/MayOS
-          cp MayOS_0.3.0-pre1/build/linux/downloads/linux-7.3.1.tar.xz /tmp/mayos-040-source/upstream/
-          sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
-          sudo apt-get update
-          (cd /tmp/mayos-040-source/upstream && apt-get source busybox)
-          tar -C /tmp -czf dist/MayOS-0.4.0-sources.tar.gz mayos-040-source
-          test -s dist/MayOS-0.4.0-sources.tar.gz
-          (cd dist && sha256sum MayOS-0.4.0-sources.tar.gz >> SHA256SUMS.txt)
-      - name: Prepare release notes
-        run: |
-          cat > dist/RELEASE_NOTES.md <<'EOF'
-          # MayOS 0.4.0
-
-          Experimental dual-kernel desktop: MayKernel x86 and Linux 7.3.1 x86_64.
-
-          - Native Material 3-style neutral desktop with macOS-like top bar and Dock.
-          - App launcher/search, window overview, notifications, quick settings,
-            context menus, real clock, brightness and native file interaction.
-          - MayKernel RTL8139 IPv4 with DHCP, ARP, Ping, DNS and basic TCP/HTTP/1.0
-            text transport using numeric IP hosts.
-          - Linux e1000 DHCP/DNS and HTTP text preview, BIOS/UEFI QEMU validation.
-
-          Limits: CPU framebuffer, 1024x768, no audio mixer, GPU acceleration,
-          Wi-Fi manager, HTTPS, Secure Boot, arbitrary hardware or full TCP API.
-          Linux desktop files remain RAM-only, whereas native MayFS persists.
-
-          Includes two ISO images, SHA256SUMS and corresponding source bundle.
-          QEMU-only experimental build, not recommended for production computers.
-          EOF
-      - name: Preserve the validated Release archive
-        uses: actions/upload-artifact@v4
-        with:
-          name: MayOS-0.4.0-verified-release
-          path: dist/
-          retention-days: 30
-      - name: Publish only the exact tested source and ISO
-        run: |
-          set -euo pipefail
-          ! gh release view v0.4.0 >/dev/null 2>&1
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git ls-remote --exit-code origin refs/tags/v0.4.0 >/dev/null 2>&1; then
-            test "$(git rev-list -n 1 v0.4.0)" = "$GITHUB_SHA"
-          else
-            git tag -a v0.4.0 -m "Tested MayOS 0.4.0"
-            git push origin refs/tags/v0.4.0
-          fi
-          gh release create v0.4.0 \
-            dist/MayOS-0.4.0-dual-boot.iso \
-            dist/MayOS-0.4.0-MayKernel.iso \
-            dist/MayOS-0.4.0-desktop.png \
-            dist/MayOS-0.4.0-sources.tar.gz \
-            dist/SHA256SUMS.txt \
-            --title "MayOS 0.4.0" --notes-file dist/RELEASE_NOTES.md --latest
+            --title 'MayOS 0.4.0' \
+            --notes-file dist/RELEASE_NOTES.md \
+            --latest
