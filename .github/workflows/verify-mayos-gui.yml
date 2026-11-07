@@ -22,12 +22,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential gcc-multilib \
-            grub-pc-bin grub-common xorriso mtools qemu-system-x86 python3-pil
-      - name: Build custom kernel ISO and run GUI smoke tests
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools \
+            qemu-system-x86 python3-pil
+      - name: Build custom kernel ISO
         working-directory: MayOS_0.3.0-pre1
-        run: |
-          make all
-          make test
+        run: make all
+      - name: Run QEMU desktop smoke tests
+        working-directory: MayOS_0.3.0-pre1
+        run: make test
       - name: Upload real QEMU desktop screenshots
         if: always()
         uses: actions/upload-artifact@v4
