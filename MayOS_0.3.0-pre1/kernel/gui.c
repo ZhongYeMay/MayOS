@@ -2,7 +2,8 @@
 #include "core.h"
 #include "font.h"
 #include "material_icons.h"
-#define MAYOS_RELEASE "0.4.0-pre2"
+#include "browser_text.h"
+#define MAYOS_RELEASE "0.4.0-pre3"
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
 #define PLATFORM_BADGE "LINUX SESSION"
@@ -1090,55 +1091,193 @@ static void editor_draw(Window *w) {
     numtext(x + w->w - 140, y + w->h - 29, strlen(editor_buf), muted);
     text(x + w->w - 89, y + w->h - 29, "/ 4095 B", muted);
 }
-/* Orange shares this UI across both kernels. Linux provides the HTTP transport. */
-static char explorer_query[72], explorer_bookmark[72];
-static int explorer_loading;
-static char explorer_response[2048];
-static void explorer_submit(void) {
+/* Same browser chrome, navigation/history and text viewer on both kernels.
+ * Linux and MayKernel retain their explicitly different HTTP transports. */
+static char explorer_query[176], explorer_bookmarks[5][176];
+static char explorer_history[12][176], explorer_response[2048], explorer_view[2048];
+static int explorer_bookmark_count, explorer_history_count, explorer_history_index = -1;
+static int explorer_loading, explorer_scroll, explorer_home = 1;
+static int explorer_editing;
+
+static void explorer_load(const char *candidate, int add_history) {
+    char address[176];
+    copy(address, candidate, sizeof(address));
+    int length = strlen(address);
+    while (length && address[length - 1] == ' ') address[--length] = 0;
+    if (!length) {
+        explorer_home = 1;
+        explorer_loading = 0;
+        explorer_response[0] = 0;
+        explorer_scroll = 0;
+        dirty = 1;
+        return;
+    }
+    int http = address[0] == 'h' && address[1] == 't' &&
+               address[2] == 't' && address[3] == 'p' &&
+               address[4] == ':' && address[5] == '/' && address[6] == '/';
+    int https = address[0] == 'h' && address[1] == 't' &&
+                address[2] == 't' && address[3] == 'p' && address[4] == 's' &&
+                address[5] == ':' && address[6] == '/' && address[7] == '/';
+    if (!http && !https) {
+        char prefix[176] = "http://";
+        copy(prefix + 7, address, sizeof(prefix) - 7);
+        copy(address, prefix, sizeof(address));
+    }
+    if (add_history &&
+        (explorer_history_index < 0 ||
+         strcmp(explorer_history[explorer_history_index], address))) {
+        explorer_history_count = explorer_history_index + 1;
+        if (explorer_history_count == 12) {
+            for (int i = 1; i < 12; i++)
+                copy(explorer_history[i - 1], explorer_history[i],
+                     sizeof(explorer_history[i - 1]));
+            explorer_history_count = 11;
+        }
+        copy(explorer_history[explorer_history_count], address,
+             sizeof(explorer_history[0]));
+        explorer_history_index = explorer_history_count++;
+    }
+    copy(explorer_query, address, sizeof(explorer_query));
+    explorer_home = 0;
+    explorer_editing = 0;
+    explorer_scroll = 0;
+    explorer_response[0] = 0;
+    if (https) {
+        copy(explorer_response,
+             "HTTPS requires TLS, not yet available. No insecure downgrade was attempted.",
+             sizeof(explorer_response));
+        explorer_loading = 0;
+        serial("Explorer: HTTPS unsupported\n");
+    } else {
 #ifdef MAYOS_LINUX
-    explorer_loading = platform_web_start(explorer_query);
-    platform_web_poll(explorer_response, sizeof(explorer_response));
-    dirty = 1;
+        explorer_loading = platform_web_start(explorer_query);
+        platform_web_poll(explorer_response, sizeof(explorer_response));
 #else
-    explorer_loading = net_http_start(explorer_query);
-    net_http_poll(explorer_response, sizeof(explorer_response));
-    dirty = 1;
+        explorer_loading = net_http_start(explorer_query);
+        net_http_poll(explorer_response, sizeof(explorer_response));
 #endif
+        serial("Explorer: HTTP navigation\n");
+    }
+    dirty = 1;
+}
+static void explorer_submit(void) { explorer_load(explorer_query, 1); }
+static void explorer_step(int delta) {
+    int next = explorer_history_index + delta;
+    if (next < 0 || next >= explorer_history_count) return;
+    explorer_history_index = next;
+    explorer_load(explorer_history[next], 0);
+    serial(delta < 0 ? "Explorer: history back\n" : "Explorer: history forward\n");
+}
+static void explorer_reload(void) {
+    if (explorer_home) return;
+    explorer_load(explorer_query, 0);
+    serial("Explorer: reload\n");
+}
+static void explorer_save_bookmark(void) {
+    if (explorer_home || !explorer_query[0]) return;
+    for (int i = 0; i < explorer_bookmark_count; i++)
+        if (!strcmp(explorer_bookmarks[i], explorer_query)) {
+            for (int j = i + 1; j < explorer_bookmark_count; j++)
+                copy(explorer_bookmarks[j - 1], explorer_bookmarks[j],
+                     sizeof(explorer_bookmarks[j - 1]));
+            explorer_bookmark_count--;
+            serial("Explorer: bookmark removed\n");
+            notify("已移除收藏");
+            return;
+        }
+    if (explorer_bookmark_count == 5) {
+        for (int i = 1; i < 5; i++)
+            copy(explorer_bookmarks[i - 1], explorer_bookmarks[i],
+                 sizeof(explorer_bookmarks[i - 1]));
+        explorer_bookmark_count = 4;
+    }
+    copy(explorer_bookmarks[explorer_bookmark_count++], explorer_query,
+         sizeof(explorer_bookmarks[0]));
+    serial("Explorer: bookmark added\n");
+    notify("已收藏本页");
+}
+static int explorer_favorite(void) {
+    for (int i = 0; i < explorer_bookmark_count; i++)
+        if (!strcmp(explorer_bookmarks[i], explorer_query)) return 1;
+    return 0;
 }
 static void explorer_draw(Window *w) {
-    int x = w->x, y = w->y;
-    text(x + 24, y + 58, "<   >   ↻", muted);
-    roundrect(x + 120, y + 51, w->w - 250, 34, bg);
-    text(x + 132, y + 58, "输入 http:// 地址 / ASCII", muted);
-    button(x + w->w - 115, y + 53, 90, "收藏", 0);
-    text(x + 25, y + 100, explorer_bookmark[0] ? explorer_bookmark : "收藏夹为空（仅本次会话）", muted);
-    circle(x + 130, y + 207, 24, accent);
-    circle(x + 130, y + 207, 18, panel);
-    large_text(x + 177, y + 187, "MayOS Explorer", ink);
-    roundrect(x + 100, y + 260, w->w - 200, 44, bg);
-    text(x + 114, y + 272, explorer_query[0] ? explorer_query : "http://example.com/", ink);
-    button(x + w->w - 92, y + 267, 65, "转到", 1);
-    text(x + 100, y + 337, "网络 / HTTP 文本预览。HTTPS 与完整浏览器尚未支持。", muted);
-#ifdef MAYOS_LINUX
-    char network_report[384];
-    int has_network = platform_network_status(network_report, sizeof(network_report));
-#else
-    int has_network = net_online();
-#endif
-    text(x + 100, y + 358, has_network ? "IP 已获取 · DHCP 网络可用" : "网络初始化中 · 检查 DHCP 或网卡", muted);
-
-    text(x + 100, y + 383, explorer_loading ? "HTTP 正在加载" : "HTTP 文本预览 / 不支持 HTTPS 与脚本", accent);
-    const char *s = explorer_response;
-    for (int row = 0; row < (w->h - 420) / 20 && *s; row++) {
-        char part[80];
-        int n = 0, cols = (w->w - 140) / 8;
-        if (cols > 79) cols = 79;
-        while (*s && *s != '\n' && n < cols) part[n++] = *s++;
-        if (*s == '\n') s++;
-        part[n] = 0;
-        text(x + 70, y + 414 + row * 20, part, muted);
+    int x = w->x, y = w->y, width = w->w;
+    /* Functional back/forward/reload/home controls, no inert decoration. */
+    const char *nav[] = {"<", ">", "R", "H"};
+    for (int i = 0; i < 4; i++) {
+        int xx = x + 16 + i * 42;
+        int disabled = i == 0 ? explorer_history_index <= 0 :
+                       i == 1 ? explorer_history_index + 1 >= explorer_history_count :
+                       i == 2 ? explorer_home : 0;
+        roundrect(xx, y + 53, 36, 36,
+                  inside(mx, my, xx, y + 53, 36, 36) && !disabled ?
+                  selected_fill : surface_high);
+        text(xx + 11, y + 60, nav[i], disabled ? muted : ink);
     }
-
+    roundrect(x + 192, y + 53, width - 308, 36, surface_high);
+    symbol(x + 201, y + 61, 19, 18, muted);
+    char display[62];
+    copy(display, explorer_query[0] ? explorer_query : "输入 http:// 地址",
+         sizeof(display));
+    text(x + 227, y + 60, display, explorer_query[0] ? ink : muted);
+    if (explorer_editing) rect(x + 227 + (int)strlen(display) * 8,
+                                y + 61, 2, 21, accent);
+    roundrect(x + width - 105, y + 53, 88, 36,
+              inside(mx, my, x + width - 105, y + 53, 88, 36)
+              ? selected_fill : surface_high);
+    text(x + width - 90, y + 60, explorer_favorite() ? "已收藏" : "收藏", ink);
+    text(x + 20, y + 104, "收藏夹", muted);
+    for (int i = 0; i < explorer_bookmark_count; i++) {
+        int xx = x + 88 + i * 132;
+        char label[16];
+        copy(label, explorer_bookmarks[i] + 7, sizeof(label));
+        roundrect(xx, y + 100, 126, 30,
+                  inside(mx, my, xx, y + 100, 126, 30) ?
+                  selected_fill : surface_high);
+        text(xx + 7, y + 104, label, ink);
+    }
+    rect(x + 16, y + 140, width - 32, 1, line);
+    if (explorer_home) {
+        symbol(x + 34, y + 169, 4, 46, accent);
+        large_text(x + 102, y + 174, "Explorer", ink);
+        text(x + 38, y + 250, "输入网址并按 Enter 以访问 HTTP 文本页面", ink);
+        text(x + 38, y + 285, "支持返回、前进、刷新、收藏、文本阅读和滚动", muted);
+        text(x + 38, y + 318, "HTTPS、JavaScript、图片和 CSS 网页排版尚不支持", muted);
+        text(x + 38, y + 355, "在 QEMU 中可访问 http://10.0.2.2:端口/", muted);
+    } else {
+        char state[68];
+        copy(state, explorer_loading ? "加载中..." : "文本阅读模式", sizeof(state));
+        text(x + 22, y + 153, state, accent);
+        text(x + width - 300, y + 153, "不执行网页脚本", muted);
+        browse_preview(explorer_response, explorer_view, sizeof(explorer_view));
+        int max_cols = (width - 66) / 8;
+        if (max_cols > 105) max_cols = 105;
+        const char *ptr = explorer_view;
+        int index = 0, painted = 0;
+        int max_rows = (w->h - 248) / 19;
+        while (*ptr && painted < max_rows) {
+            char linebuf[108];
+            int count = 0;
+            while (*ptr && *ptr != '\n' && count < max_cols)
+                linebuf[count++] = *ptr++;
+            if (*ptr == '\n') ptr++;
+            linebuf[count] = 0;
+            if (index++ >= explorer_scroll) {
+                text(x + 27, y + 184 + painted * 19, linebuf, ink);
+                painted++;
+            }
+        }
+        if (!explorer_view[0] && !explorer_loading)
+            text(x + 26, y + 194, "没有可显示的文本内容", muted);
+    }
+    rect(x + 16, y + w->h - 62, width - 32, 1, line);
+    roundrect(x + 18, y + w->h - 51, 95, 34, surface_high);
+    text(x + 29, y + w->h - 46, "上一页", ink);
+    roundrect(x + width - 113, y + w->h - 51, 95, 34, surface_high);
+    text(x + width - 102, y + w->h - 46, "下一页", ink);
+    text(x + width / 2 - 80, y + w->h - 45,
+         explorer_loading ? "HTTP 请求进行中" : "文本预览 · HTTP", muted);
 }
 static void taskbar(void) {
     /* Centered Material 3 dock with state-layer hover and active indicator. */
@@ -1771,10 +1910,33 @@ static void left_click(void) {
             return;
         }
         if (id == 4) {
-            if (inside(rx, ry, w->w - 115, 53, 90, 30)) {
-                copy(explorer_bookmark, explorer_query, sizeof(explorer_bookmark));
-                notify(explorer_query[0] ? "已收藏到本次会话" : "请先输入搜索或链接");
-            } else if (inside(rx, ry, w->w - 92, 267, 65, 30)) explorer_submit();
+            if (inside(rx, ry, 16, 53, 36, 36)) explorer_step(-1);
+            else if (inside(rx, ry, 58, 53, 36, 36)) explorer_step(1);
+            else if (inside(rx, ry, 100, 53, 36, 36)) explorer_reload();
+            else if (inside(rx, ry, 142, 53, 36, 36)) {
+                explorer_home = 1;
+                explorer_scroll = 0;
+                explorer_loading = 0;
+                explorer_response[0] = 0;
+                explorer_editing = 0;
+                serial("Explorer: home\n");
+            } else if (inside(rx, ry, 192, 53, w->w - 308, 36)) {
+                explorer_editing = 1;
+            } else if (inside(rx, ry, w->w - 105, 53, 88, 36)) {
+                explorer_save_bookmark();
+            } else if (ry >= 100 && ry < 130 && rx >= 88 &&
+                       rx < 88 + explorer_bookmark_count * 132) {
+                int item = (rx - 88) / 132;
+                if ((rx - 88) % 132 < 126)
+                    explorer_load(explorer_bookmarks[item], 1);
+            } else if (inside(rx, ry, 18, w->h - 51, 95, 34)) {
+                if (explorer_scroll >= 8) explorer_scroll -= 8;
+                else explorer_scroll = 0;
+                serial("Explorer: page up\n");
+            } else if (inside(rx, ry, w->w - 113, w->h - 51, 95, 34)) {
+                if (explorer_scroll < 96) explorer_scroll += 8;
+                serial("Explorer: page down\n");
+            }
             return;
         }
         if (id == 1) {
@@ -1973,10 +2135,17 @@ static void key_event(int k) {
     if (focus == 4 && windows[4].open && !windows[4].min) {
         int n = strlen(explorer_query);
         if (k == '\n') explorer_submit();
-        else if (k == '\b' && n) explorer_query[n - 1] = 0;
-        else if (k >= 32 && k < 127 && n < 60) {
+        else if (k == 0x101) {
+            if (explorer_scroll) explorer_scroll--;
+        } else if (k == 0x102) {
+            if (explorer_scroll < 96) explorer_scroll++;
+        } else if (k == '\b' && n) {
+            explorer_query[n - 1] = 0;
+            explorer_editing = 1;
+        } else if (k >= 32 && k < 127 && n < (int)sizeof(explorer_query) - 1) {
             explorer_query[n] = k;
             explorer_query[n + 1] = 0;
+            explorer_editing = 1;
         }
         return;
     }
