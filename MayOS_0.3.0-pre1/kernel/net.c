@@ -473,9 +473,14 @@ void net_poll(void) {
         u16 flags = read_ring16(rx_at);
         u16 len = read_ring16((u16)(rx_at + 2u));
         if (!(flags & 1u) || len < 18 || len > 1536) {
-            serial("MayNet: invalid RX descriptor\n");
-            outb((u16)(nic_io + 0x37), 0x0c);
+            /* Recover the software read pointer from RTL8139's current DMA
+               write pointer instead of retrying the same corrupt descriptor
+               indefinitely. Keep the adapter active and acknowledge IRQs. */
+            u16 dma = inw((u16)(nic_io + 0x3a));
+            rx_at = (u16)((dma + 3u) & 0xfffcu);
+            outw((u16)(nic_io + 0x38), (u16)(rx_at - 16u));
             outw((u16)(nic_io + 0x3e), 0xffffu);
+            serial("MayNet: RX resynchronized\n");
             return;
         }
         for (u16 i = 0; i < len - 4; i++)
