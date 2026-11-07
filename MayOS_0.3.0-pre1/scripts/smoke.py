@@ -10,7 +10,7 @@ class VM:
     def __init__(self,disk,tag):
         self.sock=BUILD/f'{tag}.sock';self.sock.unlink(missing_ok=True)
         self.log=BUILD/f'{tag}.log'
-        args=[QEMU,'-machine','pc','-accel','tcg','-m','128','-vga','std','-display','none','-cdrom',str(BUILD/'mayos.iso'),'-boot','d','-serial',f'file:{self.log}','-qmp',f'unix:{self.sock},server=on,wait=off','-no-reboot','-no-shutdown']
+        args=[QEMU,'-machine','pc','-accel','tcg','-m','128','-vga','std','-display','none','-cdrom',str(BUILD/'mayos.iso'),'-boot','d','-nic','user,model=rtl8139','-serial',f'file:{self.log}','-qmp',f'unix:{self.sock},server=on,wait=off','-no-reboot','-no-shutdown']
         if disk is not None:args+=['-drive',f'file={disk},format=raw,if=ide,index=0']
         if os.environ.get('QEMU_DATA_DIR'):args+=['-L',os.environ['QEMU_DATA_DIR']]
         self.proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=(BUILD/f'{tag}-qemu.log').open('w'))
