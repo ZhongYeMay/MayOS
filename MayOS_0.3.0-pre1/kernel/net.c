@@ -296,7 +296,7 @@ static void tcp_receive(const u8 *p, u16 length, u32 source) {
         for (u16 i = 0; i < payload && http_used < (int)sizeof(http_response) - 2; i++) {
             u8 c = body[i];
             http_response[http_used++] =
-                (c == '\n' || c == '\r' || c == '\t' || (c >= 32 && c < 127)) ? (char)c : '?';
+                (c == '\n' || c == '\r' || c == '\t' || c >= 32) ? (char)c : '?';
         }
         http_response[http_used] = 0;
         tcp_send(0x10, 0, 0);
