@@ -2078,30 +2078,51 @@ static void left_click(void) {
             return;
         }
         if (id == 4) {
-            if (inside(rx, ry, 16, 53, 36, 36)) explorer_step(-1);
-            else if (inside(rx, ry, 58, 53, 36, 36)) explorer_step(1);
-            else if (inside(rx, ry, 100, 53, 36, 36)) explorer_reload();
-            else if (inside(rx, ry, 142, 53, 36, 36)) {
+            if (ry >= 50 && ry < 86) {
+                for (int tab = 0; tab < explorer_tab_count; tab++) {
+                    int tx = 15 + tab * 159;
+                    if (inside(rx, ry, tx, 50, 154, 35)) {
+                        if (rx >= tx + 129) explorer_tab_close(tab);
+                        else explorer_tab_select(tab);
+                        return;
+                    }
+                }
+                int tx = 19 + explorer_tab_count * 159;
+                if (explorer_tab_count < 4 &&
+                    inside(rx, ry, tx, 52, 34, 32))
+                    explorer_tab_new();
+                return;
+            }
+            if (inside(rx, ry, 16, 97, 36, 36)) explorer_step(-1);
+            else if (inside(rx, ry, 58, 97, 36, 36)) explorer_step(1);
+            else if (inside(rx, ry, 100, 97, 36, 36)) explorer_reload();
+            else if (inside(rx, ry, 142, 97, 36, 36)) {
                 explorer_home = 1;
-                explorer_scroll = 0;
-                explorer_loading = 0;
-                explorer_response[0] = 0;
+                explorer_scroll = explorer_loading = 0;
+                explorer_response[0] = explorer_query[0] = 0;
                 explorer_editing = 0;
                 serial("Explorer: home\n");
-            } else if (inside(rx, ry, 192, 53, w->w - 308, 36)) {
-                /* Selecting the address bar replaces the old URL on typing. */
+            } else if (inside(rx, ry, 192, 97, w->w - 359, 36)) {
                 explorer_query[0] = 0;
                 explorer_editing = 1;
-            } else if (inside(rx, ry, w->w - 105, 53, 88, 36)) {
+                explorer_find_open = 0;
+            } else if (inside(rx, ry, w->w - 155, 97, 44, 36)) {
+                explorer_find_open = !explorer_find_open;
+                explorer_find[0] = 0;
+                explorer_editing = 0;
+                serial("Explorer: find opened\n");
+            } else if (inside(rx, ry, w->w - 105, 97, 88, 36)) {
                 explorer_save_bookmark();
-            } else if (ry >= 100 && ry < 130 && rx >= 88 &&
+            } else if (ry >= 144 && ry < 174 && rx >= 88 &&
                        rx < 88 + explorer_bookmark_count * 132) {
                 int item = (rx - 88) / 132;
                 if ((rx - 88) % 132 < 126)
                     explorer_load(explorer_bookmarks[item], 1);
+            } else if (explorer_find_open &&
+                       inside(rx, ry, w->w - 61, 194, 30, 65)) {
+                explorer_find_open = 0;
             } else if (inside(rx, ry, 18, w->h - 51, 95, 34)) {
-                if (explorer_scroll >= 8) explorer_scroll -= 8;
-                else explorer_scroll = 0;
+                explorer_scroll = explorer_scroll >= 8 ? explorer_scroll - 8 : 0;
                 serial("Explorer: page up\n");
             } else if (inside(rx, ry, w->w - 113, w->h - 51, 95, 34)) {
                 if (explorer_scroll < 96) explorer_scroll += 8;
@@ -2272,8 +2293,31 @@ static void key_event(int k) {
         return;
     }
     if (k == 27) {
+        if (focus == 4 && explorer_find_open) {
+            explorer_find_open = 0;
+            return;
+        }
         start_open = context_open = quick_open = notifications_open = overview_open = desktop_context_open = clock_open = power_open = 0;
         return;
+    }
+    if (focus == 4 && windows[4].open && !windows[4].min) {
+        if (k == 0x108) {
+            explorer_query[0] = 0;
+            explorer_editing = 1;
+            explorer_find_open = 0;
+            serial("Explorer: address focus\n");
+            return;
+        }
+        if (k == 0x109) { explorer_tab_new(); return; }
+        if (k == 0x10a) { explorer_tab_close(explorer_tab_index); return; }
+        if (k == 0x10b) {
+            explorer_find_open = 1;
+            explorer_find[0] = 0;
+            explorer_editing = 0;
+            serial("Explorer: find opened\n");
+            return;
+        }
+        if (k == 0x10c) { explorer_reload(); return; }
     }
     if (k == 0x107) {
         overview_open = !overview_open;
@@ -2304,6 +2348,16 @@ static void key_event(int k) {
         return;
     }
     if (focus == 4 && windows[4].open && !windows[4].min) {
+        if (explorer_find_open) {
+            int count = strlen(explorer_find);
+            if (k == '\n') explorer_find_next();
+            else if (k == '\b' && count) explorer_find[--count] = 0;
+            else if (k >= 32 && k < 127 && count < (int)sizeof(explorer_find) - 1) {
+                explorer_find[count] = k;
+                explorer_find[count + 1] = 0;
+            }
+            return;
+        }
         int n = strlen(explorer_query);
         if (k == '\n') explorer_submit();
         else if (k == 0x101) {
