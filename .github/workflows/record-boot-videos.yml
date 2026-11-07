@@ -2,6 +2,11 @@ name: Record and publish MayOS boot videos
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'MayOS_0.3.0-pre1/scripts/dual_boot_smoke.py'
+      - '.github/workflows/record-boot-videos.yml'
 
 permissions:
   contents: write
