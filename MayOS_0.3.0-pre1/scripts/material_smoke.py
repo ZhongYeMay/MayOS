@@ -36,8 +36,7 @@ def main():
         vm.key('esc')
         vm.click(346, 717)
         vm.shot('material-files')
-        vm.click(948, 94)  # close Settings if visible, else close foreground
-        vm.click(620, 480, 'right')
+        vm.click(954, 480, 'right')
         vm.shot('material-desktop-context')
         print('PASS: native desktop, quick settings, brightness, notifications, '
               'app search, Dock, Alt+Tab and context menus', flush=True)
