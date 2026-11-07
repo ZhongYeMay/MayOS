@@ -201,3 +201,11 @@ MayFS / 桌面文件模型最多 48 个目录项，文件名 47 字节，每文�
 `kernel/` 包含启动、核心、MayFS 与共享 GUI；`linux/desktop.c` 为 Linux 显示输入后端；`linux/desktop-session` 管理桌面启动与回退；`scripts/linux.py` 构建 Linux 和静态桌面；`scripts/dual_iso.py` 打包 BIOS / EFI 混合 ISO；`scripts/*smoke.py` 验证实际启动；`scripts/record_boot.py` 录制真实帧；[架构文档](docs/architecture.md) 记录内部结构。
 
 终端输入 `meow`，或在“关于”连续点击设备图标 5 次可显示原猫咪照片；Esc、Enter、返回或关闭退出。官网也保留五击标识与输入 `meow` 的入口。照片来自 `assets/easter-cat.jpg`，构建时生成等比例 RGB565 资源；无需网络。
+
+## 2026-11-07 草图适配：Orange 界面预览
+
+左侧 Dock 的 Explorer 入口打开独立的第五个窗口；支持拖动、最大化、最小化、关闭、任务栏恢复，ASCII 查询输入、Google/Bing 选项切换和会话收藏。此界面在共享 GUI 中实现，适用于 MayKernel 和 Linux 桌面。
+
+这是本地 UI 预览：提交查询会明确提示没有发送请求。网络栈、TLS、网页渲染、导航历史和下载尚未接入；搜索方式选项目前仅保存界面状态。不代表 0.0.4 已发布，也不代表 Snapdragon X / ARM 或 UEFI IA32 已适配。当前版本号及已有系统信息继续使用实际代码数据。
+
+官网已改为独立首页、下载页和运行示例页，并通过仓库 GitHub Pages 工作流部署。

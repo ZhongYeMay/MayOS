@@ -162,11 +162,13 @@ typedef struct {
     int x, y, w, h, open, min, max, ox, oy, ow, oh;
     const char *title;
 } Window;
-static Window windows[4] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "文件 / Files"},
+#define WINDOW_COUNT 5
+static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "文件 / Files"},
                             {186, 74, 800, 620, 1, 0, 0, 0, 0, 0, 0, "系统设置 / System Settings"},
                             {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
-                            {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"}};
-static int order[4] = {0, 2, 3, 1}, focus = 1, dirty = 1;
+                            {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
+                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
+static int order[WINDOW_COUNT] = {0, 2, 3, 4, 1}, focus = 1, dirty = 1;
 static int mx = 530, my = 390, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
            cut = 0, settings_tab = 0;
@@ -196,11 +198,11 @@ static void notify(const char *s) {
 }
 static void raise_window(int id) {
     int at = 0;
-    for (; at < 4 && order[at] != id; at++)
+    for (; at < WINDOW_COUNT && order[at] != id; at++)
         ;
-    for (int i = at; i < 3; i++)
+    for (int i = at; i < WINDOW_COUNT - 1; i++)
         order[i] = order[i + 1];
-    order[3] = id;
+    order[WINDOW_COUNT - 1] = id;
     windows[id].open = 1;
     windows[id].min = 0;
     focus = id;
@@ -587,13 +589,16 @@ static void desktop(void) {
     text(104, 9, "Activities", 0xd7cdd7);
     text(801, 9, PLATFORM_BADGE, 0xd7cdd7);
     text(944, 9, "TEST", 0xae9fad);
-    roundrect(10, 51, 78, 490, 0x292330);
+    roundrect(10, 51, 78, 514, 0x292330);
     rect(12, 62, 3, 68, accent);
     const char *names[] = {"文件", "设置", "终端", "回收站"};
     for (int i = 0; i < 4; i++) {
         icon(32, 83 + i * 100, i, 44);
         text(i == 3 ? 30 : 38, 132 + i * 100, names[i], 0xdbd2dc);
     }
+    circle(49, 508, 14, accent);
+    circle(49, 508, 10, 0x292330);
+    text(17, 533, "Explorer", 0xdbd2dc);
     large_text(727, 596, "MayOS", 0x89697c);
     text(728, 639, "WORKSTATION / " MAYOS_RELEASE, 0xb19cab);
 }
@@ -639,7 +644,7 @@ static void settings(Window *w) {
         large_text(cx, cy + 23, "MayOS", ink);
         roundrect(cx + 111, cy + 32, 161, 25, dark ? 0x26433f : 0xdeeeea);
         text(cx + 124, cy + 35, MAYOS_RELEASE, accent);
-        text(cx, cy + 72, "一个清晰、专注的桌面工作空间。", muted);
+        text(cx, cy + 72, "系统 > 关于 / " PLATFORM_SHORT, muted);
         roundrect(cx, cy + 105, cw, 90, bg);
         icon(cx + 16, cy + 125, 1, 44);
         text(cx + 78, cy + 117, device, ink);
@@ -907,6 +912,29 @@ static void editor_draw(Window *w) {
     numtext(x + w->w - 140, y + w->h - 29, strlen(editor_buf), muted);
     text(x + w->w - 89, y + w->h - 29, "/ 4095 B", muted);
 }
+/* Orange is a local UI preview; no network or browser engine is claimed. */
+static char explorer_query[72], explorer_bookmark[72];
+static int explorer_engine;
+static void explorer_submit(void) {
+    notify("Explorer 预览：网络与网页引擎尚未接入，未发送搜索。");
+}
+static void explorer_draw(Window *w) {
+    int x = w->x, y = w->y;
+    text(x + 24, y + 58, "<   >   ↻", muted);
+    roundrect(x + 120, y + 51, w->w - 250, 34, bg);
+    text(x + 132, y + 58, "搜索或输入链接 / Preview", muted);
+    button(x + w->w - 115, y + 53, 90, "收藏", 0);
+    text(x + 25, y + 100, explorer_bookmark[0] ? explorer_bookmark : "收藏夹为空（仅本次会话）", muted);
+    circle(x + 130, y + 207, 24, accent);
+    circle(x + 130, y + 207, 18, panel);
+    large_text(x + 177, y + 187, "MayOS Explorer", ink);
+    roundrect(x + 100, y + 260, w->w - 200, 44, bg);
+    text(x + 114, y + 272, explorer_query[0] ? explorer_query : "在此输入以搜索（ASCII）", ink);
+    button(x + w->w - 92, y + 267, 65, "转到", 1);
+    button(x + 100, y + 327, 290, explorer_engine ? "搜索方式：Bing / 切换" : "搜索方式：Google / 切换", 0);
+    text(x + 100, y + 383, "Orange / 本地交互预览 · 尚未连接互联网", accent);
+    text(x + 100, y + 417, "输入与收藏可用；网页加载、下载和历史尚未实现。", muted);
+}
 static void taskbar(void) {
     rect(0, H - 46, W, 46, 0x0b131c);
     rect(0, H - 46, W, 1, 0x2a3a46);
@@ -915,19 +943,19 @@ static void taskbar(void) {
         for (int x = 0; x < 2; x++)
             rect(24 + x * 7, H - 29 + y * 7, 4, 4, accent);
     text(46, H - 34, "应用", 0xe2edf0);
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < WINDOW_COUNT; i++)
         if (windows[i].open) {
-            int x = 110 + i * 144;
+            int x = 110 + i * 126;
             int active = focus == i && !windows[i].min;
-            rect(x, H - 38, 136, 31, active ? 0x253640 : 0x111f29);
+            rect(x, H - 38, 118, 31, active ? 0x253640 : 0x111f29);
             text(x + 14, H - 34,
                  i == 0   ? "文件"
                  : i == 1 ? "系统设置"
                  : i == 2 ? ">_ 终端"
-                          : "文本编辑器",
+                          : i == 3 ? "文本编辑器" : "Explorer",
                  active ? 0xd5e9e7 : 0x88a3b0);
             if (active)
-                rect(x + 12, H - 6, 112, 2, accent);
+                rect(x + 12, H - 6, 94, 2, accent);
         }
     circle(772, H - 23, 3, disk_ready ? accent : 0x86a5b2);
     text(785, H - 33,
@@ -1055,7 +1083,7 @@ static void cursor(void) {
 static void render(void) {
     palette();
     desktop();
-    for (int k = 0; k < 4; k++) {
+    for (int k = 0; k < WINDOW_COUNT; k++) {
         int i = order[k];
         Window *w = &windows[i];
         if (!w->open || w->min)
@@ -1067,8 +1095,10 @@ static void render(void) {
             settings(w);
         else if (i == 2)
             terminal_draw(w);
-        else
+        else if (i == 3)
             editor_draw(w);
+        else
+            explorer_draw(w);
     }
     taskbar();
     if (start_open)
@@ -1233,8 +1263,8 @@ static void left_click(void) {
             search[0] = 0;
             return;
         }
-        for (int i = 0; i < 4; i++)
-            if (windows[i].open && inside(mx, my, 110 + i * 144, H - 38, 136, 31)) {
+        for (int i = 0; i < WINDOW_COUNT; i++)
+            if (windows[i].open && inside(mx, my, 110 + i * 126, H - 38, 118, 31)) {
                 if (focus == i && !windows[i].min)
                     windows[i].min = 1;
                 else
@@ -1271,7 +1301,7 @@ static void left_click(void) {
         }
         start_open = 0;
     }
-    for (int k = 3; k >= 0; k--) {
+    for (int k = WINDOW_COUNT - 1; k >= 0; k--) {
         int id = order[k];
         Window *w = &windows[id];
         if (!w->open || w->min || !inside(mx, my, w->x, w->y, w->w, w->h))
@@ -1300,6 +1330,14 @@ static void left_click(void) {
                 dragx = rx;
                 dragy = ry;
             }
+            return;
+        }
+        if (id == 4) {
+            if (inside(rx, ry, 100, 327, 290, 30)) explorer_engine = !explorer_engine;
+            else if (inside(rx, ry, w->w - 115, 53, 90, 30)) {
+                copy(explorer_bookmark, explorer_query, sizeof(explorer_bookmark));
+                notify(explorer_query[0] ? "已收藏到本次会话" : "请先输入搜索或链接");
+            } else if (inside(rx, ry, w->w - 92, 267, 65, 30)) explorer_submit();
             return;
         }
         if (id == 1) {
@@ -1380,6 +1418,10 @@ static void left_click(void) {
         } else if (id == 3 && inside(rx, ry, 17, 55, 90, 30)) {
             save_editor();
         }
+        return;
+    }
+    if (inside(mx, my, 12, 486, 76, 72)) {
+        raise_window(4);
         return;
     }
     for (int i = 0; i < 4; i++)
@@ -1468,6 +1510,16 @@ static void key_event(int k) {
                         raise_window(i);
                     break;
                 }
+        }
+        return;
+    }
+    if (focus == 4 && windows[4].open && !windows[4].min) {
+        int n = strlen(explorer_query);
+        if (k == '\n') explorer_submit();
+        else if (k == '\b' && n) explorer_query[n - 1] = 0;
+        else if (k >= 32 && k < 127 && n < 60) {
+            explorer_query[n] = k;
+            explorer_query[n + 1] = 0;
         }
         return;
     }

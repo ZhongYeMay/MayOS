@@ -1,25 +1,14 @@
-# MayOS 官网源文件
+# MayOS 官网 · GitHub Pages
 
-本目录是 2026-11-01 起维护的 MayOS 官方网站静态源码，入口为 `index.html`。它介绍当前仓库开发进度与历史可用构建，且**不会把未发布的 ISO 标成可用下载**。
+根据 2026-11-07 提供的草图实现三页静态站点：
+- `index.html`：MayOS 字标、双内核介绍、开发进度。
+- `download.html`：源码与历史启动包、SHA-256 与复制按钮。
+- `demos.html`：历史 MayKernel / Linux 启动录像。
 
-## 本次界面
+共享 `style.css` 和 `site.js`，包含移动端布局、可持久化深浅主题、键盘焦点及复制失败提示。所有站内路径使用相对地址，兼容 `/MayOS/` 项目站点。
 
-- 采用与 MayOS 桌面一致的深紫灰、Ubuntu 橙色、简洁窗口与 Dock。
-- 响应式设计、语义化页面结构、键盘焦点、减少动态效果。
-- 桌面卡片是 **CSS 示意图**，不是 QEMU 真实截图。
-- 现有 `0.3.0-pre1` 链接明确标记为历史构建；更新源代码不自动更新镜像。
-- 最新源码统一链接至 `ZhongYeMay/MayOS` 的 `main` 分支。
+运行 `python3 website/check_site.py` 检查全部页面；本地预览：`python3 -m http.server 8080`，访问 `/website/`。
 
-## 当前源码预发布
+部署工作流：`.github/workflows/website-pages.yml`。GitHub Pages Source 使用 GitHub Actions，main 的网站提交触发部署；访问 https://zhongyemay.github.io/MayOS/ 。站点可用性以部署结果为准。
 
-最新源码预发布为 [v0.3.0-pre1-source.1](https://github.com/ZhongYeMay/MayOS/releases/tag/v0.3.0-pre1-source.1)，包含 Ubuntu 风格、Fastfetch 与 Linux framebuffer 性能优化的源码和 SHA-256 校验。它**不是新版可启动 ISO**。网站下载区将源码与旧版测试镜像分开标注。
-
-## 部署
-
-`website/index.html` 为单文件静态站点，可部署到任意静态网页主机。仓库含 GitHub Pages Action（`.github/workflows/website-pages.yml`）；使用前可能需要在 **Settings → Pages → Build and deployment → Source** 选择 GitHub Actions。仅当该 Action 的部署步骤成功时，才能使用 Pages 地址。
-
-既有网站 `https://mayos-official.business-tea-9633.chatgpt.site/` 位于不同的托管服务，单纯向 GitHub 提交网页**不会**自动覆盖其内容；要更新该域名，还需用原站点管理环境重新部署本目录页面。
-
-更新链接或发布信息时，先运行 `python3 website/check_site.py`，并核对发布版本、ISO SHA-256、QEMU 启动实测及许可附件。
-
-MayOS Team 2023 - 2026.
+源码快照不含新版 ISO。网站不将设计草图中的 0.0.4、ARM、互联网支持和 UEFI IA32 宣称为已发布能力。历史附件须核实可访问后才能列为下载。

@@ -40,4 +40,19 @@ assert all(text in html for text in required), "Missing project disclosure"
 assert "MayOS_0.1_Eng" not in html
 assert "MayOS_0.2_Eng" not in html
 assert 'href="#"' not in html and "href='#'" not in html, "Empty link target"
+for page in ROOT.glob("*.html"):
+    doc = LinkParser()
+    doc.feed(page.read_text(encoding="utf-8"))
+    assert doc.has_lang and doc.title, page.name
+    for link in doc.links:
+        assert link and not link.startswith("javascript:"), (page.name, link)
+        if link.startswith(("https://", "http://")):
+            continue
+        target, _, anchor = link.partition("#")
+        dest = ROOT / target if target else page
+        assert dest.is_file(), (page.name, link)
+        if anchor:
+            other = LinkParser()
+            other.feed(dest.read_text(encoding="utf-8"))
+            assert anchor in other.ids, (page.name, link)
 print("PASS: MayOS website HTML, navigation, disclosures and release boundaries")
