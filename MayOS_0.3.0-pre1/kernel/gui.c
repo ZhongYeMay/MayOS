@@ -66,16 +66,28 @@ static void circle(int cx, int cy, int r, u32 c) {
 }
 static int utf(const char **s) {
     const u8 *p = (const u8 *)*s;
-    int c = *p++;
-    if (c >= 0xe0) {
-        c = ((c & 15) << 12) | ((p[0] & 63) << 6) | (p[1] & 63);
-        p += 2;
-    } else if (c >= 0xc0) {
-        c = ((c & 31) << 6) | (p[0] & 63);
-        p++;
-    }
+    u32 c = *p++;
+    if (c >= 0xc2 && c <= 0xdf) {
+        if ((p[0] & 0xc0) == 0x80) {
+            c = ((c & 31) << 6) | (p[0] & 63);
+            p++;
+        } else c = '?';
+    } else if (c >= 0xe0 && c <= 0xef) {
+        if (p[0] && p[1] && (p[0] & 0xc0) == 0x80 &&
+            (p[1] & 0xc0) == 0x80) {
+            c = ((c & 15) << 12) | ((p[0] & 63) << 6) | (p[1] & 63);
+            p += 2;
+        } else c = '?';
+    } else if (c >= 0xf0 && c <= 0xf4) {
+        if (p[0] && p[1] && p[2] && (p[0] & 0xc0) == 0x80 &&
+            (p[1] & 0xc0) == 0x80 && (p[2] & 0xc0) == 0x80) {
+            c = ((c & 7) << 18) | ((p[0] & 63) << 12) |
+                ((p[1] & 63) << 6) | (p[2] & 63);
+            p += 3;
+        } else c = '?';
+    } else if (c >= 0x80) c = '?';
     *s = (const char *)p;
-    return c;
+    return (int)c;
 }
 static int glyph(int c) {
     int lo = 0, hi = FONT_COUNT - 1;
