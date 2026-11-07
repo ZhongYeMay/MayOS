@@ -406,7 +406,7 @@ static void shell(void) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest");
-        emit("theme light|dark  reboot  shutdown");
+        emit("theme light|dark  net status  reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
         out_count = 0;
@@ -511,6 +511,16 @@ static void shell(void) {
         emitnum("Uptime: ", ticks / 100, " seconds");
         emit(disk_ready ? "Disk: ATA / MayFS" : "Disk: RAM fallback");
         emit(cpu_name);
+#endif
+    } else if (!strcmp(c, "net") || !strcmp(c, "network")) {
+#ifdef MAYOS_LINUX
+        char report[384];
+        platform_network_status(report, sizeof(report));
+        emit(report);
+        emit("HTTP: Explorer supports http:// text preview; HTTPS unavailable.");
+#else
+        emit("Network: MayKernel has no native NIC / TCP/IP driver.");
+        emit("Boot Linux for DHCP, DNS, IP diagnostics and HTTP preview.");
 #endif
     } else if (!strcmp(c, "memtest")) {
         u32 before = free_pages;
@@ -1011,8 +1021,12 @@ static void explorer_draw(Window *w) {
     roundrect(x + 100, y + 260, w->w - 200, 44, bg);
     text(x + 114, y + 272, explorer_query[0] ? explorer_query : "http://example.com/", ink);
     button(x + w->w - 92, y + 267, 65, "转到", 1);
-    text(x + 100, y + 337, "仅 HTTP 文本响应；搜索与 HTTPS 仍在适配。", muted);
+    text(x + 100, y + 337, "网络 / HTTP 文本预览。HTTPS 与完整浏览器尚未支持。", muted);
 #ifdef MAYOS_LINUX
+    char network_report[384];
+    int has_network = platform_network_status(network_report, sizeof(network_report));
+    text(x + 100, y + 358, has_network ? "IP 已获取 · DHCP 网络可用" : "网络初始化中 · 检查 DHCP 或网卡", muted);
+
     text(x + 100, y + 383, explorer_loading ? "HTTP 正在加载 / 10 秒超时" : "HTTP 文本预览 · 不支持 HTTPS / HTML 渲染", accent);
     const char *s = explorer_response;
     for (int row = 0; row < (w->h - 420) / 20 && *s; row++) {
