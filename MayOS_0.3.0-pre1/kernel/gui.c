@@ -277,6 +277,9 @@ static void open_easter(void) {
 }
 static char modal_text[64], notice[120], search[48], device[48] = "MayOS Workstation";
 static u32 notice_until = 0, last_click_tick;
+static int notification_count;
+static char notification_log[4][120];
+static int resizing = -1;
 static int last_clicked = -1;
 static int editor_file = -1, editor_changed = 0;
 static char editor_buf[FILE_CAP];
@@ -284,6 +287,10 @@ static char output[180][100], command[160], history[160];
 static int out_count, cmdlen, cwd = 0, scroll = 0;
 static void notify(const char *s) {
     copy(notice, s, sizeof(notice));
+    for (int i = 3; i > 0; i--)
+        copy(notification_log[i], notification_log[i - 1], sizeof(notification_log[i]));
+    copy(notification_log[0], s, sizeof(notification_log[0]));
+    if (notification_count < 3) notification_count++;
     notice_until = ticks + 350;
     dirty = 1;
 }
@@ -687,8 +694,6 @@ static void palette(void) {
 }
 static int quick_open, notifications_open, overview_open, desktop_context_open, wallpaper_mode;
 static int brightness_level = 100, desktop_x, desktop_y;
-static int notification_count;
-static char notification_log[4][120];
 static int desktop_icon_at(int px, int py) {
     int item = 0;
     for (int i = 4; i < FS_MAX; i++) {
@@ -1477,45 +1482,124 @@ static void left_click(void) {
         }
         context_open = 0;
     }
-    if (my >= H - 46) {
-        if (mx < 100) {
+    if (desktop_context_open) {
+        desktop_context_open = 0;
+        if (inside(mx, my, desktop_x, desktop_y, 242, 179)) {
+            int index = (my - desktop_y) / 41;
+            if (index == 0 || index == 1) {
+                folder = 2;
+                begin_modal(index ? 2 : 1, -1);
+            } else if (index == 2)
+                wallpaper_mode = !wallpaper_mode;
+            else if (index == 3)
+                raise_window(1);
+        }
+        return;
+    }
+    if (quick_open) {
+        quick_open = 0;
+        if (inside(mx, my, 689, 52, 319, 336)) {
+            if (inside(mx, my, 707, 153, 283, 44)) dark = !dark;
+            else if (inside(mx, my, 707, 247, 68, 48)) {
+                brightness_level -= 10;
+                if (brightness_level < 30) brightness_level = 30;
+            } else if (inside(mx, my, 936, 247, 72, 48)) {
+                brightness_level += 10;
+                if (brightness_level > 100) brightness_level = 100;
+            } else if (inside(mx, my, 919, 340, 90, 47)) {
+#ifndef MAYOS_LINUX
+                net_command("renew");
+#else
+                char status[200];
+                platform_network_status(status, sizeof(status));
+#endif
+                notify("已重新检查网络状态");
+            } else quick_open = 1;
+        }
+        return;
+    }
+    if (notifications_open) {
+        notifications_open = 0;
+        if (inside(mx, my, 919, 52, 88, 63)) {
+            notification_count = 0;
+            notice[0] = 0;
+        }
+        return;
+    }
+    if (overview_open) {
+        overview_open = 0;
+        if (inside(mx, my, 158, 112, 708, 520)) {
+            int current = 0;
+            for (int i = 0; i < WINDOW_COUNT; i++) {
+                if (!windows[i].open) continue;
+                int x = 184 + (current % 2) * 340;
+                int y = 190 + (current / 2) * 144;
+                if (inside(mx, my, x, y, 317, 126)) {
+                    raise_window(i);
+                    return;
+                }
+                current++;
+            }
+        }
+        return;
+    }
+    if (my < 42) {
+        start_open = 0;
+        if (mx < 110 || (mx >= 264 && mx < 346)) {
+            start_open = 1;
+            search[0] = 0;
+        } else if (mx >= 110 && mx < 185)
+            raise_window(0);
+        else if (mx >= 185 && mx < 262)
+            overview_open = 1;
+        else if (mx >= 346 && mx < 425)
+            raise_window(2);
+        else if (mx >= 696 && mx < 800)
+            quick_open = 1;
+        else if (mx >= 800 && mx < 868)
+            quick_open = 1;
+        else if (mx >= 868 && mx < 957)
+            notifications_open = 1;
+        else if (mx >= 957)
+            quick_open = 1;
+        return;
+    }
+    if (my >= H - 84 && inside(mx, my, 210, H - 84, 604, 76)) {
+        int app = (mx - 226) / 98;
+        if (mx < 226 || app < 0 || app >= 6) return;
+        if (app == 0) {
             start_open = !start_open;
             search[0] = 0;
-            return;
+        } else {
+            int id = app - 1;
+            if (windows[id].open && focus == id && !windows[id].min)
+                windows[id].min = 1;
+            else
+                raise_window(id);
         }
-        for (int i = 0; i < WINDOW_COUNT; i++)
-            if (windows[i].open && inside(mx, my, 110 + i * 126, H - 38, 118, 31)) {
-                if (focus == i && !windows[i].min)
-                    windows[i].min = 1;
-                else
-                    raise_window(i);
-                return;
-            }
-        start_open = 0;
         return;
     }
     if (start_open) {
-        int x = 12, y = H - 424;
-        if (inside(mx, my, x, y, 326, 366)) {
-            for (int i = 0; i < 4; i++)
-                if (search_match(i) && inside(mx, my, x + 16, y + 100 + i * 47, 294, 46)) {
-                    if (i == 3) {
-                        folder = 3;
-                        file_scroll = 0;
-                        selected = -1;
-                        raise_window(0);
-                    } else
-                        raise_window(i);
-                    return;
-                }
-            if (my >= y + 320) {
-                if (mx > x + 267) {
-                    fs_sync();
-                    poweroff();
-                } else if (mx > x + 210) {
-                    fs_sync();
-                    reboot();
-                }
+        if (inside(mx, my, 180, 130, 664, 500)) {
+            for (int i = 0; i < 6; i++) {
+                int xx = 211 + (i % 3) * 210;
+                int yy = 277 + (i / 3) * 151;
+                if (!search_match(i) || !inside(mx, my, xx, yy, 186, 123))
+                    continue;
+                if (i == 5) {
+                    folder = 3;
+                    selected = -1;
+                    raise_window(0);
+                } else if (i == 3 && editor_file < 0) {
+                    folder = 1;
+                    raise_window(0);
+                    begin_modal(1, -1);
+                } else raise_window(i);
+                return;
+            }
+            if (my >= 582 && mx >= 646 && mx < 844) {
+                fs_sync();
+                if (mx > 752) poweroff(); else reboot();
             }
             return;
         }
@@ -1528,6 +1612,11 @@ static void left_click(void) {
             continue;
         raise_window(id);
         int rx = mx - w->x, ry = my - w->y;
+        if (!w->max && rx >= w->w - 22 && ry >= w->h - 22) {
+            resizing = id;
+            drag = -1;
+            return;
+        }
         if (ry < 42) {
             if (rx > w->w - 46) {
                 if (id == 3 && editor_changed) {
@@ -1638,21 +1727,17 @@ static void left_click(void) {
         }
         return;
     }
-    if (inside(mx, my, 12, 486, 76, 72)) {
-        raise_window(4);
-        return;
-    }
-    for (int i = 0; i < 4; i++)
-        if (inside(mx, my, 20, 76 + i * 100, 76, 88)) {
-            if (i == 3) {
-                folder = 3;
-                file_scroll = 0;
-                selected = -1;
-                raise_window(0);
-            } else
-                raise_window(i);
-            return;
+    int item = desktop_icon_at(mx, my);
+    if (item >= 0) {
+        if (last_clicked == item && ticks - last_click_tick < 45) {
+            open_file(item);
+            last_clicked = -1;
+        } else {
+            selected = item;
+            last_clicked = item;
+            last_click_tick = ticks;
         }
+    }
 }
 static void right_click(void) {
     if (egg_open)
@@ -1674,7 +1759,24 @@ static void right_click(void) {
             ctxy = H - 380;
         context_open = 1;
         dirty = 1;
+        return;
     }
+    for (int i = 0; i < WINDOW_COUNT; i++)
+        if (windows[i].open && !windows[i].min &&
+            inside(mx, my, windows[i].x, windows[i].y, windows[i].w, windows[i].h))
+            return;
+    int item = desktop_icon_at(mx, my);
+    if (item >= 0) {
+        selected = item;
+        ctxx = mx > W - 190 ? W - 190 : mx;
+        ctxy = my > H - 380 ? H - 380 : my;
+        context_open = 1;
+    } else {
+        desktop_x = mx > W - 250 ? W - 250 : mx;
+        desktop_y = my > H - 190 ? H - 190 : my;
+        desktop_context_open = 1;
+    }
+    dirty = 1;
 }
 static void key_event(int k) {
     dirty = 1;
@@ -1708,7 +1810,11 @@ static void key_event(int k) {
         return;
     }
     if (k == 27) {
-        start_open = context_open = 0;
+        start_open = context_open = quick_open = notifications_open = overview_open = desktop_context_open = 0;
+        return;
+    }
+    if (k == 0x107) {
+        overview_open = !overview_open;
         return;
     }
     if (start_open) {
@@ -1719,11 +1825,15 @@ static void key_event(int k) {
             search[n] = k;
             search[n + 1] = 0;
         } else if (k == '\n') {
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 6; i++)
                 if (search_match(i)) {
-                    if (i == 3) {
+                    if (i == 5) {
                         folder = 3;
                         raise_window(0);
+                    } else if (i == 3 && editor_file < 0) {
+                        folder = 1;
+                        raise_window(0);
+                        begin_modal(1, -1);
                     } else
                         raise_window(i);
                     break;
@@ -1822,8 +1932,25 @@ void kernel_main(u32 magic, u32 info) {
                 left_click();
             if ((buttons & 2) && !(oldbuttons & 2))
                 right_click();
-            if (!(buttons & 1))
+            if (!(buttons & 1)) {
                 drag = -1;
+                resizing = -1;
+            }
+            if (resizing >= 0) {
+                Window *w = &windows[resizing];
+                int min_width = resizing == 1 ? 800 : 590;
+                int min_height = resizing == 1 ? 620 : 380;
+                int width = mx - w->x + 8;
+                int height = my - w->y + 8;
+                if (width < min_width) width = min_width;
+                if (height < min_height) height = min_height;
+                if (width > W - w->x) width = W - w->x;
+                if (height > H - 92 - w->y) height = H - 92 - w->y;
+                if (width >= min_width && height >= min_height) {
+                    w->w = width;
+                    w->h = height;
+                }
+            }
             if (drag >= 0) {
                 Window *w = &windows[drag];
                 w->x = mx - dragx;
