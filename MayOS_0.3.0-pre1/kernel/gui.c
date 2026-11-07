@@ -680,8 +680,8 @@ static void accept_modal(void) {
     modal = 0;
 }
 static void palette(void) {
-    const u32 dark_primary[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6};
-    const u32 light_primary[] = {0x6750a4, 0x006a64, 0x415f91, 0x904b40};
+    const u32 dark_primary[] = {0xe2e2e7, 0xc7c8cf, 0xb7bbbd, 0xd4d1c9};
+    const u32 light_primary[] = {0x414249, 0x505257, 0x5d6264, 0x69675d};
     bg = dark ? 0x141218 : 0xfffbfe;
     panel = dark ? 0x211f26 : 0xfff7ff;
     surface_high = dark ? 0x2b2930 : 0xf3edf7;
@@ -689,8 +689,8 @@ static void palette(void) {
     muted = dark ? 0xcac4d0 : 0x49454f;
     line = dark ? 0x49454f : 0xcac4d0;
     accent = dark ? dark_primary[accent_choice] : light_primary[accent_choice];
-    on_accent = dark ? 0x381e72 : 0xffffff;
-    selected_fill = dark ? 0x4f378b : 0xeaddff;
+    on_accent = dark ? 0x202124 : 0xffffff;
+    selected_fill = dark ? 0x46474d : 0xe0e1e5;
 }
 static int quick_open, notifications_open, overview_open, desktop_context_open, wallpaper_mode;
 static int brightness_level = 100, desktop_x, desktop_y;
@@ -761,6 +761,9 @@ static void frame(int id) {
     rect(controls + 11, w->y + 21, 11, 1, muted);
     border(controls + 48, w->y + 16, 10, 10, muted);
     text(w->x + w->w - 35, w->y + 10, "×", muted);
+    for (int i = 0; i < 3; i++)
+        stroke(w->x + w->w - 8 - i * 5, w->y + w->h - 4,
+               w->x + w->w - 4, w->y + w->h - 8 - i * 5, 1, muted);
 }
 static void settings(Window *w) {
     int x = w->x, y = w->y, cx = x + 204, cy = y + 65, cw = w->w - 234;
@@ -854,7 +857,7 @@ static void settings(Window *w) {
             }
         }
         text(cx, cy + 353, "主题色 / Accent", ink);
-        u32 colors[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6};
+        u32 colors[] = {0xe2e2e7, 0xc7c8cf, 0xb7bbbd, 0xd4d1c9};
         for (int i = 0; i < 4; i++) {
             circle(cx + 19 + i * 64, cy + 410, 18, colors[i]);
             if (accent_choice == i)
@@ -1339,6 +1342,15 @@ static void render(void) {
     if (egg_open)
         easter_draw();
     cursor();
+    if (brightness_level != 100) {
+        for (int index = 0; index < W * H; index++) {
+            u32 color = pixels[index];
+            u32 r = ((color >> 16) & 255u) * (u32)brightness_level / 100u;
+            u32 g = ((color >> 8) & 255u) * (u32)brightness_level / 100u;
+            u32 b = (color & 255u) * (u32)brightness_level / 100u;
+            pixels[index] = r << 16 | g << 8 | b;
+        }
+    }
     present(pixels);
     dirty = 0;
 }
