@@ -1,0 +1,145 @@
+name: Publish fully validated MayOS 0.4.0-pre2
+
+on:
+  push:
+    branches:
+      - release/mayos-0.4.0-pre2
+    paths:
+      - '.github/workflows/complete-mayos-040-pre2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: mayos-040-pre2-release
+  cancel-in-progress: false
+
+jobs:
+  release-pre2:
+    if: github.repository == 'ZhongYeMay/MayOS'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: 408d8816bf74a00d23c810142b8bc44fbe52f6cf
+      VERIFIED_RUN: '42387470897'
+    steps:
+      - name: Wait for exact pinned native and BIOS/UEFI verification
+        run: |
+          set -euo pipefail
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN" --jq .head_sha)"
+          test "$actual" = "$SOURCE_SHA"
+          for attempt in $(seq 1 180); do
+            state="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN" --jq .status)"
+            if [ "$state" = completed ]; then break; fi
+            sleep 10
+          done
+          result="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN" --jq .conclusion)"
+          test "$result" = success || {
+            echo "Full pre2 QEMU matrix did not pass: $result" >&2
+            exit 1
+          }
+          if gh release view v0.4.0-pre2 >/dev/null 2>&1; then
+            echo 'v0.4.0-pre2 exists; refusing overwrite' >&2
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Retrieve native + dual ISO from exact successful CI
+        run: |
+          set -euo pipefail
+          test "$(git show "$SOURCE_SHA:MayOS_0.3.0-pre1/VERSION")" = '0.4.0-pre2'
+          gh run download "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name MayOS-0.4.0-pre2-native --dir native
+          gh run download "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name MayOS-0.4.0-pre2-dual-verified --dir dual
+          test -s native/mayos.iso
+          test -s dual/mayos-dual.iso
+          test -s native/pre2-windows-pointer.png
+          test -s native/pre2-icon-only-statusbar.png
+          (cd dual && sha256sum -c SHA256SUMS.txt)
+          mkdir -p dist
+          cp native/mayos.iso dist/MayOS-0.4.0-pre2-MayKernel.iso
+          cp dual/mayos-dual.iso dist/MayOS-0.4.0-pre2-dual-boot.iso
+          cp native/pre2-windows-pointer.png dist/MayOS-0.4.0-pre2-desktop.png
+          cp native/pre2-icon-only-statusbar.png dist/MayOS-0.4.0-pre2-status-panel.png
+          cp native/pre2-polished-windows.png dist/MayOS-0.4.0-pre2-windows.png
+          (cd dist && sha256sum *.iso > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+      - name: Stage exact pre2 OS source on a workflow-clean release commit
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git restore --source="$SOURCE_SHA" --staged --worktree -- MayOS_0.3.0-pre1
+          git diff --cached --quiet && { echo 'No source delta' >&2; exit 1; }
+          git commit -m 'release: exact validated MayOS 0.4.0-pre2 system sources'
+          git diff --quiet "$SOURCE_SHA" HEAD -- MayOS_0.3.0-pre1
+          git push origin HEAD:refs/heads/release/source-0.4.0-pre2
+          git archive HEAD | gzip -9 > dist/MayOS-0.4.0-pre2-source.tar.gz
+          test -s dist/MayOS-0.4.0-pre2-source.tar.gz
+      - name: Create immutable annotated pre2 source tag
+        run: |
+          set -euo pipefail
+          git tag -a v0.4.0-pre2 -m 'QEMU-verified MayOS 0.4.0-pre2'
+          git push origin refs/tags/v0.4.0-pre2
+      - name: Write verification notes
+        run: |
+          cat > dist/RELEASE_NOTES.md <<'EOF'
+          # MayOS 0.4.0-pre2
+
+          This preview preserves the pre1 kernels and network features while
+          refining the native Material Design 3 desktop. Changes:
+          - Windows-style white mouse pointer with dark outline and shadow.
+          - Top-right system status is entirely icon-based; text navigation
+            remains on the left side of the menu bar.
+          - Functional clock, network, brightness, notifications, power and
+            quick-settings entry points.
+          - Refined grayscale window shadows/controls, Dock hover feedback,
+            application icons and desktop selection.
+          - Twenty official Apache-licensed Material Symbols Rounded icons,
+            rasterized into the native kernel framebuffer at build time.
+
+          GitHub Actions verified MayKernel GUI, cursor pixel output, disk
+          isolation, DHCP/ARP/ICMP/DNS/TCP/HTTP, and both Linux 7.3.1 and
+          MayKernel BIOS/UEFI QEMU boot modes. The ISO binaries and screenshot
+          assets are copied from the exact successful validation run.
+
+          Experimental QEMU x86/x86_64 operating system (1024x768 CPU framebuffer).
+          No audio mixer, Wi-Fi manager, HTTPS/TLS browser, GPU acceleration,
+          Secure Boot or broad physical PC support. Linux session files are
+          temporary; MayKernel MayFS persists files.
+
+          Includes two ISO images, screenshots, source archive and SHA256SUMS.txt.
+          Third-party source and license requirements are documented in
+          MayOS_0.3.0-pre1/linux/README.md within the source archive.
+          EOF
+      - name: Preserve verified pre2 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-0.4.0-pre2-release-assets
+          path: dist/
+          retention-days: 30
+      - name: Publish GitHub prerelease
+        run: |
+          set -euo pipefail
+          if gh release view v0.4.0-pre2 >/dev/null 2>&1; then
+            echo 'Release already exists; refusing overwrite' >&2
+            exit 1
+          fi
+          gh release create v0.4.0-pre2 \
+            dist/MayOS-0.4.0-pre2-dual-boot.iso \
+            dist/MayOS-0.4.0-pre2-MayKernel.iso \
+            dist/MayOS-0.4.0-pre2-desktop.png \
+            dist/MayOS-0.4.0-pre2-status-panel.png \
+            dist/MayOS-0.4.0-pre2-windows.png \
+            dist/MayOS-0.4.0-pre2-source.tar.gz \
+            dist/SHA256SUMS.txt \
+            --verify-tag \
+            --title 'MayOS 0.4.0-pre2' \
+            --notes-file dist/RELEASE_NOTES.md \
+            --prerelease
