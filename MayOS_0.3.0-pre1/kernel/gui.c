@@ -729,6 +729,9 @@ static void desktop(void) {
 #else
     int online = net_online();
 #endif
+    char clock_text[8];
+    platform_clock(clock_text);
+    text(620, 10, clock_text, ink);
     symbol(708, 8, 8, 27, online ? ink : muted);
     text(742, 10, online ? "NET" : "OFF", muted);
     text(802, 10, "亮度", muted);
