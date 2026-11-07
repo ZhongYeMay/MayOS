@@ -36,12 +36,6 @@ static void rect(int x, int y, int w, int h, u32 c) {
         for (int i = x; i < x + w; i++)
             pixels[j * W + i] = c;
 }
-static void border(int x, int y, int w, int h, u32 c) {
-    rect(x, y, w, 1, c);
-    rect(x, y + h - 1, w, 1, c);
-    rect(x, y, 1, h, c);
-    rect(x + w - 1, y, 1, h, c);
-}
 static void roundrect(int x, int y, int w, int h, u32 c) {
     /* M3 medium-radius surface. No anti-aliasing or external dependencies. */
     int r = 10;
