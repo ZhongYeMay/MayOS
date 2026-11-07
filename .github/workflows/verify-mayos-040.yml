@@ -1,0 +1,50 @@
+name: Verify MayOS 0.4.0 development
+
+on:
+  push:
+    branches:
+      - develop/mayos-0.4.0
+    paths:
+      - 'MayOS_0.3.0-pre1/kernel/**'
+      - 'MayOS_0.3.0-pre1/scripts/**'
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - 'MayOS_0.3.0-pre1/VERSION'
+      - '.github/workflows/verify-mayos-040.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mayos-040-development
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Build and test native MayKernel GUI/network
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib build-essential \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools \
+            qemu-system-x86 python3-pil fonts-noto-cjk fonts-dejavu-core
+      - name: Build native 0.4.0 kernel ISO
+        working-directory: MayOS_0.3.0-pre1
+        run: make all
+      - name: Native GUI and storage regressions
+        working-directory: MayOS_0.3.0-pre1
+        run: make test
+      - name: Upload QEMU screenshots and serial diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mayos-040-native-validation
+          path: |
+            MayOS_0.3.0-pre1/build/*.png
+            MayOS_0.3.0-pre1/build/*.log
+          if-no-files-found: warn
+          retention-days: 14
