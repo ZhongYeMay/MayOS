@@ -1099,6 +1099,115 @@ static int explorer_bookmark_count, explorer_history_count, explorer_history_ind
 static int explorer_loading, explorer_scroll, explorer_home = 1;
 static int explorer_editing;
 
+/* Four independent session tabs. A tab owns its URL/history/loaded page.
+ * Transport is intentionally single-flight, and an unfinished request is
+ * discarded when switching tabs rather than attributing data to another tab. */
+typedef struct {
+    char query[176], response[8192], history[12][176];
+    int history_count, history_index, scroll, home;
+} ExplorerTab;
+static ExplorerTab explorer_tabs[4];
+static int explorer_tab_count = 1, explorer_tab_index;
+static int explorer_find_open;
+static char explorer_find[48];
+
+static void explorer_tab_store(void) {
+    ExplorerTab *tab = &explorer_tabs[explorer_tab_index];
+    copy(tab->query, explorer_query, sizeof(tab->query));
+    copy(tab->response, explorer_response, sizeof(tab->response));
+    for (int i = 0; i < 12; i++)
+        copy(tab->history[i], explorer_history[i], sizeof(tab->history[i]));
+    tab->history_count = explorer_history_count;
+    tab->history_index = explorer_history_index;
+    tab->scroll = explorer_scroll;
+    tab->home = explorer_home;
+}
+static void explorer_tab_restore(int index) {
+    ExplorerTab *tab = &explorer_tabs[index];
+    explorer_tab_index = index;
+    copy(explorer_query, tab->query, sizeof(explorer_query));
+    copy(explorer_response, tab->response, sizeof(explorer_response));
+    for (int i = 0; i < 12; i++)
+        copy(explorer_history[i], tab->history[i], sizeof(explorer_history[i]));
+    explorer_history_count = tab->history_count;
+    explorer_history_index = tab->history_index;
+    explorer_scroll = tab->scroll;
+    explorer_home = tab->home;
+    explorer_loading = explorer_editing = explorer_find_open = 0;
+    dirty = 1;
+}
+static void explorer_tab_select(int index) {
+    if (index < 0 || index >= explorer_tab_count || index == explorer_tab_index) return;
+    explorer_tab_store();
+    explorer_tab_restore(index);
+    serial("Explorer: tab switch\n");
+}
+static void explorer_tab_new(void) {
+    if (explorer_tab_count >= 4) {
+        notify("最多可打开四个标签页");
+        return;
+    }
+    explorer_tab_store();
+    int index = explorer_tab_count++;
+    memset(&explorer_tabs[index], 0, sizeof(explorer_tabs[index]));
+    explorer_tabs[index].history_index = -1;
+    explorer_tabs[index].home = 1;
+    explorer_tab_restore(index);
+    explorer_editing = 1;
+    serial("Explorer: new tab\n");
+}
+static void explorer_tab_close(int index) {
+    if (index < 0 || index >= explorer_tab_count) return;
+    explorer_tab_store();
+    if (explorer_tab_count == 1) {
+        memset(&explorer_tabs[0], 0, sizeof(explorer_tabs[0]));
+        explorer_tabs[0].history_index = -1;
+        explorer_tabs[0].home = 1;
+        explorer_tab_restore(0);
+    } else {
+        for (int i = index + 1; i < explorer_tab_count; i++)
+            explorer_tabs[i - 1] = explorer_tabs[i];
+        explorer_tab_count--;
+        int target = explorer_tab_index;
+        if (index < target) target--;
+        if (target >= explorer_tab_count) target = explorer_tab_count - 1;
+        explorer_tab_restore(target);
+    }
+    serial("Explorer: tab close\n");
+}
+static int explorer_find_match(const char *s, const char *needle) {
+    if (!*needle) return 0;
+    for (; *s; s++) {
+        int i = 0;
+        while (needle[i] && s[i] &&
+               browse_lower(s[i]) == browse_lower(needle[i])) i++;
+        if (!needle[i]) return 1;
+    }
+    return 0;
+}
+static void explorer_find_next(void) {
+    browse_preview(explorer_response, explorer_view, sizeof(explorer_view));
+    const char *ptr = explorer_view;
+    int row = 0, width = (windows[4].w - 66) / 8;
+    if (width > 105) width = 105;
+    while (*ptr) {
+        char linebuf[108];
+        int n = 0;
+        while (*ptr && *ptr != '\n' && n < width) linebuf[n++] = *ptr++;
+        if (*ptr == '\n') ptr++;
+        linebuf[n] = 0;
+        if (explorer_find_match(linebuf, explorer_find)) {
+            explorer_scroll = row;
+            serial("Explorer: find match\n");
+            dirty = 1;
+            return;
+        }
+        row++;
+    }
+    notify("本页没有找到匹配的文本");
+    serial("Explorer: find not found\n");
+}
+
 static void explorer_load(const char *candidate, int add_history) {
     char address[176];
     copy(address, candidate, sizeof(address));
