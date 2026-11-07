@@ -31,6 +31,8 @@ void net_status(void);
 void net_ping(void);
 void net_dns(void);
 void net_command(const char *);
+int net_http_start(const char *url);
+int net_http_poll(char *destination, int capacity);
 static inline const char *platform_kernel(void) { return "MayOS custom x86"; }
 static inline void platform_idle(void) { __asm__ volatile("hlt"); }
 #endif
