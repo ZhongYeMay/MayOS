@@ -20,6 +20,7 @@ typedef unsigned long long u64;
 const char *platform_kernel(void);
 int platform_web_start(const char *url);
 int platform_web_poll(char *destination, int capacity);
+int platform_network_status(char *destination, int capacity);
 int platform_fastfetch(char *destination, int capacity);
 void platform_idle(void);
 #else
