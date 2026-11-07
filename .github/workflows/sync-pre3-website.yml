@@ -1,0 +1,74 @@
+name: Publish verified MayOS 0.4.0-pre3 website and boot videos
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: mayos-pre3-website
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'ZhongYeMay/MayOS'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v0.4.0-pre3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Require the actual verified pre3 GitHub Release
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.draft' | grep -q '^false$'
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.prerelease' | grep -q '^true$'
+      - name: Download authentic ISO, MP4, metadata, screenshot and checksums
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'MayOS-0.4.0-pre3-*.iso' \
+            --pattern 'MayOS-0.4.0-pre3-all-features-*' \
+            --pattern 'MayOS-0.4.0-pre3-browser.png' \
+            --pattern 'SHA256SUMS.txt' --dir release-assets
+          test -s release-assets/MayOS-0.4.0-pre3-all-features-MayKernel.mp4
+          test -s release-assets/MayOS-0.4.0-pre3-all-features-Linux.mp4
+          test -s release-assets/MayOS-0.4.0-pre3-browser.png
+          (cd release-assets && sha256sum -c SHA256SUMS.txt)
+      - name: Publish pre3 content while retaining pre1/pre2 downloads
+        run: |
+          set -euo pipefail
+          python3 website/apply_pre3_release.py --assets release-assets
+          REQUIRE_PRE2_RECORDINGS=1 python3 website/check_site.py
+          git status --short
+      - name: Upload exact real QEMU MP4 videos to GitHub Pages sources
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add website/index.html website/download.html website/demos.html \
+                  website/check_site.py \
+                  website/media/MayOS-0.4.0-pre3-all-features-MayKernel.mp4 \
+                  website/media/MayOS-0.4.0-pre3-all-features-MayKernel.json \
+                  website/media/MayOS-0.4.0-pre3-all-features-Linux.mp4 \
+                  website/media/MayOS-0.4.0-pre3-all-features-Linux.json \
+                  website/media/MayOS-0.4.0-pre3-browser.png
+          if git diff --cached --quiet; then
+            echo 'Pre3 site already up to date'
+          else
+            git commit -m 'Publish MayOS 0.4.0-pre3 browser and verified full-feature QEMU MP4 videos'
+            git push origin HEAD:main
+          fi
+      - name: Dispatch GitHub Pages with the actual pre3 media files
+        run: |
+          set -euo pipefail
+          gh workflow run website-pages.yml --ref main
+          echo 'Website deployment dispatched after binary media synchronization'
