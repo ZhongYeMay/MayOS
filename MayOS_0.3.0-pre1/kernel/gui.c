@@ -1,7 +1,7 @@
 #include "cat_image.h"
 #include "core.h"
 #include "font.h"
-#define MAYOS_RELEASE "0.3.0-pre11"
+#define MAYOS_RELEASE "0.3.0-pre12"
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
 #define PLATFORM_BADGE "LINUX SESSION"
