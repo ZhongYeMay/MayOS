@@ -386,6 +386,13 @@ static int keycode(unsigned int code, int value) {
         key ^= 32;
     if ((left_ctrl || right_ctrl) && (key == 's' || key == 'S'))
         return 0x106;
+    if (left_ctrl || right_ctrl) {
+        if (key == 'l' || key == 'L') return 0x108;
+        if (key == 't' || key == 'T') return 0x109;
+        if (key == 'w' || key == 'W') return 0x10a;
+        if (key == 'f' || key == 'F') return 0x10b;
+        if (key == 'r' || key == 'R') return 0x10c;
+    }
     return key;
 }
 
