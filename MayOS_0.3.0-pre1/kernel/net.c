@@ -267,7 +267,7 @@ static void tcp_receive(const u8 *p, u16 length, u32 source) {
     if (http_stage == 1 && (flags & 0x12) == 0x12) {
         http_ack = seq + 1;
         http_seq++;
-        tcp_send(0x10, NULL, 0);
+        tcp_send(0x10, 0, 0);
         u8 request[460];
         memset(request, 0, sizeof(request));
         copy((char *)request, "GET ", sizeof(request));
@@ -299,12 +299,12 @@ static void tcp_receive(const u8 *p, u16 length, u32 source) {
                 (c == '\n' || c == '\r' || c == '\t' || (c >= 32 && c < 127)) ? (char)c : '?';
         }
         http_response[http_used] = 0;
-        tcp_send(0x10, NULL, 0);
+        tcp_send(0x10, 0, 0);
         serial("MayNet: HTTP response received\n");
     }
     if (flags & 1) {
         http_ack = seq + payload + 1;
-        tcp_send(0x10, NULL, 0);
+        tcp_send(0x10, 0, 0);
         http_stage = 3;
         serial("MayNet: HTTP connection closed\n");
     }
@@ -383,7 +383,7 @@ int net_http_start(const char *url) {
     http_ack = 0;
     http_stage = 1;
     http_started = ticks;
-    tcp_send(0x02, NULL, 0);
+    tcp_send(0x02, 0, 0);
     serial("MayNet: TCP SYN sent\n");
     return 1;
 }
