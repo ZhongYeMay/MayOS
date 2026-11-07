@@ -1921,6 +1921,8 @@ static void left_click(void) {
                 explorer_editing = 0;
                 serial("Explorer: home\n");
             } else if (inside(rx, ry, 192, 53, w->w - 308, 36)) {
+                /* Selecting the address bar replaces the old URL on typing. */
+                explorer_query[0] = 0;
                 explorer_editing = 1;
             } else if (inside(rx, ry, w->w - 105, 53, 88, 36)) {
                 explorer_save_bookmark();
