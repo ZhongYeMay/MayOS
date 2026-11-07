@@ -1,0 +1,127 @@
+name: Publish validated MayOS 0.4.0-pre1 ISO
+
+on:
+  push:
+    branches:
+      - develop/mayos-0.4.0
+    paths:
+      - '.github/workflows/publish-mayos-040-pre1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: mayos-040-pre1-release
+  cancel-in-progress: false
+
+jobs:
+  publish-pre1:
+    if: github.repository == 'ZhongYeMay/MayOS'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_COMMIT: a6023d86879c8cfef2bb8c0ac7f8b5d7524c53e4
+      VALIDATED_RUN: '42382447248'
+    steps:
+      - name: Verify validated source and successful two-kernel run
+        run: |
+          set -euo pipefail
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATED_RUN" --jq .head_sha)"
+          result="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATED_RUN" --jq .conclusion)"
+          test "$actual" = "$SOURCE_COMMIT"
+          test "$result" = success
+          if gh release view v0.4.0-pre1 >/dev/null 2>&1; then
+            echo 'v0.4.0-pre1 already exists; refusing overwrite' >&2
+            exit 1
+          fi
+      - name: Checkout exact tested pre1 sources
+        uses: actions/checkout@v4
+        with:
+          ref: a6023d86879c8cfef2bb8c0ac7f8b5d7524c53e4
+          fetch-depth: 0
+      - name: Assert precise prerelease version
+        run: |
+          test "$(cat MayOS_0.3.0-pre1/VERSION)" = '0.4.0-pre1'
+          grep -q '^#define MAYOS_RELEASE "0.4.0-pre1"$' MayOS_0.3.0-pre1/kernel/gui.c
+      - name: Install native build and QEMU dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools \
+            qemu-system-x86 python3 python3-pil fonts-noto-cjk fonts-dejavu-core
+      - name: Build pre1 MayKernel ISO and validate native GUI/net
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          make all
+          grep -q '^#define MAYOS_MATERIAL_ICONS 1$' build/material_icons.h
+          make test
+          make test-net
+          make test-material
+      - name: Retrieve exact validated dual-kernel ISO artifact
+        run: |
+          set -euo pipefail
+          mkdir -p validated
+          gh run download "$VALIDATED_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name MayOS-0.4.0-verified-dual-kernel-ISO --dir validated
+          find validated -maxdepth 2 -type f -printf '%p %s bytes\n'
+          test -s validated/mayos-dual.iso
+          test -s validated/SHA256SUMS.txt
+          (cd validated && sha256sum -c SHA256SUMS.txt)
+      - name: Prepare both prerelease ISOs, screenshot and hashes
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp validated/mayos-dual.iso dist/MayOS-0.4.0-pre1-dual-boot.iso
+          cp MayOS_0.3.0-pre1/build/mayos.iso dist/MayOS-0.4.0-pre1-MayKernel.iso
+          cp MayOS_0.3.0-pre1/build/material-desktop.png dist/MayOS-0.4.0-pre1-desktop.png
+          (cd dist && sha256sum *.iso > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+          git archive HEAD | gzip -9 > dist/MayOS-0.4.0-pre1-source.tar.gz
+          cat > dist/RELEASE_NOTES.md <<'EOF'
+          # MayOS 0.4.0-pre1
+
+          First verified 0.4.0 preview. Native Material 3 desktop with macOS-like
+          top menu and Dock, native Material Symbols Rounded icons, application
+          drawer, window overview, file management, notifications and quick settings.
+
+          Native MayKernel RTL8139: DHCP, ARP, ICMP, DNS and limited TCP/HTTP text
+          preview. Linux 7.3.1: Ethernet DHCP/DNS and HTTP text preview.
+
+          Validated native GUI/network tests and Linux/MayKernel BIOS/UEFI QEMU
+          boot tests from the exact source revision for this preview.
+
+          Experimental QEMU system: 1024x768 CPU framebuffer, no Secure Boot,
+          HTTPS, Wi-Fi manager, arbitrary physical hardware or audio mixer.
+          Linux desktop files are RAM-only. Do not use on production devices.
+
+          Native and dual-kernel ISO SHA-256 checksums are in SHA256SUMS.txt.
+          Project source is attached. Third-party upstream kernel sources and
+          corresponding licenses are described in linux/README.md in the
+          project source tree.
+          EOF
+      - name: Preserve verification files
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-0.4.0-pre1-release-files
+          path: dist/
+          retention-days: 30
+      - name: Publish GitHub prerelease
+        run: |
+          set -euo pipefail
+          if gh release view v0.4.0-pre1 >/dev/null 2>&1; then
+            echo 'Already released; refusing overwrite' >&2
+            exit 1
+          fi
+          gh release create v0.4.0-pre1 \
+            dist/MayOS-0.4.0-pre1-dual-boot.iso \
+            dist/MayOS-0.4.0-pre1-MayKernel.iso \
+            dist/MayOS-0.4.0-pre1-desktop.png \
+            dist/MayOS-0.4.0-pre1-source.tar.gz \
+            dist/SHA256SUMS.txt \
+            --target "$SOURCE_COMMIT" \
+            --title 'MayOS 0.4.0-pre1' \
+            --notes-file dist/RELEASE_NOTES.md \
+            --prerelease
