@@ -2068,6 +2068,7 @@ static void right_click(void) {
         desktop_x = mx > W - 250 ? W - 250 : mx;
         desktop_y = my > H - 190 ? H - 190 : my;
         desktop_context_open = 1;
+        serial("Desktop: context menu\n");
     }
     dirty = 1;
 }
