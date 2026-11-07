@@ -171,7 +171,7 @@ static void ring(int cx, int cy, int r, int thickness, u32 c) {
 }
 static void symbol(int x, int y, int kind, int size, u32 c) {
 #if MAYOS_MATERIAL_ICONS
-    if (kind >= 0 && kind < 20 && size > 0) {
+    if (kind >= 0 && kind < 23 && size > 0) {
         for (int j = 0; j < size; j++)
             for (int i = 0; i < size; i++) {
                 int px = x + i, py = y + j;
@@ -1311,82 +1311,141 @@ static int explorer_favorite(void) {
     return 0;
 }
 static void explorer_draw(Window *w) {
-    int x = w->x, y = w->y, width = w->w;
-    /* Functional back/forward/reload/home controls, no inert decoration. */
+    const int x = w->x, y = w->y, width = w->w;
+    /* Compact Material 3 browser tabs above the combined address toolbar. */
+    rect(x + 2, y + 44, width - 4, 48, dark ? 0x1b1c20 : 0xe8e9eb);
+    for (int i = 0; i < explorer_tab_count; i++) {
+        int tx = x + 15 + i * 159, ty = y + 50, active = i == explorer_tab_index;
+        int hover = inside(mx, my, tx, ty, 154, 35);
+        roundrect(tx, ty, 154, 35,
+                  active ? panel : hover ? selected_fill : surface_high);
+        if (active) roundrect(tx + 9, ty + 1, 134, 3, accent);
+        symbol(tx + 11, ty + 8, 4, 20, active ? ink : muted);
+        char label[16] = "新标签页";
+        const char *url = active ? explorer_query : explorer_tabs[i].query;
+        if (url[0]) {
+            const char *name = url;
+            if (url[0] == 'h' && url[1] == 't' && url[2] == 't' &&
+                url[3] == 'p' && url[4] == ':') name = url + 7;
+            else if (url[0] == 'h' && url[1] == 't' && url[2] == 't' &&
+                     url[3] == 'p' && url[4] == 's' && url[5] == ':')
+                name = url + 8;
+            copy(label, name, sizeof(label));
+        }
+        text(tx + 35, ty + 8, label, active ? ink : muted);
+        if (hover || active)
+            symbol(tx + 131, ty + 8, 14, 18, muted);
+    }
+    if (explorer_tab_count < 4) {
+        int tx = x + 19 + explorer_tab_count * 159;
+        roundrect(tx, y + 52, 34, 32,
+                  inside(mx, my, tx, y + 52, 34, 32) ?
+                  selected_fill : surface_high);
+        symbol(tx + 7, y + 58, 21, 20, ink);
+    }
     const char *nav[] = {"<", ">", "R", "H"};
     for (int i = 0; i < 4; i++) {
-        int xx = x + 16 + i * 42;
+        int xx = x + 16 + i * 42, yy = y + 97;
         int disabled = i == 0 ? explorer_history_index <= 0 :
                        i == 1 ? explorer_history_index + 1 >= explorer_history_count :
                        i == 2 ? explorer_home : 0;
-        roundrect(xx, y + 53, 36, 36,
-                  inside(mx, my, xx, y + 53, 36, 36) && !disabled ?
+        roundrect(xx, yy, 36, 36,
+                  !disabled && inside(mx, my, xx, yy, 36, 36) ?
                   selected_fill : surface_high);
-        text(xx + 11, y + 60, nav[i], disabled ? muted : ink);
+        text(xx + 11, yy + 7, nav[i], disabled ? muted : ink);
     }
-    roundrect(x + 192, y + 53, width - 308, 36, surface_high);
-    symbol(x + 201, y + 61, 19, 18, muted);
-    char display[62];
-    copy(display, explorer_query[0] ? explorer_query : "输入 http:// 地址",
+    roundrect(x + 192, y + 97, width - 359, 36, surface_high);
+    symbol(x + 201, y + 105, 19, 18, muted);
+    char display[49];
+    copy(display, explorer_query[0] ? explorer_query : "输入网址 / HTTP 地址",
          sizeof(display));
-    text(x + 227, y + 60, display, explorer_query[0] ? ink : muted);
+    text(x + 227, y + 104, display, explorer_query[0] ? ink : muted);
     if (explorer_editing) rect(x + 227 + (int)strlen(display) * 8,
-                                y + 61, 2, 21, accent);
-    roundrect(x + width - 105, y + 53, 88, 36,
-              inside(mx, my, x + width - 105, y + 53, 88, 36)
-              ? selected_fill : surface_high);
-    text(x + width - 90, y + 60, explorer_favorite() ? "已收藏" : "收藏", ink);
-    text(x + 20, y + 104, "收藏夹", muted);
+                                y + 105, 2, 21, accent);
+    int find_x = x + width - 155, mark_x = x + width - 105;
+    roundrect(find_x, y + 97, 44, 36,
+              inside(mx, my, find_x, y + 97, 44, 36) || explorer_find_open ?
+              selected_fill : surface_high);
+    symbol(find_x + 11, y + 105, 22, 21, ink);
+    roundrect(mark_x, y + 97, 88, 36,
+              inside(mx, my, mark_x, y + 97, 88, 36) ?
+              selected_fill : surface_high);
+    symbol(mark_x + 10, y + 105, 20, 20,
+           explorer_favorite() ? accent : muted);
+    text(mark_x + 36, y + 103,
+         explorer_favorite() ? "已保存" : "收藏", ink);
+
+    text(x + 21, y + 148, "收藏夹", muted);
     for (int i = 0; i < explorer_bookmark_count; i++) {
         int xx = x + 88 + i * 132;
         char label[16];
-        copy(label, explorer_bookmarks[i] + 7, sizeof(label));
-        roundrect(xx, y + 100, 126, 30,
-                  inside(mx, my, xx, y + 100, 126, 30) ?
+        const char *url = explorer_bookmarks[i];
+        copy(label, url + (url[4] == 's' ? 8 : 7), sizeof(label));
+        roundrect(xx, y + 144, 126, 30,
+                  inside(mx, my, xx, y + 144, 126, 30) ?
                   selected_fill : surface_high);
-        text(xx + 7, y + 104, label, ink);
+        text(xx + 7, y + 150, label, ink);
     }
-    rect(x + 16, y + 140, width - 32, 1, line);
+    rect(x + 16, y + 186, width - 32, 1, line);
     if (explorer_home) {
-        symbol(x + 34, y + 169, 4, 46, accent);
-        large_text(x + 102, y + 174, "Explorer", ink);
-        text(x + 38, y + 250, "输入网址并按 Enter 以访问 HTTP 文本页面", ink);
-        text(x + 38, y + 285, "支持返回、前进、刷新、收藏、文本阅读和滚动", muted);
-        text(x + 38, y + 318, "HTTPS、JavaScript、图片和 CSS 网页排版尚不支持", muted);
-        text(x + 38, y + 355, "在 QEMU 中可访问 http://10.0.2.2:端口/", muted);
+        roundrect(x + 30, y + 216, width - 60, w->h - 302, surface_high);
+        symbol(x + 49, y + 233, 4, 45, accent);
+        large_text(x + 105, y + 240, "Explorer", ink);
+        text(x + 51, y + 303, "输入 HTTP 地址以浏览文本及网页内容", ink);
+        text(x + 51, y + 336, "标签页 · 历史记录 · 收藏夹 · 页面查找", muted);
+        text(x + 51, y + 369, "Ctrl+L 地址栏 · Ctrl+T 新标签 · Ctrl+F 查找", muted);
+        text(x + 51, y + 402, "HTTPS 与 JavaScript 尚未实现，连接不会自动降级", muted);
     } else {
-        char state[68];
-        copy(state, explorer_loading ? "加载中..." : "文本阅读模式", sizeof(state));
-        text(x + 22, y + 153, state, accent);
-        text(x + width - 300, y + 153, "不执行网页脚本", muted);
+        text(x + 24, y + 203,
+             explorer_loading ? "连接中..." : "网页阅读 · 纯文本模式", accent);
+        text(x + width - 230, y + 203, "脚本不会执行", muted);
         browse_preview(explorer_response, explorer_view, sizeof(explorer_view));
         int max_cols = (width - 66) / 8;
         if (max_cols > 105) max_cols = 105;
         const char *ptr = explorer_view;
         int index = 0, painted = 0;
-        int max_rows = (w->h - 248) / 19;
+        int max_rows = (w->h - 311) / 19;
         while (*ptr && painted < max_rows) {
             char linebuf[108];
-            int count = 0;
-            while (*ptr && *ptr != '\n' && count < max_cols)
-                linebuf[count++] = *ptr++;
+            int n = 0;
+            while (*ptr && *ptr != '\n' && n < max_cols)
+                linebuf[n++] = *ptr++;
             if (*ptr == '\n') ptr++;
-            linebuf[count] = 0;
+            linebuf[n] = 0;
             if (index++ >= explorer_scroll) {
-                text(x + 27, y + 184 + painted * 19, linebuf, ink);
+                int highlighted = explorer_find[0] && explorer_find_match(linebuf, explorer_find);
+                if (highlighted)
+                    roundrect(x + 19, y + 234 + painted * 19,
+                              width - 40, 19, selected_fill);
+                text(x + 27, y + 235 + painted * 19,
+                     linebuf, highlighted ? accent : ink);
                 painted++;
             }
         }
         if (!explorer_view[0] && !explorer_loading)
-            text(x + 26, y + 194, "没有可显示的文本内容", muted);
+            text(x + 26, y + 245, "没有可显示的文本内容", muted);
+    }
+    if (explorer_find_open) {
+        int fx = x + width - 331, fy = y + 194;
+        roundrect(fx + 3, fy + 4, 304, 65,
+                  dark ? 0x0c0d0f : 0xc5c7ca);
+        roundrect(fx, fy, 304, 65, panel);
+        symbol(fx + 12, fy + 20, 22, 22, muted);
+        text(fx + 42, fy + 21,
+             explorer_find[0] ? explorer_find : "在当前页面查找文本", ink);
+        symbol(fx + 270, fy + 20, 14, 22, muted);
     }
     rect(x + 16, y + w->h - 62, width - 32, 1, line);
-    roundrect(x + 18, y + w->h - 51, 95, 34, surface_high);
+    roundrect(x + 18, y + w->h - 51, 95, 34,
+              inside(mx, my, x + 18, y + w->h - 51, 95, 34)
+              ? selected_fill : surface_high);
     text(x + 29, y + w->h - 46, "上一页", ink);
-    roundrect(x + width - 113, y + w->h - 51, 95, 34, surface_high);
+    roundrect(x + width - 113, y + w->h - 51, 95, 34,
+              inside(mx, my, x + width - 113, y + w->h - 51, 95, 34)
+              ? selected_fill : surface_high);
     text(x + width - 102, y + w->h - 46, "下一页", ink);
-    text(x + width / 2 - 80, y + w->h - 45,
-         explorer_loading ? "HTTP 请求进行中" : "文本预览 · HTTP", muted);
+    text(x + width / 2 - 78, y + w->h - 44,
+         explorer_loading ? "正在请求..." : "HTTP · 阅读视图", muted);
 }
 static void taskbar(void) {
     /* Centered Material 3 dock with state-layer hover and active indicator. */
