@@ -17,6 +17,7 @@ REQUIRED = {
     "App launcher/search",
     "Browser HTTP/HTML",
     "Browser bookmarks",
+    "Browser clickable links",
     "Browser navigation/history/scroll",
     "Browser TLS safety",
     "File manager",
