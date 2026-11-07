@@ -21,6 +21,11 @@ static u32 ip_addr, subnet_mask, gateway, dns_server, dhcp_server;
 static u32 offered_ip, last_dhcp, last_arp, identifier;
 static int link_ready, lease_ready, gateway_ready, dhcp_phase;
 static int ping_replies, dns_replies;
+static u32 http_ip, http_seq, http_ack, http_started;
+static u16 http_port;
+static int http_stage, http_used;
+static char http_path[240], http_host[64], http_response[2048];
+
 
 
 static u16 be16(const u8 *p) { return (u16)((u16)p[0] << 8 | p[1]); }
@@ -233,6 +238,168 @@ static void udp_receive(const u8 *p, u16 length) {
     if (to == 68 && from == 67) dhcp_receive(p + 8, size - 8);
     if (to == 53000 && from == 53) dns_receive(p + 8, size - 8);
 }
+/* Single outstanding HTTP/1.0 connection over IPv4 TCP. */
+static void tcp_send(u8 flags, const u8 *data, u16 length) {
+    u8 segment[768], pseudo[12 + sizeof(segment)];
+    if (length > sizeof(segment) - 20 || !gateway_ready) return;
+    memset(segment, 0, 20);
+    wr16(segment, 53001); wr16(segment + 2, http_port);
+    wr32(segment + 4, http_seq); wr32(segment + 8, http_ack);
+    segment[12] = 0x50; segment[13] = flags;
+    wr16(segment + 14, 4096);
+    if (length) memcpy(segment + 20, data, length);
+    wr32(pseudo, ip_addr); wr32(pseudo + 4, http_ip);
+    pseudo[8] = 0; pseudo[9] = 6;
+    wr16(pseudo + 10, (u16)(20 + length));
+    memcpy(pseudo + 12, segment, (u32)20 + length);
+    wr16(segment + 16, checksum(pseudo, (u32)32 + length));
+    int count = ipv4(frame, gateway_mac, ip_addr, http_ip, 6, segment, (u16)(20 + length));
+    if (count) tx(frame, (u16)count);
+}
+static void tcp_receive(const u8 *p, u16 length, u32 source) {
+    if (!http_stage || http_stage == 3 || source != http_ip ||
+        length < 20 || be16(p) != http_port || be16(p + 2) != 53001)
+        return;
+    u32 seq = be32(p + 4);
+    u32 hlen = (u32)(p[12] >> 4) * 4;
+    if (hlen < 20 || hlen > length) return;
+    u8 flags = p[13];
+    if (http_stage == 1 && (flags & 0x12) == 0x12) {
+        http_ack = seq + 1;
+        http_seq++;
+        tcp_send(0x10, NULL, 0);
+        u8 request[460];
+        memset(request, 0, sizeof(request));
+        copy((char *)request, "GET ", sizeof(request));
+        copy((char *)request + strlen((char *)request), http_path,
+             (int)(sizeof(request) - strlen((char *)request)));
+        copy((char *)request + strlen((char *)request),
+             " HTTP/1.0\r\nHost: ", (int)(sizeof(request) - strlen((char *)request)));
+        copy((char *)request + strlen((char *)request), http_host,
+             (int)(sizeof(request) - strlen((char *)request)));
+        copy((char *)request + strlen((char *)request),
+             "\r\nConnection: close\r\nUser-Agent: MayOS/0.4\r\n\r\n",
+             (int)(sizeof(request) - strlen((char *)request)));
+        u16 bytes = (u16)strlen((char *)request);
+        tcp_send(0x18, request, bytes);
+        http_seq += bytes;
+        http_stage = 2;
+        serial("MayNet: HTTP GET sent\n");
+        return;
+    }
+    if (http_stage != 2) return;
+    u16 payload = (u16)(length - hlen);
+    if (payload) {
+        if (seq != http_ack) return;
+        http_ack += payload;
+        const u8 *body = p + hlen;
+        for (u16 i = 0; i < payload && http_used < (int)sizeof(http_response) - 2; i++) {
+            u8 c = body[i];
+            http_response[http_used++] =
+                (c == '\n' || c == '\r' || c == '\t' || (c >= 32 && c < 127)) ? (char)c : '?';
+        }
+        http_response[http_used] = 0;
+        tcp_send(0x10, NULL, 0);
+        serial("MayNet: HTTP response received\n");
+    }
+    if (flags & 1) {
+        http_ack = seq + payload + 1;
+        tcp_send(0x10, NULL, 0);
+        http_stage = 3;
+        serial("MayNet: HTTP connection closed\n");
+    }
+    if (flags & 4) http_stage = 3;
+}
+static int parse_address(const char *input, u32 *address, const char **end) {
+    u32 result = 0;
+    const char *p = input;
+    for (int i = 0; i < 4; i++) {
+        u32 value = 0;
+        int digits = 0;
+        while (*p >= '0' && *p <= '9' && digits < 3) {
+            value = value * 10 + (u32)(*p++ - '0');
+            digits++;
+        }
+        if (!digits || value > 255) return 0;
+        result = (result << 8) | value;
+        if (i != 3) {
+            if (*p++ != '.') return 0;
+        }
+    }
+    *address = result;
+    *end = p;
+    return 1;
+}
+int net_http_start(const char *url) {
+    http_stage = http_used = 0;
+    http_response[0] = 0;
+    if (!link_ready || !lease_ready || !gateway_ready) {
+        copy(http_response, "Network not ready. Retry DHCP / ARP.", sizeof(http_response));
+        return 0;
+    }
+    if (!url || strlen(url) > 320 || url[0] != 'h' || url[1] != 't' ||
+        url[2] != 't' || url[3] != 'p' || url[4] != ':' ||
+        url[5] != '/' || url[6] != '/') {
+        copy(http_response, "Use http://IPv4:port/path. HTTPS is unsupported.",
+             sizeof(http_response));
+        return 0;
+    }
+    const char *p = url + 7, *host_end = p;
+    if (!parse_address(p, &http_ip, &host_end)) {
+        copy(http_response, "Use an IPv4 address. Hostname HTTP is not yet supported.",
+             sizeof(http_response));
+        return 0;
+    }
+    http_port = 80;
+    p = host_end;
+    if (*p == ':') {
+        p++;
+        u32 port = 0;
+        int digits = 0;
+        while (*p >= '0' && *p <= '9' && digits < 5) {
+            port = port * 10 + (u32)(*p++ - '0');
+            digits++;
+        }
+        if (!digits || port == 0 || port > 65535) {
+            copy(http_response, "Invalid HTTP port.", sizeof(http_response));
+            return 0;
+        }
+        http_port = (u16)port;
+    }
+    if (*p && *p != '/') {
+        copy(http_response, "Invalid HTTP address.", sizeof(http_response));
+        return 0;
+    }
+    copy(http_host, url + 7, sizeof(http_host));
+    for (int i = 0; http_host[i]; i++)
+        if (http_host[i] == '/') { http_host[i] = 0; break; }
+    copy(http_path, *p ? p : "/", sizeof(http_path));
+    for (int i = 0; http_path[i]; i++)
+        if ((u8)http_path[i] < 33 || (u8)http_path[i] >= 127) {
+            copy(http_response, "Invalid HTTP path.", sizeof(http_response));
+            return 0;
+        }
+    http_seq = 0x504d4159u;
+    http_ack = 0;
+    http_stage = 1;
+    http_started = ticks;
+    tcp_send(0x02, NULL, 0);
+    serial("MayNet: TCP SYN sent\n");
+    return 1;
+}
+int net_http_poll(char *destination, int capacity) {
+    if (http_stage == 1 || http_stage == 2) {
+        if (ticks - http_started > 1200) {
+            if (!http_used)
+                copy(http_response, "HTTP connection timed out.", sizeof(http_response));
+            http_stage = 3;
+        }
+    }
+    if (destination && capacity > 0)
+        copy(destination, http_response, capacity);
+    return http_stage == 1 || http_stage == 2;
+}
+
 static void receive(const u8 *p, u16 length) {
     if (length < 14) return;
     u16 type = be16(p + 12);
@@ -247,6 +414,7 @@ static void receive(const u8 *p, u16 length) {
     u16 body_len = (u16)(be16(h + 2) - size);
     if (h[9] == IP_UDP) udp_receive(body, body_len);
     else if (h[9] == IP_ICMP) icmp_receive(body, body_len);
+    else if (h[9] == 6) tcp_receive(body, body_len, be32(h + 12));
 }
 static u32 pci_read(u8 bus, u8 slot, u8 function, u8 offset) {
     outl(0xcf8, 0x80000000u | (u32)bus << 16 | (u32)slot << 11 |
