@@ -23,13 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: a6023d86879c8cfef2bb8c0ac7f8b5d7524c53e4
+          ref: main
           fetch-depth: 0
           persist-credentials: true
       - name: Reuse ISO files already built and tested by GitHub Actions
         run: |
           set -euo pipefail
-          test "$(cat MayOS_0.3.0-pre1/VERSION)" = '0.4.0-pre1'
+          test "$(git show "$SOURCE_SHA:MayOS_0.3.0-pre1/VERSION")" = '0.4.0-pre1'
           status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ARTIFACT_RUN" --jq .conclusion)"
           test "$status" = failure
           gh run download "$ARTIFACT_RUN" --repo "$GITHUB_REPOSITORY" \
@@ -39,18 +39,23 @@ jobs:
           test -s dist/MayOS-0.4.0-pre1-desktop.png
           test -s dist/MayOS-0.4.0-pre1-source.tar.gz
           (cd dist && sha256sum -c SHA256SUMS.txt)
-      - name: Create source-specific prerelease tag
+      - name: Stage byte-identical pre1 sources without workflow-file changes
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          if git ls-remote --exit-code origin refs/tags/v0.4.0-pre1 >/dev/null 2>&1; then
-            git fetch --tags origin
-            test "$(git rev-parse v0.4.0-pre1^{commit})" = "$SOURCE_SHA"
-          else
-            git tag -a v0.4.0-pre1 "$SOURCE_SHA" -m 'Verified MayOS 0.4.0-pre1'
-            git push origin refs/tags/v0.4.0-pre1
-          fi
+          git restore --source="$SOURCE_SHA" --staged --worktree -- MayOS_0.3.0-pre1
+          git diff --cached --quiet && { echo "No source delta" >&2; exit 1; }
+          git commit -m 'release: exact MayOS 0.4.0-pre1 system source'
+          git diff --quiet "$SOURCE_SHA" HEAD -- MayOS_0.3.0-pre1
+          git push origin HEAD:refs/heads/release/source-0.4.0-pre1
+          git archive HEAD | gzip -9 > dist/MayOS-0.4.0-pre1-source.tar.gz
+          test -s dist/MayOS-0.4.0-pre1-source.tar.gz
+      - name: Create annotated tag on the workflow-clean release source
+        run: |
+          set -euo pipefail
+          git tag -a v0.4.0-pre1 -m 'Verified MayOS 0.4.0-pre1'
+          git push origin refs/tags/v0.4.0-pre1
       - name: Publish archived and checksum-verified ISO as GitHub prerelease
         run: |
           set -euo pipefail
