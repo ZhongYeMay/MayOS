@@ -54,3 +54,45 @@ jobs:
             MayOS_0.3.0-pre1/build/*.log
           if-no-files-found: warn
           retention-days: 14
+
+  dual-kernel:
+    name: Verify Linux 7.3.1 parity and BIOS/UEFI boot
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 160
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux build, QEMU and firmware requirements
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools dosfstools \
+            qemu-system-x86 ovmf python3 python3-pil \
+            fonts-noto-cjk fonts-dejavu-core flex bison bc libelf-dev libssl-dev \
+            xz-utils busybox-static musl-tools rsync
+      - name: Build hybrid dual-kernel ISO
+        working-directory: MayOS_0.3.0-pre1
+        run: make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+      - name: Verify Linux DHCP and MayKernel in BIOS GRUB
+        working-directory: MayOS_0.3.0-pre1
+        run: make test-dual LINUX_VERSION=7.3.1
+      - name: Verify both kernels via OVMF UEFI GRUB
+        working-directory: MayOS_0.3.0-pre1
+        run: make test-uefi LINUX_VERSION=7.3.1
+      - name: Prepare exact ISO checksums
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          cd build
+          sha256sum mayos-dual.iso > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+      - name: Preserve validated BIOS/UEFI ISO
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-0.4.0-verified-dual-kernel-ISO
+          path: |
+            MayOS_0.3.0-pre1/build/mayos-dual.iso
+            MayOS_0.3.0-pre1/build/SHA256SUMS.txt
+            MayOS_0.3.0-pre1/build/uefi-test-results.json
+            MayOS_0.3.0-pre1/build/dual-boot-test-results.json
+          retention-days: 30
