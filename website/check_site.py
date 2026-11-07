@@ -8,8 +8,8 @@ import os
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
-CURRENT = "0.4.0-pre2"
-PREFIX = "MayOS-0.4.0-pre2-UEFI-"
+CURRENT = "0.4.0-pre3"
+PREFIX = "MayOS-0.4.0-pre3-all-features-"
 
 
 class SiteParser(HTMLParser):
@@ -77,8 +77,8 @@ for name, (doc, _) in docs.items():
             assert dest_doc and anchor in dest_doc[0].ids, ("broken anchor", name, url)
 
 assert docs["demos.html"][0].videos == 2
-assert "MayOS-0.4.0-pre2-dual-boot.iso" in docs["download.html"][1]
-assert "MayOS-0.4.0-pre2-MayKernel.iso" in docs["download.html"][1]
+assert "MayOS-0.4.0-pre3-dual-boot.iso" in docs["download.html"][1]
+assert "MayOS-0.4.0-pre3-MayKernel.iso" in docs["download.html"][1]
 assert "v0.4.0-pre1" in docs["download.html"][1], "historic pre1 download omitted"
 
 if not pending:

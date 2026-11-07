@@ -1,0 +1,105 @@
+{
+  "mayos_release": "0.4.0-pre3",
+  "kernel": "linux",
+  "firmware": "uefi",
+  "source_commit": "c86b8ef2f212eaabbe59e6cf94c9e64d2da83297",
+  "iso_sha256": "07823f8dcd6078ccf0627d8d299f0e1972a8214a2f2b2e05d084a9394e4ffe56",
+  "video": "MayOS-0.4.0-pre3-all-features-Linux.mp4",
+  "video_sha256": "f783a057c3d93aa898b23754e8bcaa78b61ffc55695f937f251786c6db61b441",
+  "capture": "Real-time QEMU framebuffer via QMP, no simulated frames",
+  "fps": 10,
+  "frames": 898,
+  "duration_seconds": 89.8,
+  "coverage": [
+    {
+      "component": "UEFI/GRUB/dual-boot",
+      "evidence": "Actual firmware boot and desktop-ready serial event"
+    },
+    {
+      "component": "Linux network",
+      "evidence": "Active Ethernet checked by subsequent HTTP request"
+    },
+    {
+      "component": "Desktop/Windows pointer/Dock",
+      "evidence": "Rendered after real QEMU mouse input"
+    },
+    {
+      "component": "System clock",
+      "evidence": "Icon clicked; popover shown/closed"
+    },
+    {
+      "component": "Network quick settings",
+      "evidence": "Icon clicked; popover shown/closed"
+    },
+    {
+      "component": "Notification center",
+      "evidence": "Icon clicked; popover shown/closed"
+    },
+    {
+      "component": "Power menu",
+      "evidence": "Icon clicked; popover shown/closed"
+    },
+    {
+      "component": "Settings shortcut",
+      "evidence": "Icon clicked; popover shown/closed"
+    },
+    {
+      "component": "App launcher/search",
+      "evidence": "Dock app drawer opened and dismissed"
+    },
+    {
+      "component": "Browser HTTP/HTML",
+      "evidence": "Guest fetched real local HTTP HTML via QEMU NIC"
+    },
+    {
+      "component": "Browser clickable links",
+      "evidence": "Followed a real HTML anchor through TCP/HTTP"
+    },
+    {
+      "component": "Browser multi-tab",
+      "evidence": "Ctrl+T, independent HTTP page, tab switch and Ctrl+W"
+    },
+    {
+      "component": "Browser bookmarks",
+      "evidence": "Real session favorite added"
+    },
+    {
+      "component": "Browser find-in-page",
+      "evidence": "Ctrl+F and actual text match scrolled into view"
+    },
+    {
+      "component": "Browser navigation/history/scroll",
+      "evidence": "Back, forward, reload, page down, home and saved favorite"
+    },
+    {
+      "component": "Browser TLS safety",
+      "evidence": "Unsupported HTTPS reported without downgrading it to HTTP"
+    },
+    {
+      "component": "File manager",
+      "evidence": "Opened native file manager via Dock"
+    },
+    {
+      "component": "Terminal/system info/network diagnostics",
+      "evidence": "neofetch output plus real MayShell commands"
+    },
+    {
+      "component": "Settings/theme",
+      "evidence": "Both light and dark theme commands executed"
+    },
+    {
+      "component": "Window overview/Alt-Tab",
+      "evidence": "Guest opened/dismissed real window overview"
+    },
+    {
+      "component": "Desktop context menu",
+      "evidence": "Actual desktop context-menu serial event after right-click"
+    },
+    {
+      "component": "File editor/save/persistence",
+      "evidence": "Real GUI creation + Ctrl-S, verified through shell reading"
+    }
+  ],
+  "http_requests_observed": 9,
+  "recorded_at_utc": "2026-11-07T17:14:24.247926+00:00"
+}
