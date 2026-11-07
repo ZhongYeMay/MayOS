@@ -1110,6 +1110,8 @@ static ExplorerTab explorer_tabs[4];
 static int explorer_tab_count = 1, explorer_tab_index;
 static int explorer_find_open;
 static char explorer_find[48];
+static BrowserLink explorer_links[6];
+static int explorer_link_count, explorer_links_open;
 
 static void explorer_tab_store(void) {
     ExplorerTab *tab = &explorer_tabs[explorer_tab_index];
@@ -1133,7 +1135,7 @@ static void explorer_tab_restore(int index) {
     explorer_history_index = tab->history_index;
     explorer_scroll = tab->scroll;
     explorer_home = tab->home;
-    explorer_loading = explorer_editing = explorer_find_open = 0;
+    explorer_loading = explorer_editing = explorer_find_open = explorer_links_open = 0;
     dirty = 1;
 }
 static void explorer_tab_select(int index) {
@@ -1251,6 +1253,7 @@ static void explorer_load(const char *candidate, int add_history) {
     explorer_editing = 0;
     explorer_scroll = 0;
     explorer_response[0] = 0;
+    explorer_links_open = explorer_find_open = explorer_link_count = 0;
     if (https) {
         copy(explorer_response,
              "HTTPS requires TLS, not yet available. No insecure downgrade was attempted.",
@@ -1354,7 +1357,7 @@ static void explorer_draw(Window *w) {
                   selected_fill : surface_high);
         text(xx + 11, yy + 7, nav[i], disabled ? muted : ink);
     }
-    roundrect(x + 192, y + 97, width - 359, 36, surface_high);
+    roundrect(x + 192, y + 97, width - 406, 36, surface_high);
     symbol(x + 201, y + 105, 19, 18, muted);
     char display[49];
     copy(display, explorer_query[0] ? explorer_query : "输入网址 / HTTP 地址",
@@ -1362,6 +1365,11 @@ static void explorer_draw(Window *w) {
     text(x + 227, y + 104, display, explorer_query[0] ? ink : muted);
     if (explorer_editing) rect(x + 227 + (int)strlen(display) * 8,
                                 y + 105, 2, 21, accent);
+    int link_x = x + width - 200;
+    roundrect(link_x, y + 97, 42, 36,
+              inside(mx, my, link_x, y + 97, 42, 36) || explorer_links_open ?
+              selected_fill : surface_high);
+    text(link_x + 9, y + 104, "链接", ink);
     int find_x = x + width - 155, mark_x = x + width - 105;
     roundrect(find_x, y + 97, 44, 36,
               inside(mx, my, find_x, y + 97, 44, 36) || explorer_find_open ?
@@ -1400,6 +1408,8 @@ static void explorer_draw(Window *w) {
              explorer_loading ? "连接中..." : "网页阅读 · 纯文本模式", accent);
         text(x + width - 230, y + 203, "脚本不会执行", muted);
         browse_preview(explorer_response, explorer_view, sizeof(explorer_view));
+        explorer_link_count = browse_collect_links(explorer_response, explorer_query,
+                                                   explorer_links, 6);
         int max_cols = (width - 66) / 8;
         if (max_cols > 105) max_cols = 105;
         const char *ptr = explorer_view;
@@ -1424,6 +1434,23 @@ static void explorer_draw(Window *w) {
         }
         if (!explorer_view[0] && !explorer_loading)
             text(x + 26, y + 245, "没有可显示的文本内容", muted);
+    }
+    if (explorer_links_open) {
+        int lx = x + width - 322, ly = y + 192;
+        int rows = explorer_link_count;
+        roundrect(lx + 4, ly + 5, 304, 54 + rows * 39,
+                  dark ? 0x0c0d0f : 0xc5c7ca);
+        roundrect(lx, ly, 304, 54 + rows * 39, panel);
+        text(lx + 19, ly + 13, "当前页面链接", ink);
+        symbol(lx + 274, ly + 13, 14, 20, muted);
+        if (!rows)
+            text(lx + 18, ly + 48, "没有可用的 HTTP 页面链接", muted);
+        for (int i = 0; i < rows; i++) {
+            int ry = ly + 44 + i * 39;
+            if (inside(mx, my, lx + 10, ry, 282, 35))
+                roundrect(lx + 10, ry, 282, 35, selected_fill);
+            text(lx + 19, ry + 7, explorer_links[i].title, accent);
+        }
     }
     if (explorer_find_open) {
         int fx = x + width - 331, fy = y + 194;
@@ -2102,10 +2129,25 @@ static void left_click(void) {
                 explorer_response[0] = explorer_query[0] = 0;
                 explorer_editing = 0;
                 serial("Explorer: home\n");
-            } else if (inside(rx, ry, 192, 97, w->w - 359, 36)) {
+            } else if (explorer_links_open &&
+                       inside(rx, ry, w->w - 322, 192, 304,
+                              54 + explorer_link_count * 39)) {
+                int link = (ry - 236) / 39;
+                if (ry >= 236 && link >= 0 && link < explorer_link_count) {
+                    char url[176];
+                    copy(url, explorer_links[link].url, sizeof(url));
+                    explorer_links_open = 0;
+                    explorer_load(url, 1);
+                    serial("Explorer: link opened\n");
+                } else explorer_links_open = 0;
+            } else if (inside(rx, ry, 192, 97, w->w - 406, 36)) {
                 explorer_query[0] = 0;
                 explorer_editing = 1;
                 explorer_find_open = 0;
+            } else if (inside(rx, ry, w->w - 200, 97, 42, 36)) {
+                explorer_links_open = !explorer_links_open;
+                explorer_find_open = 0;
+                serial("Explorer: links opened\n");
             } else if (inside(rx, ry, w->w - 155, 97, 44, 36)) {
                 explorer_find_open = !explorer_find_open;
                 explorer_find[0] = 0;
@@ -2293,6 +2335,10 @@ static void key_event(int k) {
         return;
     }
     if (k == 27) {
+        if (focus == 4 && explorer_links_open) {
+            explorer_links_open = 0;
+            return;
+        }
         if (focus == 4 && explorer_find_open) {
             explorer_find_open = 0;
             return;
