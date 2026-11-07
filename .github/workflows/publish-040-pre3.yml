@@ -23,8 +23,8 @@ jobs:
     timeout-minutes: 80
     env:
       GH_TOKEN: ${{ github.token }}
-      VERIFIED_RUN: '42393210528'
-      SOURCE_SHA: d0095bbeec73def3abe5daa39b04c7e4f8fe64a6
+      VERIFIED_RUN: '42393752402'
+      SOURCE_SHA: 911736d981158120c12766e178811b215802f2b3
       RELEASE_TAG: v0.4.0-pre3
     steps:
       - name: Require exactly the validated MayOS pre3 code and green full QEMU matrix
