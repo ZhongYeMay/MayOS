@@ -12,8 +12,8 @@
 #define PLATFORM_ARCH "x86 / 32-bit"
 #endif
 static u32 pixels[W * H];
-static u32 bg = 0x101924, panel = 0x18232e, ink = 0xe6eef3, muted = 0x91a3b2, line = 0x2b3945,
-           accent = 0xe95420;
+static u32 bg = 0x141619, panel = 0x22252a, ink = 0xf2f3f5, muted = 0xb0b5bd, line = 0x41464d,
+           accent = 0xc8cdd3;
 static int dark = 1;
 static void rect(int x, int y, int w, int h, u32 c) {
     if (x < 0) {
@@ -41,10 +41,10 @@ static void border(int x, int y, int w, int h, u32 c) {
     rect(x + w - 1, y, 1, h, c);
 }
 static void roundrect(int x, int y, int w, int h, u32 c) {
-    rect(x + 4, y, w - 8, h, c);
-    rect(x, y + 4, w, h - 8, c);
-    rect(x + 1, y + 2, w - 2, h - 4, c);
-    rect(x + 2, y + 1, w - 4, h - 2, c);
+    /* Precise two-pixel corners instead of soft pill styling. */
+    rect(x + 2, y, w - 4, h, c);
+    rect(x, y + 2, w, h - 4, c);
+    rect(x + 1, y + 1, w - 2, h - 2, c);
 }
 static void circle(int cx, int cy, int r, u32 c) {
     for (int y = -r; y <= r; y++)
@@ -136,8 +136,9 @@ static int inside(int px, int py, int x, int y, int w, int h) {
 /* Icons are drawn directly by the kernel. */
 
 static void icon(int x, int y, int kind, int size) {
-    u32 c = kind == 0 ? 0xe2b96f : kind == 1 ? 0x83a8cd : kind == 2 ? accent : 0x8cae9f;
-    roundrect(x, y, size, size, dark ? 0x39323e : 0xf0ecef);
+    u32 c = dark ? 0xd4d8dd : 0x3c4249;
+    roundrect(x, y, size, size, dark ? 0x2b2e32 : 0xe9ebed);
+    border(x, y, size, size, dark ? 0x454a50 : 0xcbd0d5);
     int k = size / 4;
     if (kind == 0) {
         border(x + k - 1, y + k + 3, size - 2 * k + 2, size / 2, c);
@@ -155,8 +156,9 @@ static void icon(int x, int y, int kind, int size) {
     }
 }
 static void button(int x, int y, int w, const char *s, int primary) {
-    roundrect(x, y, w, 30, primary ? accent : (dark ? 0x453a49 : 0xf0ecf0));
-    text(x + 12, y + 4, s, primary ? 0xffffff : ink);
+    roundrect(x, y, w, 30, primary ? (dark ? 0xd2d5da : 0x30343a) : (dark ? 0x33373c : 0xe9ebed));
+    border(x, y, w, 30, dark ? 0x596069 : 0xc6cbd0);
+    text(x + 12, y + 4, s, primary ? (dark ? 0x111315 : 0xffffff) : ink);
 }
 typedef struct {
     int x, y, w, h, open, min, max, ox, oy, ow, oh;
@@ -572,52 +574,53 @@ static void accept_modal(void) {
     modal = 0;
 }
 static void palette(void) {
-    bg = dark ? 0x26212b : 0xf6f4f6;
-    panel = dark ? 0x312b35 : 0xffffff;
-    ink = dark ? 0xf5f1f5 : 0x2c2630;
-    muted = dark ? 0xb8aeba : 0x766c79;
-    line = dark ? 0x4b414e : 0xe5e0e6;
+    bg = dark ? 0x141619 : 0xf2f3f5;
+    panel = dark ? 0x22252a : 0xffffff;
+    ink = dark ? 0xf2f3f5 : 0x20242a;
+    muted = dark ? 0xb0b5bd : 0x626971;
+    line = dark ? 0x41464d : 0xd9dde1;
 }
 static void desktop(void) {
-    /* Aubergine workstation wallpaper and a restrained Ubuntu-like dock. */
+    /* Graphite workstation: neutral materials, clear alignment, no illustration. */
     for (int y = 0; y < H; y++)
-        rect(0, y, W, 1, blend(0x231826, 0x4a3044, y * 190 / H));
-    rect(0, 0, W, 38, 0x211b25);
-    rect(0, 37, W, 1, 0x413847);
-    rect(19, 12, 4, 14, accent);
-    text(32, 9, "MayOS", 0xf4f0f4);
-    text(104, 9, "Activities", 0xd7cdd7);
-    text(801, 9, PLATFORM_BADGE, 0xd7cdd7);
-    text(944, 9, "TEST", 0xae9fad);
-    roundrect(10, 51, 78, 514, 0x292330);
-    rect(12, 62, 3, 68, accent);
+        rect(0, y, W, 1, blend(0x16191d, 0x23272d, y * 150 / H));
+    rect(0, 0, W, 38, 0x101215);
+    rect(0, 37, W, 1, 0x41464c);
+    rect(19, 12, 3, 14, 0xc7cbd0);
+    text(32, 9, "MayOS", 0xf4f5f6);
+    text(104, 9, "Workspace", 0xbcc3ca);
+    text(801, 9, PLATFORM_BADGE, 0xbcc3ca);
+    text(944, 9, "TEST", 0x929aa4);
+    roundrect(10, 51, 78, 514, 0x1e2226);
+    border(10, 51, 78, 514, 0x3d4248);
+    rect(12, 62, 2, 68, 0xc7cbd0);
     const char *names[] = {"文件", "设置", "终端", "回收站"};
     for (int i = 0; i < 4; i++) {
         icon(32, 83 + i * 100, i, 44);
-        text(i == 3 ? 30 : 38, 132 + i * 100, names[i], 0xdbd2dc);
+        text(i == 3 ? 30 : 38, 132 + i * 100, names[i], 0xd9dde1);
     }
-    circle(49, 508, 14, accent);
-    circle(49, 508, 10, 0x292330);
-    text(17, 533, "Explorer", 0xdbd2dc);
-    large_text(727, 596, "MayOS", 0x89697c);
-    text(728, 639, "WORKSTATION / " MAYOS_RELEASE, 0xb19cab);
+    border(35, 494, 28, 28, 0xcbd0d6);
+    text(39, 497, ">_", 0xcbd0d6);
+    text(17, 533, "Explorer", 0xd9dde1);
+    large_text(727, 596, "MayOS", 0x818b96);
+    text(728, 639, "WORKSTATION / " MAYOS_RELEASE, 0x9ea7b1);
 }
 static void frame(int id) {
     Window *w = &windows[id];
-    rect(w->x + 4, w->y + 6, w->w, w->h, 0x17131a);
+    rect(w->x + 4, w->y + 6, w->w, w->h, 0x0c0e11);
     roundrect(w->x, w->y, w->w, w->h, panel);
     border(w->x, w->y, w->w, w->h, line);
-    rect(w->x + 1, w->y + 1, w->w - 2, 40, dark ? 0x3a333e : 0xf4f1f4);
+    rect(w->x + 1, w->y + 1, w->w - 2, 40, dark ? 0x2b2f34 : 0xf4f5f6);
     rect(w->x + 1, w->y + 41, w->w - 2, 1, line);
     icon(w->x + 13, w->y + 10, id == 0 ? 0 : id == 1 ? 1 : 2, 22);
     text(w->x + 45, w->y + 10, w->title, focus == id ? ink : muted);
     int controls = w->x + w->w - 119;
     for (int i = 0; i < 3; i++)
         circle(controls + i * 36 + 17, w->y + 21, 12,
-               i == 2 ? accent : (dark ? 0x514653 : 0xe4dfe4));
+               dark ? 0x3a3f45 : 0xe5e8eb);
     rect(controls + 11, w->y + 21, 11, 1, muted);
     border(controls + 48, w->y + 16, 10, 10, muted);
-    text(w->x + w->w - 35, w->y + 10, "×", 0xffffff);
+    text(w->x + w->w - 35, w->y + 10, "×", muted);
 }
 static void settings(Window *w) {
     int x = w->x, y = w->y, cx = x + 204, cy = y + 65, cw = w->w - 234;
@@ -711,7 +714,7 @@ static void settings(Window *w) {
             }
         }
         text(cx, cy + 353, "主题色 / Accent", ink);
-        u32 colors[] = {0xe95420, 0x6d8ac1, 0x9566a0, 0x7c9d83};
+        u32 colors[] = {0xc8cdd3, 0x939ba5, 0x626a74, 0xe2e5e8};
         for (int i = 0; i < 4; i++) {
             circle(cx + 19 + i * 64, cy + 410, 18, colors[i]);
             if (accent == colors[i])
@@ -959,9 +962,9 @@ static void explorer_draw(Window *w) {
 #endif
 }
 static void taskbar(void) {
-    rect(0, H - 46, W, 46, 0x0b131c);
-    rect(0, H - 46, W, 1, 0x2a3a46);
-    roundrect(12, H - 38, 84, 31, start_open ? 0x23483f : 0x1b2d36);
+    rect(0, H - 46, W, 46, 0x111418);
+    rect(0, H - 46, W, 1, 0x484d54);
+    roundrect(12, H - 38, 84, 31, start_open ? 0x363b41 : 0x252a30);
     for (int y = 0; y < 2; y++)
         for (int x = 0; x < 2; x++)
             rect(24 + x * 7, H - 29 + y * 7, 4, 4, accent);
@@ -970,7 +973,7 @@ static void taskbar(void) {
         if (windows[i].open) {
             int x = 110 + i * 126;
             int active = focus == i && !windows[i].min;
-            rect(x, H - 38, 118, 31, active ? 0x253640 : 0x111f29);
+            rect(x, H - 38, 118, 31, active ? 0x343940 : 0x1b2026);
             text(x + 14, H - 34,
                  i == 0   ? "文件"
                  : i == 1 ? "系统设置"
@@ -1390,7 +1393,7 @@ static void left_click(void) {
                 }
                 if (ry >= 457 && ry <= 493 && rx >= 204) {
                     int i = (rx - 204) / 64;
-                    u32 colors[] = {0x50c6b3, 0x6aa9df, 0xae91da, 0xdab078};
+                    u32 colors[] = {0xc8cdd3, 0x939ba5, 0x626a74, 0xe2e5e8};
                     if (i < 4)
                         accent = colors[i];
                 }
