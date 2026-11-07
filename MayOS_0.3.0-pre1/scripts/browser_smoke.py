@@ -119,7 +119,7 @@ def main():
         wait_more(vm, "MayNet: HTTP response received", previous)
         vm.key("ctrl-f")
         vm.wait("Explorer: find opened")
-        vm.type("Scroll row 015\n")
+        vm.type("Scroll row 005\n")
         vm.wait("Explorer: find match")
         snapshot(vm, "browser-find-in-page")
         vm.key("esc")
