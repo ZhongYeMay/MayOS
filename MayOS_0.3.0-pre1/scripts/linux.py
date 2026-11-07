@@ -360,12 +360,12 @@ def build_initramfs(busybox: Path, fastfetch: Path, version: str) -> dict:
                                  ("usr/share/doc/mayos/linux-readme.txt", "README.md", 0o644)):
         entries.append((target, stat.S_IFREG | mode, (ROOT / "linux" / source).read_bytes(), 0, 0))
     release_name = (ROOT / "VERSION").read_text().strip()
-    if re.fullmatch(r"[0-9]+\\.[0-9]+\\.[0-9]+(?:-pre[0-9]+)?", release_name) is None:
+    if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-pre[0-9]+)?", release_name) is None:
         raise RuntimeError("Invalid MayOS version string")
     text_files = {
-        "etc/os-release": (f'NAME="MayOS Linux Live"\\nID=mayos-linux\\n'
-                           f'VERSION="{release_name}"\\n'
-                           f'PRETTY_NAME="MayOS Linux Live {release_name}"\\n'),
+        "etc/os-release": (f'NAME="MayOS Linux Live"\nID=mayos-linux\n'
+                           f'VERSION="{release_name}"\n'
+                           f'PRETTY_NAME="MayOS Linux Live {release_name}"\n'),
         "etc/passwd": "root:x:0:0:root:/root:/bin/sh\n",
         "etc/group": "root:x:0:\n",
         "etc/hostname": "MayOS-Linux\n",
