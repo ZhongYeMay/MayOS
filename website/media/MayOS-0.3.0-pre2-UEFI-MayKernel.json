@@ -1,0 +1,25 @@
+{
+  "iso": "mayos-dual.iso",
+  "iso_sha256": "664226ed1c924eeb02b2e5407a4388f0698342657c1fe023f2b107f7d2a8a4bb",
+  "kernel": "custom",
+  "mayos_release": "0.3.0-pre2",
+  "source_commit": "ac465f6919c2c814892f1053b1930e634179d24c",
+  "firmware": "uefi",
+  "started_at_utc": "2026-11-07T11:13:10.884498+00:00",
+  "fps": 10,
+  "frames": 408,
+  "duration_seconds": 40.8,
+  "video": "MayOS-0.3.0-pre2-UEFI-MayKernel.mp4",
+  "video_sha256": "d47880770b2d55c96ebc5e1ffc77c7460f0846af71ce1167c149997698eb3189",
+  "capture": "Real-time QEMU framebuffer via QMP; no synthesized UI frames",
+  "actions": [
+    "firmware_boot",
+    "grub_selection",
+    "desktop_about",
+    "open_source_credits",
+    "neofetch",
+    "gui_file_write_read"
+  ],
+  "qemu": "QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)",
+  "ovmf_code_sha256": "ad23261d43116abc3747d59a7837fbf578c9586a8993f4eeba064cd07eccb083"
+}
