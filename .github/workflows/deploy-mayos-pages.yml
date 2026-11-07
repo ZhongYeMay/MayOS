@@ -1,0 +1,52 @@
+name: Deploy MayOS website to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/deploy-mayos-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: mayos-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.repository == 'ZhongYeMay/MayOS'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout website sources
+        uses: actions/checkout@v4
+      - name: Check website assets
+        run: |
+          set -eu
+          test -s website/index.html
+          test -s website/download.html
+          test -s website/demos.html
+          test -s website/style.css
+          test -s website/site.js
+          test -s website/media/MayOS-0.3.0-pre2-UEFI-MayKernel.mp4
+          test -s website/media/MayOS-0.3.0-pre2-UEFI-Linux.mp4
+          test -s website/media/MayOS-0.3.0-pre2-UEFI-MayKernel.json
+          test -s website/media/MayOS-0.3.0-pre2-UEFI-Linux.json
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Upload static site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./website
+      - name: Deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
