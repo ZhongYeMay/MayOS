@@ -61,7 +61,7 @@ REQUIRED_CONFIG = (
     "SERIAL_8250_CONSOLE", "VGA_CONSOLE", "KEYBOARD_ATKBD", "ACPI",
     "EFI", "EFI_STUB", "FB", "FB_DEVICE", "FRAMEBUFFER_CONSOLE", "MOUSE_PS2",
     "INPUT_EVDEV", "NET", "INET", "PACKET", "E1000", "VIRTIO_MENU", "VIRTIO",
-    "VIRTIO_PCI", "VIRTIO_NET",
+    "VIRTIO_PCI",
 )
 REQUIRED_APPLETS = {
     "sh", "init", "cttyhack", "mount", "umount", "mkdir", "hostname",

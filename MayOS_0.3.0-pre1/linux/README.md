@@ -73,4 +73,4 @@ BusyBox 按 GPL v2 分发。分发含这些二进制的 ISO / 压缩包时，必
 
 本配置面向验证过的 QEMU 虚拟硬件；要求至少 1024×768 的 RGB888 / 32 位
 framebuffer。BIOS 与 OVMF x64 UEFI 需要分别通过启动验证，UEFI 不等于
-Secure Boot 支持。Linux 启动环境会尝试通过 QEMU e1000 / virtio-net 的首个以太网设备获取 DHCP 地址，并提供基础 IPv4、DNS、ping 和 Explorer HTTP 文本预览；尚无 Wi-Fi、TLS / HTTPS 或完整浏览器。不能据此承诺实体机、任意 GPU、无线网络或候选主线版本可用。
+Secure Boot 支持。Linux 启动环境会尝试通过 QEMU e1000 的首个以太网设备获取 DHCP 地址，并提供基础 IPv4、DNS、ping 和 Explorer HTTP 文本预览；尚无 virtio-net、Wi-Fi、TLS / HTTPS 或完整浏览器。不能据此承诺实体机、任意 GPU、无线网络或候选主线版本可用。
