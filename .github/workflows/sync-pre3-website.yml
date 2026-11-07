@@ -1,6 +1,10 @@
 name: Publish verified MayOS 0.4.0-pre3 website and boot videos
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-pre3-website.yml'
   workflow_dispatch:
 
 permissions:
