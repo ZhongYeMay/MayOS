@@ -14,7 +14,7 @@ OVMF_CODE ?= /usr/share/OVMF/OVMF_CODE_4M.fd
 OVMF_VARS ?= /usr/share/OVMF/OVMF_VARS_4M.fd
 CFLAGS := -m32 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie -fno-pic -fno-stack-protector -fno-builtin -fno-strict-aliasing -mno-sse -mno-mmx -Ibuild -Ikernel
 OBJECTS := build/boot.o build/core.o build/fs.o build/gui.o build/net.o
-.PHONY: all clean run test linux linux-update dual run-dual test-dual run-uefi test-uefi test-net test-material
+.PHONY: all clean run test linux linux-update dual run-dual test-dual run-uefi test-uefi test-net test-material test-pre2
 all: build/mayos.iso build/mayos-disk.img
 build:
 	mkdir -p build
@@ -46,6 +46,8 @@ test-net: all
 	$(PYTHON) scripts/net_smoke.py
 test-material: all
 	$(PYTHON) scripts/material_smoke.py
+test-pre2: all
+	$(PYTHON) scripts/pre2_smoke.py
 # An explicit Linux build resolves latest stable at kernel.org. `dual` reuses
 # verified local payloads; run `linux-update` when a newer stable is wanted.
 linux: | build
