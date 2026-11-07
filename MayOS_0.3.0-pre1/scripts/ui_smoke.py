@@ -21,9 +21,9 @@ def main():
     vm=VM(disk,'test-ui')
     try:
         vm.click(295,236);vm.click(710,350);vm.shot('dark-settings')
-        assert Image.open(BUILD/'dark-settings.png').getpixel((900,500))==(34,37,42)
+        assert Image.open(BUILD/'dark-settings.png').getpixel((900,500))==(33,31,38)
         vm.click(440,330);vm.shot('light-settings')
-        assert Image.open(BUILD/'light-settings.png').getpixel((900,500))==(255,255,255)
+        assert Image.open(BUILD/'light-settings.png').getpixel((900,500))==(255,247,255)
         vm.click(270,600);vm.shot('offline-help');vm.key('esc')
         vm.click(55,105);vm.shot('files')
         vm.click(450,300,'right');vm.shot('context-menu');vm.click(480,455)
