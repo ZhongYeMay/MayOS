@@ -2,7 +2,7 @@
 #include "core.h"
 #include "font.h"
 #include "material_icons.h"
-#define MAYOS_RELEASE "0.4.0-pre1"
+#define MAYOS_RELEASE "0.4.0-pre2"
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
 #define PLATFORM_BADGE "LINUX SESSION"
@@ -15,7 +15,7 @@
 static u32 pixels[W * H];
 /* Material Design 3 color roles, tuned for the 1024x768 framebuffer. */
 static u32 bg = 0x141218, panel = 0x211f26, ink = 0xe6e1e5, muted = 0xcac4d0, line = 0x49454f,
-           accent = 0xd0bcff, surface_high = 0x2b2930, on_accent = 0x381e72, selected_fill = 0x4f378b;
+           accent = 0xe2e2e7, surface_high = 0x2b2930, on_accent = 0x202124, selected_fill = 0x46474d;
 static int dark = 1, accent_choice = 0;
 static void rect(int x, int y, int w, int h, u32 c) {
     if (x < 0) {
@@ -176,7 +176,7 @@ static void ring(int cx, int cy, int r, int thickness, u32 c) {
 }
 static void symbol(int x, int y, int kind, int size, u32 c) {
 #if MAYOS_MATERIAL_ICONS
-    if (kind >= 0 && kind < 10 && size > 0) {
+    if (kind >= 0 && kind < 20 && size > 0) {
         for (int j = 0; j < size; j++)
             for (int i = 0; i < size; i++) {
                 int px = x + i, py = y + j;
@@ -707,7 +707,7 @@ static void palette(void) {
     on_accent = dark ? 0x202124 : 0xffffff;
     selected_fill = dark ? 0x46474d : 0xe0e1e5;
 }
-static int quick_open, notifications_open, overview_open, desktop_context_open, wallpaper_mode;
+static int quick_open, notifications_open, overview_open, desktop_context_open, wallpaper_mode, clock_open, power_open;
 static int brightness_level = 100, desktop_x, desktop_y;
 static int desktop_icon_at(int px, int py) {
     int item = 0;
@@ -722,17 +722,19 @@ static int desktop_icon_at(int px, int py) {
     return -1;
 }
 static void desktop(void) {
-    /* Native grayscale wallpaper and macOS-style top application bar.
-       Components use Material 3 tonal surfaces and local vector symbols. */
+    /* macOS placement, Material 3 neutral tonal surfaces.
+       Actual status actions are icon-only; textual menus remain at left. */
     for (int y = 0; y < H; y++) {
-        u32 first = wallpaper_mode ? 0x27272b : 0x17181b;
-        u32 last = wallpaper_mode ? 0x47464a : 0x303036;
-        rect(0, y, W, 1, blend(first, last, (u32)y * 175 / H));
+        u32 top = dark ? 0x17181b : 0xf3f3f5;
+        u32 bottom = dark ? 0x292a2e : 0xdfe1e5;
+        rect(0, y, W, 1, blend(top, bottom, (u32)y * 140 / H));
     }
-    for (int i = 0; i < 7; i++)
-        rect(310 + i * 42, 110 + i * 38, 1, 400, 0x3f4044);
-    rect(0, 0, W, 42, dark ? 0x211f26 : 0xf6f4f7);
-    rect(0, 41, W, 1, line);
+    /* Quiet geometric detail: architectural lines rather than illustrations. */
+    for (int i = 0; i < 5; i++)
+        rect(230 + i * 75, 155 + i * 38, 1, 336, dark ? 0x33343a : 0xd4d6da);
+    rect(0, 0, W, 42, dark ? 0x211f23 : 0xf6f6f8);
+    rect(0, 40, W, 1, dark ? 0x38393f : 0xd8d9dc);
+    rect(0, 41, W, 2, dark ? 0x111215 : 0xc8c9cd);
     text(24, 10, "MayOS", ink);
     text(126, 10, "文件", muted);
     text(200, 10, "窗口", muted);
@@ -744,41 +746,59 @@ static void desktop(void) {
 #else
     int online = net_online();
 #endif
-    char clock_text[8];
-    platform_clock(clock_text);
-    text(620, 10, clock_text, ink);
-    symbol(708, 8, 8, 27, online ? ink : muted);
-    text(742, 10, online ? "NET" : "OFF", muted);
-    text(802, 10, "亮度", muted);
-    symbol(880, 9, 7, 23, notification_count ? ink : muted);
-    text(911, 10, "通知", muted);
-    text(961, 10, "设置", ink);
-    /* Real files from the Desktop folder; double-click opens via the editor. */
+    const int icons[] = {10, online ? 8 : 13, 9, 7, 12, 1};
+    for (int i = 0; i < 6; i++) {
+        int x = 706 + i * 50;
+        int active = (i == 0 && clock_open) || (i == 1 && quick_open) ||
+                     (i == 2 && quick_open) || (i == 3 && notifications_open) ||
+                     (i == 4 && power_open) || (i == 5 && quick_open);
+        int hover = inside(mx, my, x, 3, 42, 36);
+        if (active || hover)
+            roundrect(x, 3, 42, 35, active ? selected_fill : surface_high);
+        symbol(x + 9, 9, icons[i], 24,
+               i == 1 && !online ? muted : active ? ink : muted);
+    }
+    if (notification_count)
+        circle(887, 7, 3, accent);
     int count = 0;
     for (int i = 4; i < FS_MAX && count < 15; i++) {
         if (!files[i].used || files[i].parent != 2) continue;
         int x = 125 + (count % 5) * 124;
         int y = 96 + (count / 5) * 100;
+        int hover = inside(mx, my, x, y, 104, 90);
+        if (selected == i || hover)
+            roundrect(x + 12, y - 3, 68, 79,
+                      selected == i ? selected_fill : (dark ? 0x38393c : 0xe7e8ea));
         icon(x + 21, y, files[i].dir ? 0 : 5, 50);
-        text(x, y + 58, files[i].name, 0xf3f2f4);
+        text(x, y + 58, files[i].name, dark ? 0xf3f2f4 : 0x27282b);
         count++;
     }
 }
 static void frame(int id) {
     Window *w = &windows[id];
-    rect(w->x + 5, w->y + 7, w->w, w->h, dark ? 0x141218 : 0xd8d1df);
+    /* Tonal window elevation with layered neutral shadows. */
+    roundrect(w->x + 6, w->y + 9, w->w, w->h,
+              dark ? 0x0d0e10 : 0xc4c6cc);
+    roundrect(w->x + 2, w->y + 3, w->w, w->h,
+              dark ? 0x17181d : 0xd5d7db);
     roundrect(w->x, w->y, w->w, w->h, panel);
-    rect(w->x + 1, w->y + 1, w->w - 2, 40, surface_high);
-    rect(w->x + 1, w->y + 41, w->w - 2, 1, line);
-    symbol(w->x + 13, w->y + 10, id == 0 ? 0 : id == 1 ? 1 : id == 4 ? 4 : 2, 22, ink);
-    text(w->x + 45, w->y + 10, w->title, focus == id ? ink : muted);
+    roundrect(w->x + 1, w->y + 1, w->w - 2, 44, surface_high);
+    rect(w->x + 1, w->y + 34, w->w - 2, 10, surface_high);
+    rect(w->x + 1, w->y + 43, w->w - 2, 1, line);
+    symbol(w->x + 16, w->y + 11,
+           id == 0 ? 0 : id == 1 ? 1 : id == 4 ? 4 : id == 3 ? 5 : 2,
+           22, ink);
+    text(w->x + 48, w->y + 11, w->title, focus == id ? ink : muted);
     int controls = w->x + w->w - 119;
-    for (int i = 0; i < 3; i++)
-        circle(controls + i * 36 + 17, w->y + 21, 12,
-               surface_high);
-    rect(controls + 11, w->y + 21, 11, 1, muted);
-    border(controls + 48, w->y + 16, 10, 10, muted);
-    text(w->x + w->w - 35, w->y + 10, "×", muted);
+    const int kinds[] = {15, 16, 14};
+    for (int i = 0; i < 3; i++) {
+        int x = controls + i * 36 + 1;
+        int hover = inside(mx, my, x, w->y + 5, 33, 33);
+        roundrect(x, w->y + 5, 33, 33,
+                  hover ? selected_fill : surface_high);
+        symbol(x + 6, w->y + 11, kinds[i], 20,
+               hover ? ink : muted);
+    }
     for (int i = 0; i < 3; i++)
         stroke(w->x + w->w - 8 - i * 5, w->y + w->h - 4,
                w->x + w->w - 4, w->y + w->h - 8 - i * 5, 1, muted);
@@ -1127,20 +1147,25 @@ static void explorer_draw(Window *w) {
 
 }
 static void taskbar(void) {
-    /* macOS placement; Material 3 tonal dock, rounded icon containers. */
+    /* Centered Material 3 dock with state-layer hover and active indicator. */
     int left = 210, top = H - 84;
-    roundrect(left, top, 604, 76, dark ? 0x211f26 : 0xf3edf7);
+    roundrect(left + 3, top + 5, 604, 76,
+              dark ? 0x0f1012 : 0xc7c9cd);
+    roundrect(left, top, 604, 76, dark ? 0x242528 : 0xf4f4f6);
+    rect(left + 25, top + 1, 553, 1, dark ? 0x45464b : 0xffffff);
     for (int i = 0; i < 6; i++) {
         int x = left + 16 + i * 98;
         int id = i - 1;
-        int selected = i == 0 ? start_open :
-                       (id >= 0 && windows[id].open && !windows[id].min);
-        if (selected)
-            roundrect(x - 4, top + 3, 56, 58, selected_fill);
+        int active = i == 0 ? start_open :
+                     (id >= 0 && windows[id].open && !windows[id].min);
+        int hover = inside(mx, my, x - 7, top + 4, 61, 65);
+        if (active || hover)
+            roundrect(x - 5, top + 3, 54, 58,
+                      active ? selected_fill : surface_high);
         int kind = i == 0 ? 6 : id == 3 ? 5 : id;
-        icon(x, top + 7, kind, 44);
-        if (selected)
-            circle(x + 22, top + 65, 3, accent);
+        icon(x, top + 8 - (hover ? 2 : 0), kind, 44);
+        if (active)
+            roundrect(x + 16, top + 66, 13, 3, accent);
     }
 }
 static int contains(const char *a, const char *b) {
@@ -1316,12 +1341,68 @@ static void desktop_context_draw(void) {
     for (int i = 0; i < 4; i++)
         text(desktop_x + 18, desktop_y + 9 + i * 41, choices[i], ink);
 }
+static void clock_draw(void) {
+    int x = 728, y = 52;
+    roundrect(x + 4, y + 5, 280, 170, dark ? 0x101114 : 0xc7c9cd);
+    roundrect(x, y, 280, 170, panel);
+    text(x + 23, y + 18, "日期与时间", muted);
+    char current[8];
+    platform_clock(current);
+    large_text(x + 25, y + 51, current, ink);
+    text(x + 25, y + 130, "系统时钟", muted);
+}
+static void power_draw(void) {
+    int x = 767, y = 52;
+    roundrect(x + 4, y + 5, 241, 160, dark ? 0x101114 : 0xc7c9cd);
+    roundrect(x, y, 241, 160, panel);
+    text(x + 20, y + 16, "电源选项", ink);
+    roundrect(x + 15, y + 51, 211, 42, surface_high);
+    symbol(x + 23, y + 59, 12, 24, ink);
+    text(x + 64, y + 59, "关机", ink);
+    roundrect(x + 15, y + 103, 211, 42, surface_high);
+    symbol(x + 24, y + 111, 11, 24, ink);
+    text(x + 64, y + 111, "重启", ink);
+}
 static void cursor(void) {
-    for (int y = 0; y < 20; y++)
-        for (int x = 0; x <= y / 2; x++)
-            rect(mx + x, my + y, 1, 1, x == 0 || x == y / 2 || y == 19 ? 0x223149 : 0xffffff);
-    rect(mx + 6, my + 14, 3, 9, 0x223149);
-    rect(mx + 7, my + 15, 1, 6, 0xffffff);
+    /* Classic Windows arrow: white fill, high-contrast dark border and shadow.
+       Hotspot is the upper-left black tip. All mouse input remains unchanged. */
+    static const char *const pixels_shape[] = {
+        "#               ",
+        "##              ",
+        "#+#             ",
+        "#++#            ",
+        "#+++#           ",
+        "#++++#          ",
+        "#+++++#         ",
+        "#++++++#        ",
+        "#+++++++#       ",
+        "#++++++++#      ",
+        "#+++++++++#     ",
+        "#++++++++++#    ",
+        "#+++++++++++#   ",
+        "#++++++++++++#  ",
+        "#+++++++++++++# ",
+        "#+++++########  ",
+        "#+++#+#         ",
+        "#++# #+#        ",
+        "#+#  #++#       ",
+        "##   #++#       ",
+        "#     #++#      ",
+        "      #++#      ",
+        "      ####      "
+    };
+    for (int y = 0; y < 23; y++)
+        for (int x = 0; x < 16; x++)
+            if (pixels_shape[y][x] != ' ')
+                rect(mx + x + 2, my + y + 2, 1, 1, 0x54565c);
+    for (int y = 0; y < 23; y++)
+        for (int x = 0; x < 16; x++) {
+            char pixel = pixels_shape[y][x];
+            if (pixel == '#')
+                rect(mx + x, my + y, 1, 1, 0x111215);
+            else if (pixel == '+')
+                rect(mx + x, my + y, 1, 1, 0xffffff);
+        }
 }
 static void render(void) {
     palette();
@@ -1348,6 +1429,8 @@ static void render(void) {
     if (overview_open) overview_draw();
     if (quick_open) quick_draw();
     if (notifications_open) notifications_draw();
+    if (clock_open) clock_draw();
+    if (power_open) power_draw();
     if (desktop_context_open) desktop_context_draw();
     if (context_open)
         context_draw();
@@ -1526,6 +1609,21 @@ static void left_click(void) {
         }
         return;
     }
+    if (clock_open) {
+        clock_open = 0;
+        return;
+    }
+    if (power_open) {
+        power_open = 0;
+        if (inside(mx, my, 782, 103, 211, 42)) {
+            fs_sync();
+            poweroff();
+        } else if (inside(mx, my, 782, 155, 211, 42)) {
+            fs_sync();
+            reboot();
+        }
+        return;
+    }
     if (quick_open) {
         quick_open = 0;
         if (inside(mx, my, 689, 52, 319, 336)) {
@@ -1574,24 +1672,31 @@ static void left_click(void) {
         return;
     }
     if (my < 42) {
-        start_open = 0;
         if (mx < 110 || (mx >= 264 && mx < 346)) {
-            start_open = 1;
+            start_open = !start_open;
             search[0] = 0;
-        } else if (mx >= 110 && mx < 185)
+        } else if (mx >= 110 && mx < 185) {
             raise_window(0);
-        else if (mx >= 185 && mx < 262)
-            overview_open = 1;
-        else if (mx >= 346 && mx < 425)
+        } else if (mx >= 185 && mx < 262) {
+            overview_open = !overview_open;
+        } else if (mx >= 346 && mx < 425) {
             raise_window(2);
-        else if (mx >= 696 && mx < 800)
-            quick_open = 1;
-        else if (mx >= 800 && mx < 868)
-            quick_open = 1;
-        else if (mx >= 868 && mx < 957)
-            notifications_open = 1;
-        else if (mx >= 957)
-            quick_open = 1;
+        } else if (mx >= 706 && mx < 756) {
+            clock_open = !clock_open;
+            quick_open = notifications_open = power_open = 0;
+        } else if (mx >= 756 && mx < 856) {
+            quick_open = !quick_open;
+            clock_open = notifications_open = power_open = 0;
+        } else if (mx >= 856 && mx < 906) {
+            notifications_open = !notifications_open;
+            clock_open = quick_open = power_open = 0;
+        } else if (mx >= 906 && mx < 956) {
+            power_open = !power_open;
+            clock_open = quick_open = notifications_open = 0;
+        } else if (mx >= 956) {
+            quick_open = !quick_open;
+            clock_open = notifications_open = power_open = 0;
+        }
         return;
     }
     if (my >= H - 84 && inside(mx, my, 210, H - 84, 604, 76)) {
@@ -1840,7 +1945,7 @@ static void key_event(int k) {
         return;
     }
     if (k == 27) {
-        start_open = context_open = quick_open = notifications_open = overview_open = desktop_context_open = 0;
+        start_open = context_open = quick_open = notifications_open = overview_open = desktop_context_open = clock_open = power_open = 0;
         return;
     }
     if (k == 0x107) {
