@@ -22,7 +22,9 @@ build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
 	$(PYTHON) scripts/font.py
 build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 	$(PYTHON) scripts/photo.py
-build/gui.o: build/cat_image.h
+build/material_icons.h: assets/material_symbols.py | build
+	$(PYTHON) assets/material_symbols.py
+build/gui.o: build/cat_image.h build/material_icons.h
 build/boot.o: kernel/boot.S | build
 	$(CC) -m32 -c $< -o $@
 build/%.o: kernel/%.c kernel/core.h kernel/io.h build/font.h
@@ -63,4 +65,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h build/material_icons.h
