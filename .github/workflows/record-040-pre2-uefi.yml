@@ -1,0 +1,135 @@
+name: Record and publish MayOS 0.4.0-pre2 UEFI boot videos
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/record-040-pre2-uefi.yml'
+      - 'MayOS_0.3.0-pre1/scripts/record_pre2.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: record-mayos-040-pre2-uefi
+  cancel-in-progress: false
+
+jobs:
+  record:
+    if: github.repository == 'ZhongYeMay/MayOS' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: v0.4.0-pre2
+      VERIFIED_RUN: '42387470897'
+      VERIFIED_SOURCE: 9ba9dab8e283d2fdfc22b2d5446e34fe59bc7c68
+    steps:
+      - name: Checkout video capture script and website
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Require published pre2 and passed real QEMU verification
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+          test "$(git show "$RELEASE_TAG:MayOS_0.3.0-pre1/VERSION")" = "0.4.0-pre2"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN" --jq .head_sha)" = "$VERIFIED_SOURCE"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN" --jq .conclusion)" = success
+          test -s MayOS_0.3.0-pre1/scripts/record_pre2.py
+          test -s MayOS_0.3.0-pre1/scripts/record_boot.py
+      - name: Install QEMU, UEFI firmware, FFmpeg, and video inspection utilities
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 ovmf ffmpeg python3
+      - name: Download and authenticate real published dual-kernel ISO
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'MayOS-0.4.0-pre2-dual-boot.iso' \
+            --pattern 'MayOS-0.4.0-pre2-MayKernel.iso' \
+            --pattern 'MayOS-0.4.0-pre2-desktop.png' \
+            --pattern 'SHA256SUMS.txt' \
+            --dir dist
+          (cd dist && sha256sum -c SHA256SUMS.txt)
+          test -s /usr/share/OVMF/OVMF_CODE_4M.fd
+          test -s /usr/share/OVMF/OVMF_VARS_4M.fd
+      - name: Record actual MayKernel UEFI boot and GUI operations
+        run: |
+          set -euo pipefail
+          mkdir -p MayOS_0.3.0-pre1/build website/media
+          python3 MayOS_0.3.0-pre1/scripts/record_pre2.py \
+            --kernel custom --fps 10 \
+            --iso dist/MayOS-0.4.0-pre2-dual-boot.iso \
+            --ovmf-code /usr/share/OVMF/OVMF_CODE_4M.fd \
+            --ovmf-vars /usr/share/OVMF/OVMF_VARS_4M.fd \
+            --source-commit "$VERIFIED_SOURCE" --capture-commit "$GITHUB_SHA" \
+            --output website/media/MayOS-0.4.0-pre2-UEFI-MayKernel.mp4
+      - name: Record actual Linux 7.3.1 UEFI boot and GUI operations
+        run: |
+          set -euo pipefail
+          python3 MayOS_0.3.0-pre1/scripts/record_pre2.py \
+            --kernel linux --fps 10 \
+            --iso dist/MayOS-0.4.0-pre2-dual-boot.iso \
+            --ovmf-code /usr/share/OVMF/OVMF_CODE_4M.fd \
+            --ovmf-vars /usr/share/OVMF/OVMF_VARS_4M.fd \
+            --source-commit "$VERIFIED_SOURCE" --capture-commit "$GITHUB_SHA" \
+            --output website/media/MayOS-0.4.0-pre2-UEFI-Linux.mp4
+      - name: Verify MP4 hashes, codec, dimensions, ISO and release metadata
+        run: |
+          set -euo pipefail
+          python3 MayOS_0.3.0-pre1/scripts/verify_recordings.py \
+            --release 0.4.0-pre2 --commit "$VERIFIED_SOURCE" \
+            website/media/MayOS-0.4.0-pre2-UEFI-MayKernel.json \
+            website/media/MayOS-0.4.0-pre2-UEFI-Linux.json
+          for video in website/media/MayOS-0.4.0-pre2-UEFI-*.mp4; do
+            test -s "$video"
+            ffprobe -v error -select_streams v:0 \
+              -show_entries stream=codec_name,width,height,pix_fmt \
+              -of default=noprint_wrappers=1 "$video"
+            test "$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$video")" = h264
+          done
+          cp dist/MayOS-0.4.0-pre2-desktop.png website/media/MayOS-latest-desktop.png
+          REQUIRE_PRE2_RECORDINGS=1 python3 website/check_site.py
+      - name: Preserve actual capture artifacts and logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-0.4.0-pre2-real-UEFI-MP4
+          path: |
+            website/media/MayOS-0.4.0-pre2-UEFI-*.mp4
+            website/media/MayOS-0.4.0-pre2-UEFI-*.json
+            MayOS_0.3.0-pre1/build/record-*.log
+          retention-days: 30
+      - name: Attach both download-ready MP4 recordings to pre2 GitHub Release
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            website/media/MayOS-0.4.0-pre2-UEFI-MayKernel.mp4 \
+            website/media/MayOS-0.4.0-pre2-UEFI-MayKernel.json \
+            website/media/MayOS-0.4.0-pre2-UEFI-Linux.mp4 \
+            website/media/MayOS-0.4.0-pre2-UEFI-Linux.json
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' | grep -F 'MayOS-0.4.0-pre2-UEFI-MayKernel.mp4'
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' | grep -F 'MayOS-0.4.0-pre2-UEFI-Linux.mp4'
+      - name: Update website with exactly the verified real QEMU media
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add website/media/MayOS-0.4.0-pre2-UEFI-MayKernel.mp4 \
+                  website/media/MayOS-0.4.0-pre2-UEFI-MayKernel.json \
+                  website/media/MayOS-0.4.0-pre2-UEFI-Linux.mp4 \
+                  website/media/MayOS-0.4.0-pre2-UEFI-Linux.json \
+                  website/media/MayOS-latest-desktop.png
+          git diff --cached --quiet && { echo 'No recording media to publish'; exit 1; }
+          git commit -m 'Publish verified MayOS 0.4.0-pre2 real UEFI boot MP4 recordings'
+          git push origin HEAD:main
