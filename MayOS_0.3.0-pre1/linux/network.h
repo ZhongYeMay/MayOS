@@ -1,5 +1,8 @@
 /* Minimal asynchronous HTTP/1.0 text transport. No TLS, redirects or HTML execution.
    Included by desktop.c after libc headers and helper-name undefinitions. */
+#include <ifaddrs.h>
+#include <arpa/inet.h>
+#include <net/if.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
@@ -118,4 +121,54 @@ int platform_web_poll(char *destination, int capacity) {
     }
     if (capacity > 0) snprintf(destination, (size_t)capacity, "%s", web_result);
     return web_pid > 0;
+}
+
+/* Lightweight IPv4 diagnostics for MayOS Settings, Explorer and MayShell.
+   Reports actual Linux interface, DHCP-assigned address, default route and DNS.
+   Not a Wi-Fi manager, TLS client or custom-kernel network stack. */
+int platform_network_status(char *destination, int capacity) {
+    if (!destination || capacity < 16) return 0;
+    char iface[32] = "none", address[INET_ADDRSTRLEN] = "unassigned";
+    char gateway[INET_ADDRSTRLEN] = "none", dns[64] = "none";
+    struct ifaddrs *interfaces = NULL;
+    int connected = 0;
+    if (getifaddrs(&interfaces) == 0) {
+        for (struct ifaddrs *a = interfaces; a; a = a->ifa_next) {
+            if (!a->ifa_addr || a->ifa_addr->sa_family != AF_INET ||
+                !(a->ifa_flags & IFF_UP) || (a->ifa_flags & IFF_LOOPBACK)) continue;
+            const struct sockaddr_in *ipv4 = (const struct sockaddr_in *)a->ifa_addr;
+            if (inet_ntop(AF_INET, &ipv4->sin_addr, address, sizeof(address))) {
+                snprintf(iface, sizeof(iface), "%.31s", a->ifa_name);
+                connected = 1;
+                break;
+            }
+        }
+        freeifaddrs(interfaces);
+    }
+    FILE *routes = fopen("/proc/net/route", "r");
+    if (routes) {
+        char row[256];
+        while (fgets(row, sizeof(row), routes)) {
+            char dev[32];
+            unsigned long dst = 0, gw = 0, flags = 0;
+            if (sscanf(row, "%31s %lx %lx %lx", dev, &dst, &gw, &flags) == 4 &&
+                dst == 0 && (flags & 1) && (!connected || !strcmp(dev, iface))) {
+                uint32_t route = (uint32_t)gw;
+                inet_ntop(AF_INET, &route, gateway, sizeof(gateway));
+                break;
+            }
+        }
+        fclose(routes);
+    }
+    FILE *resolv = fopen("/etc/resolv.conf", "r");
+    if (resolv) {
+        char row[128];
+        while (fgets(row, sizeof(row), resolv))
+            if (sscanf(row, "nameserver %63s", dns) == 1) break;
+        fclose(resolv);
+    }
+    snprintf(destination, (size_t)capacity,
+             "Network: %s\\nDevice: %s\\nIPv4: %s\\nGateway: %s\\nDNS: %s",
+             connected ? "connected" : "DHCP pending / no IPv4", iface, address, gateway, dns);
+    return connected;
 }
