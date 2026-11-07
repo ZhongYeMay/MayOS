@@ -168,7 +168,7 @@ int platform_network_status(char *destination, int capacity) {
         fclose(resolv);
     }
     snprintf(destination, (size_t)capacity,
-             "Network: %s\\nDevice: %s\\nIPv4: %s\\nGateway: %s\\nDNS: %s",
+             "Network: %s\nDevice: %s\nIPv4: %s\nGateway: %s\nDNS: %s",
              connected ? "connected" : "DHCP pending / no IPv4", iface, address, gateway, dns);
     return connected;
 }
