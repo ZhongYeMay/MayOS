@@ -1,44 +1,61 @@
 'use strict';
-const toggle = document.querySelector('#theme');
-let theme;
-try { theme = localStorage.getItem('mayos-theme'); } catch {}
-if (theme === 'dark' || theme === 'light') document.documentElement.dataset.theme = theme;
-toggle.addEventListener('click', () => {
-  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-  document.documentElement.dataset.theme = next;
-  toggle.setAttribute('aria-label', next === 'dark' ? '切换浅色主题' : '切换深色主题');
-  try { localStorage.setItem('mayos-theme', next); } catch {}
+const root = document.documentElement;
+const themeButton = document.getElementById('theme');
+const menuButton = document.getElementById('menu');
+const nav = document.getElementById('nav');
+let storedTheme = null;
+try { storedTheme = localStorage.getItem('mayos-theme'); } catch (_) {}
+const preferredDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+const initial = storedTheme === 'dark' || storedTheme === 'light' ? storedTheme : (preferredDark ? 'dark' : 'light');
+root.dataset.theme = initial;
+function setTheme(next) {
+  root.dataset.theme = next;
+  themeButton?.setAttribute('aria-label', next === 'dark' ? '切换浅色主题' : '切换深色主题');
+  try { localStorage.setItem('mayos-theme', next); } catch (_) {}
+}
+setTheme(initial);
+themeButton?.addEventListener('click', () => setTheme(root.dataset.theme === 'dark' ? 'light' : 'dark'));
+menuButton?.addEventListener('click', () => {
+  const isOpen = nav.classList.toggle('open');
+  menuButton.setAttribute('aria-expanded', String(isOpen));
+  menuButton.setAttribute('aria-label', isOpen ? '收起导航' : '展开导航');
 });
-for (const button of document.querySelectorAll('[data-copy]')) {
-  button.addEventListener('click', async () => {
-    const status = document.querySelector('#copy-status');
-    try {
-      await navigator.clipboard.writeText(document.getElementById(button.dataset.copy).textContent.trim());
-      status.textContent = 'SHA-256 已复制。';
-      button.textContent = '已复制 ✓';
-    } catch { status.textContent = '无法自动复制，请选中上方 SHA-256 手动复制。'; }
-  });
-}
-
-for (const slot of document.querySelectorAll('.video-slot')) {
-  fetch(slot.dataset.video, { method: 'HEAD' }).then(response => {
-    if (!response.ok) return;
-    const video = document.createElement('video');
-    video.controls = true;
-    video.preload = 'metadata';
-    video.playsInline = true;
-    video.setAttribute('aria-label', slot.dataset.label);
-    const source = document.createElement('source');
-    source.src = slot.dataset.video;
-    source.type = 'video/mp4';
-    video.append(source, document.createTextNode('浏览器不支持视频播放。'));
-    slot.replaceChildren(video);
-    const pending = slot.closest('article').querySelector('.recording-meta');
-    if (pending?.dataset.meta) {
-      const link = document.createElement('a');
-      link.href = pending.dataset.meta;
-      link.textContent = '验证元数据 ↗';
-      pending.replaceWith(link);
+nav?.querySelectorAll('a').forEach(link => link.addEventListener('click', () => {
+  nav.classList.remove('open');
+  menuButton?.setAttribute('aria-expanded', 'false');
+}));
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && nav?.classList.contains('open')) {
+    nav.classList.remove('open');
+    menuButton?.setAttribute('aria-expanded', 'false');
+    menuButton?.focus();
+  }
+});
+const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (reduceMotion || !('IntersectionObserver' in window)) {
+  document.querySelectorAll('.reveal').forEach(el => el.classList.add('visible'));
+} else {
+  const observer = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
     }
-  }).catch(() => {});
+  }, { threshold: .08, rootMargin: '0px 0px 40px 0px' });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 }
+document.querySelectorAll('[data-copy]').forEach(button => {
+  button.addEventListener('click', async () => {
+    const target = document.getElementById(button.dataset.copy);
+    const status = document.getElementById('copy-status');
+    if (!target) return;
+    try {
+      await navigator.clipboard.writeText(target.textContent.trim());
+      button.textContent = '已复制';
+      if (status) status.textContent = 'SHA-256 已复制到剪贴板。';
+    } catch (_) {
+      if (status) status.textContent = '复制失败，请手动选择并复制校验值。';
+    }
+  });
+});
