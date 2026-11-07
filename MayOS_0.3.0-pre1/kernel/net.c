@@ -21,7 +21,7 @@ static u32 ip_addr, subnet_mask, gateway, dns_server, dhcp_server;
 static u32 offered_ip, last_dhcp, last_arp, identifier;
 static int link_ready, lease_ready, gateway_ready, dhcp_phase;
 static int ping_replies, dns_replies;
-static char last_dns[24];
+
 
 static u16 be16(const u8 *p) { return (u16)((u16)p[0] << 8 | p[1]); }
 static u32 be32(const u8 *p) {
