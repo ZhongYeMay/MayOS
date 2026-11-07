@@ -69,7 +69,17 @@ jobs:
             echo 'Pre3 site already up to date'
           else
             git commit -m 'Publish MayOS 0.4.0-pre3 browser and verified full-feature QEMU MP4 videos'
-            git push origin HEAD:main
+            # Auto-version bots may update main during this video transfer.
+            # Rebase only website changes; never force-push another actor's work.
+            pushed=false
+            for attempt in 1 2 3 4 5 6; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then pushed=true; break; fi
+              echo "Concurrent main update; retrying ($attempt/6)"
+              sleep 2
+            done
+            test "$pushed" = true
           fi
       - name: Dispatch GitHub Pages with the actual pre3 media files
         run: |
