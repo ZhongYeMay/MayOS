@@ -119,4 +119,106 @@ static void browse_preview(const char *raw, char *dest, int capacity) {
         used--;
     dest[used] = '\0';
 }
+
+/* Extract safe, clickable HTML anchors for a native links panel. JavaScript,
+   file/data URLs and inline handlers are deliberately never interpreted. */
+typedef struct {
+    char url[176];
+    char title[48];
+} BrowserLink;
+
+static void browse_piece(char *out, int capacity, const char *first, int count) {
+    int i = 0;
+    if (capacity < 1) return;
+    while (i < capacity - 1 && i < count && first[i]) {
+        out[i] = first[i];
+        i++;
+    }
+    out[i] = 0;
+}
+static int browse_prefix(const char *p, const char *word) {
+    for (int i = 0; word[i]; i++) {
+        if (p[i] != word[i]) return 0;
+    }
+    return 1;
+}
+static int browse_url_safe(const char *value) {
+    return browse_prefix(value, "http://") || browse_prefix(value, "https://");
+}
+static int browse_resolve_link(const char *base, const char *href,
+                               char *resolved, int capacity) {
+    char candidate[176];
+    if (!href[0] || href[0] == '#' || href[0] == '?' || href[0] == '\\')
+        return 0;
+    if (browse_url_safe(href)) {
+        browse_piece(candidate, sizeof(candidate), href, 175);
+    } else if (href[0] == '/') {
+        if (!browse_url_safe(base) || href[1] == '/') return 0;
+        const char *host = base + (base[4] == 's' ? 8 : 7);
+        const char *end = host;
+        while (*end && *end != '/') end++;
+        int length = (int)(end - base);
+        if (length + 1 >= (int)sizeof(candidate)) return 0;
+        browse_piece(candidate, sizeof(candidate), base, length);
+        int i = length;
+        for (const char *p = href; *p && i < (int)sizeof(candidate) - 1; p++)
+            candidate[i++] = *p;
+        candidate[i] = 0;
+    } else {
+        return 0; /* Relative path without leading slash is not yet supported. */
+    }
+    if (!browse_url_safe(candidate)) return 0;
+    int i = 0;
+    for (; candidate[i]; i++) {
+        unsigned char c = (unsigned char)candidate[i];
+        if (c <= 32 || c > 126 || c == '"' || c == '\'' ||
+            c == '<' || c == '>' || i >= capacity - 1) return 0;
+    }
+    browse_piece(resolved, capacity, candidate, i);
+    return 1;
+}
+static int browse_collect_links(const char *raw, const char *base,
+                                BrowserLink *links, int maximum) {
+    if (!raw || !base || !links || maximum < 1) return 0;
+    if (maximum > 6) maximum = 6;
+    int result = 0;
+    for (const char *p = raw; *p && result < maximum; p++) {
+        if (*p != '<' || browse_lower(p[1]) != 'a' ||
+            (p[2] != ' ' && p[2] != '\t')) continue;
+        const char *end = p + 2;
+        while (*end && *end != '>' && end - p < 900) end++;
+        if (*end != '>') continue;
+        const char *attr = p + 2;
+        char href[176] = "";
+        while (attr < end) {
+            while (attr < end && (*attr == ' ' || *attr == '\n' || *attr == '\t'))
+                attr++;
+            if (end - attr >= 6 && browse_lower(attr[0]) == 'h' &&
+                browse_lower(attr[1]) == 'r' && browse_lower(attr[2]) == 'e' &&
+                browse_lower(attr[3]) == 'f' && attr[4] == '=') {
+                const char *val = attr + 5;
+                if (val >= end || (*val != '"' && *val != '\'')) break;
+                char quote = *val++;
+                const char *stop = val;
+                while (stop < end && *stop != quote) stop++;
+                if (stop < end) browse_piece(href, sizeof(href), val, (int)(stop - val));
+                break;
+            }
+            while (attr < end && *attr != ' ' && *attr != '\n') attr++;
+        }
+        if (!browse_resolve_link(base, href, links[result].url,
+                                 sizeof(links[result].url))) continue;
+        const char *label = end + 1, *stop = label;
+        while (*stop && *stop != '<' && stop - label < 160) stop++;
+        while (label < stop && (*label == ' ' || *label == '\n')) label++;
+        if (stop <= label)
+            browse_piece(links[result].title, sizeof(links[result].title),
+                         links[result].url, 47);
+        else browse_piece(links[result].title, sizeof(links[result].title),
+                          label, (int)(stop - label));
+        result++;
+        p = end;
+    }
+    return result;
+}
 #endif
