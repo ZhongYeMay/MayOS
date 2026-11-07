@@ -2,7 +2,7 @@
 #include "core.h"
 #include "font.h"
 #include "material_icons.h"
-#define MAYOS_RELEASE "0.4.0-pre2"
+#define MAYOS_RELEASE "0.4.0-pre3"
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
 #define PLATFORM_BADGE "LINUX SESSION"
