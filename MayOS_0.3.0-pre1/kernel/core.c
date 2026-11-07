@@ -401,6 +401,11 @@ int input_poll(int *mx, int *my, int *buttons, int *key) {
                 *key = shift ? shifted[v] : normal[v];
             if (ctrl && *key == 's')
                 *key = 0x106;
+            if (ctrl && *key == 'l') *key = 0x108;
+            if (ctrl && *key == 't') *key = 0x109;
+            if (ctrl && *key == 'w') *key = 0x10a;
+            if (ctrl && *key == 'f') *key = 0x10b;
+            if (ctrl && *key == 'r') *key = 0x10c;
             if (*key)
                 return 1;
         }
