@@ -24,7 +24,7 @@ static int ping_replies, dns_replies;
 static u32 http_ip, http_seq, http_ack, http_started;
 static u16 http_port;
 static int http_stage, http_used;
-static char http_path[240], http_host[64], http_response[2048];
+static char http_path[240], http_host[64], http_response[8192];
 
 
 
