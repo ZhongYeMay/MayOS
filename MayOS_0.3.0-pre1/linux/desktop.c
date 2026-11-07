@@ -119,6 +119,15 @@ void number(char *buffer, u32 value) {
 }
 
 const char *platform_kernel(void) { return kernel_label; }
+void platform_clock(char *buffer) {
+    time_t now = time(NULL);
+    struct tm result;
+    if (localtime_r(&now, &result))
+        snprintf(buffer, 8, "%02d:%02d", result.tm_hour, result.tm_min);
+    else
+        snprintf(buffer, 8, "--:--");
+}
+
 
 /* Fastfetch is an actual executable, never a rebranded built-in mock.
    Cache its output so repainting the framebuffer cannot repeatedly spawn it. */
