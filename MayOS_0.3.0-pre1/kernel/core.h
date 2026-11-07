@@ -50,6 +50,7 @@ void hardware_init(u32, u32);
 int input_poll(int *, int *, int *, int *);
 void poweroff(void);
 void reboot(void);
+void platform_clock(char *buffer);
 void present(u32 *);
 typedef struct {
     u32 used, dir, parent, size;
