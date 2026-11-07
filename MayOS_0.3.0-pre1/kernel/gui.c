@@ -1094,7 +1094,7 @@ static void editor_draw(Window *w) {
 /* Same browser chrome, navigation/history and text viewer on both kernels.
  * Linux and MayKernel retain their explicitly different HTTP transports. */
 static char explorer_query[176], explorer_bookmarks[5][176];
-static char explorer_history[12][176], explorer_response[2048], explorer_view[2048];
+static char explorer_history[12][176], explorer_response[8192], explorer_view[8192];
 static int explorer_bookmark_count, explorer_history_count, explorer_history_index = -1;
 static int explorer_loading, explorer_scroll, explorer_home = 1;
 static int explorer_editing;
