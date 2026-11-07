@@ -18,4 +18,12 @@ static inline u16 inw(u16 p) {
     return v;
 }
 
+static inline void outl(u16 p, u32 v) {
+    __asm__ volatile("outl %0,%1" : : "a"(v), "Nd"(p));
+}
+static inline u32 inl(u16 p) {
+    u32 v;
+    __asm__ volatile("inl %1,%0" : "=a"(v) : "Nd"(p));
+    return v;
+}
 #endif
