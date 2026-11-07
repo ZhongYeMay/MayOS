@@ -35,6 +35,7 @@ FASTFETCH_URL = f"https://github.com/fastfetch-cli/fastfetch/releases/download/{
 FASTFETCH_SHA256 = "e680dd3752472d9042cc297424e80198cea9b258aeecaf8af140b3e48e92689d"
 VERSION_RE = re.compile(r"[1-9][0-9]*\.[0-9]+(?:\.[0-9]+)?\Z")
 INPUT_FILES = {
+    "version_sha256": ROOT / "VERSION",
     "config_sha256": ROOT / "linux/kernel.config",
     "init_sha256": ROOT / "linux/init",
     "inittab_sha256": ROOT / "linux/inittab",
@@ -49,6 +50,7 @@ INPUT_FILES = {
     "desktop_core_header_sha256": ROOT / "kernel/core.h",
     "font_core_source_sha256": ROOT / "kernel/core.c",
     "font_generator_sha256": ROOT / "scripts/font.py",
+    "material_symbol_generator_sha256": ROOT / "assets/material_symbols.py",
     "photo_generator_sha256": ROOT / "scripts/photo.py",
     "photo_sha256": ROOT / "assets/easter-cat.jpg",
     "linux_readme_sha256": ROOT / "linux/README.md",
@@ -358,8 +360,13 @@ def build_initramfs(busybox: Path, fastfetch: Path, version: str) -> dict:
                                  ("bin/mayos-dhcp", "dhcp-hook", 0o755),
                                  ("usr/share/doc/mayos/linux-readme.txt", "README.md", 0o644)):
         entries.append((target, stat.S_IFREG | mode, (ROOT / "linux" / source).read_bytes(), 0, 0))
+    release_name = (ROOT / "VERSION").read_text().strip()
+    if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-pre[0-9]+)?", release_name) is None:
+        raise RuntimeError("Invalid MayOS version string")
     text_files = {
-        "etc/os-release": 'NAME="MayOS Linux Live"\nID=mayos-linux\nVERSION="0.3.0-pre2"\nPRETTY_NAME="MayOS Linux Live 0.3.0-pre2"\n',
+        "etc/os-release": (f'NAME="MayOS Linux Live"\nID=mayos-linux\n'
+                           f'VERSION="{release_name}"\n'
+                           f'PRETTY_NAME="MayOS Linux Live {release_name}"\n'),
         "etc/passwd": "root:x:0:0:root:/root:/bin/sh\n",
         "etc/group": "root:x:0:\n",
         "etc/hostname": "MayOS-Linux\n",
@@ -459,6 +466,7 @@ def build(args: argparse.Namespace) -> dict:
         run(make + [f"INSTALL_HDR_PATH={OUT / 'headers'}", "headers_install"])
         run([sys.executable, str(ROOT / "scripts/font.py")])
         run([sys.executable, str(ROOT / "scripts/photo.py")])
+        run([sys.executable, str(ROOT / "assets/material_symbols.py")])
         run([desktop_compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
              "-DMAYOS_LINUX", "-fno-pie", "-no-pie", "-static",
              "-I" + str(ROOT / "kernel"), "-I" + str(ROOT / "build"),

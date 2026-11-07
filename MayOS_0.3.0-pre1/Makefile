@@ -13,8 +13,8 @@ BOOT_FIRMWARE ?= hybrid
 OVMF_CODE ?= /usr/share/OVMF/OVMF_CODE_4M.fd
 OVMF_VARS ?= /usr/share/OVMF/OVMF_VARS_4M.fd
 CFLAGS := -m32 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie -fno-pic -fno-stack-protector -fno-builtin -fno-strict-aliasing -mno-sse -mno-mmx -Ibuild -Ikernel
-OBJECTS := build/boot.o build/core.o build/fs.o build/gui.o
-.PHONY: all clean run test linux linux-update dual run-dual test-dual run-uefi test-uefi
+OBJECTS := build/boot.o build/core.o build/fs.o build/gui.o build/net.o
+.PHONY: all clean run test linux linux-update dual run-dual test-dual run-uefi test-uefi test-net test-material test-pre2
 all: build/mayos.iso build/mayos-disk.img
 build:
 	mkdir -p build
@@ -22,7 +22,9 @@ build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
 	$(PYTHON) scripts/font.py
 build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 	$(PYTHON) scripts/photo.py
-build/gui.o: build/cat_image.h
+build/material_icons.h: assets/material_symbols.py | build
+	$(PYTHON) assets/material_symbols.py
+build/gui.o: build/cat_image.h build/material_icons.h
 build/boot.o: kernel/boot.S | build
 	$(CC) -m32 -c $< -o $@
 build/%.o: kernel/%.c kernel/core.h kernel/io.h build/font.h
@@ -40,6 +42,12 @@ test: all
 	$(PYTHON) scripts/smoke.py
 	$(PYTHON) scripts/ui_smoke.py
 	$(PYTHON) scripts/easter_smoke.py
+test-net: all
+	$(PYTHON) scripts/net_smoke.py
+test-material: all
+	$(PYTHON) scripts/material_smoke.py
+test-pre2: all
+	$(PYTHON) scripts/pre2_smoke.py
 # An explicit Linux build resolves latest stable at kernel.org. `dual` reuses
 # verified local payloads; run `linux-update` when a newer stable is wanted.
 linux: | build
@@ -59,4 +67,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h build/material_icons.h

@@ -51,7 +51,7 @@ static struct pollfd inputs[32];
 static int input_count;
 static struct timespec started;
 static void *allocated_pages[64];
-static int left_shift, right_shift, left_ctrl, right_ctrl, caps_lock;
+static int left_shift, right_shift, left_ctrl, right_ctrl, left_alt, right_alt, caps_lock;
 
 static void write_text(int fd, const char *text) {
     if (fd < 0)
@@ -119,6 +119,15 @@ void number(char *buffer, u32 value) {
 }
 
 const char *platform_kernel(void) { return kernel_label; }
+void platform_clock(char *buffer) {
+    time_t now = time(NULL);
+    struct tm result;
+    if (localtime_r(&now, &result))
+        snprintf(buffer, 8, "%02d:%02d", result.tm_hour, result.tm_min);
+    else
+        snprintf(buffer, 8, "--:--");
+}
+
 
 /* Fastfetch is an actual executable, never a rebranded built-in mock.
    Cache its output so repainting the framebuffer cannot repeatedly spawn it. */
@@ -351,10 +360,13 @@ static int keycode(unsigned int code, int value) {
     if (code == KEY_LEFTSHIFT) { left_shift = value != 0; return 0; }
     if (code == KEY_RIGHTSHIFT) { right_shift = value != 0; return 0; }
     if (code == KEY_LEFTCTRL) { left_ctrl = value != 0; return 0; }
+    if (code == KEY_LEFTALT) { left_alt = value != 0; return 0; }
+    if (code == KEY_RIGHTALT) { right_alt = value != 0; return 0; }
     if (code == KEY_RIGHTCTRL) { right_ctrl = value != 0; return 0; }
     if (!value)
         return 0;
     if (code == KEY_CAPSLOCK) { if (value == 1) caps_lock = !caps_lock; return 0; }
+    if (code == KEY_TAB && (left_alt || right_alt)) return 0x107;
     switch (code) {
         case KEY_F1: return 0x105;
         case KEY_UP: return 0x101;
