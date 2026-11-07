@@ -2,7 +2,7 @@
 """Generate native icon bitmaps from Apache-2.0 Google Material Symbols Rounded.
 
 The exact upstream Git commit is pinned for reproducibility. The OS embeds only
-twenty 48x48 grayscale glyph bitmaps; it never fetches fonts/CDNs at runtime.
+twenty-three 48x48 grayscale glyph bitmaps; it never fetches fonts/CDNs at runtime.
 If the build is offline without cached assets, the existing native vector
 symbols remain available. Release CI must verify that real glyphs were built.
 """
@@ -47,6 +47,9 @@ ICONS = (
     ("dark_mode", 0xe51c),        # 17 - dark mode
     ("light_mode", 0xe518),       # 18 - light mode
     ("search", 0xe8b6),           # 19 - search
+    ("star", 0xe838),             # 20 - saved tab
+    ("add", 0xe145),              # 21 - new browser tab
+    ("find_in_page", 0xe880),     # 22 - local in-page search
 )
 
 def main() -> None:
