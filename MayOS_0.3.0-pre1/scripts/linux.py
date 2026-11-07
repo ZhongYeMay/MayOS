@@ -39,6 +39,9 @@ INPUT_FILES = {
     "init_sha256": ROOT / "linux/init",
     "inittab_sha256": ROOT / "linux/inittab",
     "profile_sha256": ROOT / "linux/profile",
+    "network_start_sha256": ROOT / "linux/network-start",
+    "dhcp_hook_sha256": ROOT / "linux/dhcp-hook",
+    "network_backend_sha256": ROOT / "linux/network.h",
     "desktop_session_sha256": ROOT / "linux/desktop-session",
     "desktop_backend_sha256": ROOT / "linux/desktop.c",
     "desktop_gui_sha256": ROOT / "kernel/gui.c",
@@ -57,11 +60,12 @@ REQUIRED_CONFIG = (
     "DEVTMPFS", "PROC_FS", "SYSFS", "TMPFS", "TTY", "VT_CONSOLE",
     "SERIAL_8250_CONSOLE", "VGA_CONSOLE", "KEYBOARD_ATKBD", "ACPI",
     "EFI", "EFI_STUB", "FB", "FB_DEVICE", "FRAMEBUFFER_CONSOLE", "MOUSE_PS2",
-    "INPUT_EVDEV",
+    "INPUT_EVDEV", "NET", "INET", "PACKET", "E1000", "VIRTIO_NET",
 )
 REQUIRED_APPLETS = {
     "sh", "init", "cttyhack", "mount", "umount", "mkdir", "hostname",
     "uname", "sync", "reboot", "poweroff", "cat", "ls", "free",
+    "ip", "ifconfig", "udhcpc", "mv", "ping", "nslookup", "sleep",
 }
 
 
@@ -349,6 +353,8 @@ def build_initramfs(busybox: Path, fastfetch: Path, version: str) -> dict:
     for target, source, mode in (("init", "init", 0o755), ("etc/inittab", "inittab", 0o644),
                                  ("etc/profile", "profile", 0o644),
                                  ("bin/mayos-session", "desktop-session", 0o755),
+                                 ("bin/mayos-network", "network-start", 0o755),
+                                 ("bin/mayos-dhcp", "dhcp-hook", 0o755),
                                  ("usr/share/doc/mayos/linux-readme.txt", "README.md", 0o644)):
         entries.append((target, stat.S_IFREG | mode, (ROOT / "linux" / source).read_bytes(), 0, 0))
     text_files = {

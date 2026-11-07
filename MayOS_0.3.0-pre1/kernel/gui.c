@@ -912,28 +912,51 @@ static void editor_draw(Window *w) {
     numtext(x + w->w - 140, y + w->h - 29, strlen(editor_buf), muted);
     text(x + w->w - 89, y + w->h - 29, "/ 4095 B", muted);
 }
-/* Orange is a local UI preview; no network or browser engine is claimed. */
+/* Orange shares this UI across both kernels. Linux provides the HTTP transport. */
 static char explorer_query[72], explorer_bookmark[72];
-static int explorer_engine;
+#ifdef MAYOS_LINUX
+static int explorer_loading;
+static char explorer_response[2048];
+#endif
 static void explorer_submit(void) {
-    notify("Explorer 预览：网络与网页引擎尚未接入，未发送搜索。");
+#ifdef MAYOS_LINUX
+    explorer_loading = platform_web_start(explorer_query);
+    platform_web_poll(explorer_response, sizeof(explorer_response));
+    dirty = 1;
+#else
+    notify("MayKernel 尚无网络栈；请使用 Linux 启动项联网。");
+#endif
 }
 static void explorer_draw(Window *w) {
     int x = w->x, y = w->y;
     text(x + 24, y + 58, "<   >   ↻", muted);
     roundrect(x + 120, y + 51, w->w - 250, 34, bg);
-    text(x + 132, y + 58, "搜索或输入链接 / Preview", muted);
+    text(x + 132, y + 58, "输入 http:// 地址 / ASCII", muted);
     button(x + w->w - 115, y + 53, 90, "收藏", 0);
     text(x + 25, y + 100, explorer_bookmark[0] ? explorer_bookmark : "收藏夹为空（仅本次会话）", muted);
     circle(x + 130, y + 207, 24, accent);
     circle(x + 130, y + 207, 18, panel);
     large_text(x + 177, y + 187, "MayOS Explorer", ink);
     roundrect(x + 100, y + 260, w->w - 200, 44, bg);
-    text(x + 114, y + 272, explorer_query[0] ? explorer_query : "在此输入以搜索（ASCII）", ink);
+    text(x + 114, y + 272, explorer_query[0] ? explorer_query : "http://example.com/", ink);
     button(x + w->w - 92, y + 267, 65, "转到", 1);
-    button(x + 100, y + 327, 290, explorer_engine ? "搜索方式：Bing / 切换" : "搜索方式：Google / 切换", 0);
-    text(x + 100, y + 383, "Orange / 本地交互预览 · 尚未连接互联网", accent);
-    text(x + 100, y + 417, "输入与收藏可用；网页加载、下载和历史尚未实现。", muted);
+    text(x + 100, y + 337, "仅 HTTP 文本响应；搜索与 HTTPS 仍在适配。", muted);
+#ifdef MAYOS_LINUX
+    text(x + 100, y + 383, explorer_loading ? "HTTP 正在加载 / 10 秒超时" : "HTTP 文本预览 · 不支持 HTTPS / HTML 渲染", accent);
+    const char *s = explorer_response;
+    for (int row = 0; row < (w->h - 420) / 20 && *s; row++) {
+        char part[80];
+        int n = 0, cols = (w->w - 140) / 8;
+        if (cols > 79) cols = 79;
+        while (*s && *s != '\n' && n < cols) part[n++] = *s++;
+        if (*s == '\n') s++;
+        part[n] = 0;
+        text(x + 70, y + 414 + row * 20, part, muted);
+    }
+#else
+    text(x + 100, y + 383, "Orange / MayKernel 网络栈尚未实现", accent);
+    text(x + 100, y + 417, "请选择 Linux 启动项使用 HTTP 文本预览。", muted);
+#endif
 }
 static void taskbar(void) {
     rect(0, H - 46, W, 46, 0x0b131c);
@@ -1333,8 +1356,7 @@ static void left_click(void) {
             return;
         }
         if (id == 4) {
-            if (inside(rx, ry, 100, 327, 290, 30)) explorer_engine = !explorer_engine;
-            else if (inside(rx, ry, w->w - 115, 53, 90, 30)) {
+            if (inside(rx, ry, w->w - 115, 53, 90, 30)) {
                 copy(explorer_bookmark, explorer_query, sizeof(explorer_bookmark));
                 notify(explorer_query[0] ? "已收藏到本次会话" : "请先输入搜索或链接");
             } else if (inside(rx, ry, w->w - 92, 267, 65, 30)) explorer_submit();
@@ -1620,6 +1642,12 @@ void kernel_main(u32 magic, u32 info) {
             if (key)
                 key_event(key);
         }
+#ifdef MAYOS_LINUX
+        if (explorer_loading) {
+            explorer_loading = platform_web_poll(explorer_response, sizeof(explorer_response));
+            dirty = 1;
+        }
+#endif
         if (ticks / 50 != last) {
             last = ticks / 50;
             dirty = 1;

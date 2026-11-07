@@ -204,8 +204,8 @@ MayFS / 桌面文件模型最多 48 个目录项，文件名 47 字节，每文�
 
 ## 2026-11-07 草图适配：Orange 界面预览
 
-左侧 Dock 的 Explorer 入口打开独立的第五个窗口；支持拖动、最大化、最小化、关闭、任务栏恢复，ASCII 查询输入、Google/Bing 选项切换和会话收藏。此界面在共享 GUI 中实现，适用于 MayKernel 和 Linux 桌面。
+左侧 Dock 的 Explorer 入口打开独立的第五个窗口；支持拖动、最大化、最小化、关闭、任务栏恢复、ASCII HTTP 地址输入和会话收藏。此界面在共享 GUI 中实现，适用于 MayKernel 和 Linux 桌面。
 
-这是本地 UI 预览：提交查询会明确提示没有发送请求。网络栈、TLS、网页渲染、导航历史和下载尚未接入；搜索方式选项目前仅保存界面状态。不代表 0.0.4 已发布，也不代表 Snapdragon X / ARM 或 UEFI IA32 已适配。当前版本号及已有系统信息继续使用实际代码数据。
+Linux 启动项现在会在首个以太网设备上运行 DHCP，写入 IPv4 地址、默认路由和 DNS；Explorer 可异步读取 `http://` URL，显示最多 1800 字节的 ASCII 文本响应并在 10 秒后超时。它尚不支持 TLS / HTTPS、HTML 渲染、重定向、搜索、导航历史和下载。MayKernel 本身仍没有网络栈。此更新不代表 0.0.4 已发布，也不代表 Wi-Fi、Snapdragon X / ARM 或 UEFI IA32 已适配。
 
 官网已改为独立首页、下载页和运行示例页，并通过仓库 GitHub Pages 工作流部署。

@@ -1,0 +1,17 @@
+#!/bin/sh
+# One primary interface; keep DHCP running for lease renewal.
+set -eu
+ip link set lo up
+iface=${1:-}
+while [ -z "$iface" ]; do
+    for dev in /sys/class/net/*; do
+        name=${dev##*/}
+        [ "$name" = lo ] && continue
+        iface=$name
+        break
+    done
+    [ -n "$iface" ] || sleep 1
+done
+case "$iface" in *[!a-zA-Z0-9_.:-]*|'') echo 'Invalid interface'; exit 1;; esac
+ip link set "$iface" up
+exec udhcpc -f -i "$iface" -s "${MAYOS_DHCP_SCRIPT:-/bin/mayos-dhcp}" -p /run/mayos-udhcpc.pid -t 5 -T 2 -A 10

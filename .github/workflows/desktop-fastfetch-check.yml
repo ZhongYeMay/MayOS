@@ -38,6 +38,13 @@ jobs:
             -isystem build/uapi-headers/include \
             linux/desktop.c kernel/fs.c kernel/gui.c -o build/mayos-desktop-ci
           file build/mayos-desktop-ci
+      - name: Test Linux network scripts and HTTP transport
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          sh -n linux/network-start linux/dhcp-hook
+          python3 scripts/network_config_test.py
+          gcc -std=c11 -O2 -Wall -Wextra -Werror scripts/network_transport_test.c -o build/network-transport-test
+          build/network-transport-test
       - name: Download and execute pinned official Fastfetch
         working-directory: MayOS_0.3.0-pre1
         run: |

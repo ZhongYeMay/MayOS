@@ -18,6 +18,8 @@ typedef unsigned long long u64;
 #define strcmp mayos_strcmp
 #define reboot mayos_reboot
 const char *platform_kernel(void);
+int platform_web_start(const char *url);
+int platform_web_poll(char *destination, int capacity);
 int platform_fastfetch(char *destination, int capacity);
 void platform_idle(void);
 #else

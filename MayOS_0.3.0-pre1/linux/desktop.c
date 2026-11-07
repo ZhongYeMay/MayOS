@@ -26,6 +26,7 @@
 #undef memcpy
 #undef strlen
 #undef strcmp
+#include "network.h"
 
 void *mayos_memset(void *destination, int value, u32 length) {
     return memset(destination, value, length);

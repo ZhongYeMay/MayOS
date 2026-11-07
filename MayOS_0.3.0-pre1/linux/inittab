@@ -4,3 +4,5 @@ ttyS0::respawn:/bin/cttyhack /bin/sh -l
 ::ctrlaltdel:/bin/reboot
 ::shutdown:/bin/sync
 ::shutdown:/bin/umount -a -r
+
+::respawn:/bin/mayos-network
