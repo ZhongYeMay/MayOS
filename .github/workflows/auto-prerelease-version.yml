@@ -1,0 +1,66 @@
+name: Increment MayOS prerelease version
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mayos-prerelease-version
+  cancel-in-progress: false
+
+jobs:
+  increment:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Increment pre number once per pushed commit
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.event.after }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --ff-only origin main
+          count=1
+          if [ "$EVENT_NAME" = "push" ] && [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            if git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+              count="$(git rev-list --count "$BEFORE_SHA..$AFTER_SHA")"
+            fi
+          fi
+          if [ "$count" -lt 1 ]; then count=1; fi
+          if [ "$count" -gt 100 ]; then
+            echo "Refusing unusually large push ($count commits); review manually" >&2
+            exit 1
+          fi
+          COUNT="$count" python3 - <<'PY'
+          import os, pathlib, re
+          version_file = pathlib.Path("MayOS_0.3.0-pre1/VERSION")
+          gui_file = pathlib.Path("MayOS_0.3.0-pre1/kernel/gui.c")
+          version = version_file.read_text().strip()
+          match = re.fullmatch(r"(\d+\.\d+\.\d+)-pre(\d+)", version)
+          if not match:
+              raise SystemExit("Unexpected VERSION format: " + version)
+          next_version = f"{match.group(1)}-pre{int(match.group(2)) + int(os.environ['COUNT'])}"
+          source = gui_file.read_text()
+          source, changed = re.subn(r'#define MAYOS_RELEASE "\d+\.\d+\.\d+-pre\d+"',
+                                    f'#define MAYOS_RELEASE "{next_version}"', source, count=1)
+          if changed != 1:
+              raise SystemExit("Could not locate MayOS GUI version constant")
+          gui_file.write_text(source)
+          version_file.write_text(next_version + "\n")
+          print("Advanced MayOS version:", version, "->", next_version)
+          PY
+          git add MayOS_0.3.0-pre1/VERSION MayOS_0.3.0-pre1/kernel/gui.c
+          git commit -m "chore(version): increment MayOS prerelease [skip ci]"
+          git push origin HEAD:main
