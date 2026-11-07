@@ -324,7 +324,7 @@ static const char shifted[] =
     "\0\033!@#$%^&*()_+\b\tQWERTYUIOP{}\n\0ASDFGHJKL:\"~\0|ZXCVBNM<>?\0*\0 ";
 int input_poll(int *mx, int *my, int *buttons, int *key) {
     static u8 packet[3], n = 0;
-    static int shift = 0, ext = 0, ctrl = 0;
+    static int shift = 0, ext = 0, ctrl = 0, alt = 0;
     *key = 0;
     int changed = 0;
     for (int k = 0; k < 128 && (inb(0x64) & 1); k++) {
@@ -356,6 +356,12 @@ int input_poll(int *mx, int *my, int *buttons, int *key) {
             if (v == 0xe0) {
                 ext = 1;
                 continue;
+            }
+            if (v == 56) { alt = 1; continue; }
+            if (v == 184) { alt = 0; continue; }
+            if (alt && v == 15) {
+                *key = 0x107;  /* Alt+Tab: window overview */
+                return 1;
             }
             if (v == 29) {
                 ctrl = 1;
