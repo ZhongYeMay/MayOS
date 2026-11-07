@@ -352,7 +352,7 @@ def main():
         # The RAM-only filesystem is verified by the Linux shell checks above
         # and the GUI write/read round-trip. Do not require an optional status
         # line that some GUI builds omit from their serial transcript.
-        vm.click(55, 105)
+        vm.click(346, 717)  # Material Dock: Files
         vm.click(370, 212)
         vm.keyboard_command('linux-editor.txt')
         time.sleep(.2)
