@@ -41,6 +41,9 @@ jobs:
       - name: Verify RTL8139 DHCP, gateway ping and DNS in MayKernel
         working-directory: MayOS_0.3.0-pre1
         run: make test-net
+      - name: Test Material desktop menus, Dock, app search and brightness
+        working-directory: MayOS_0.3.0-pre1
+        run: make test-material
       - name: Upload QEMU screenshots and serial diagnostics
         if: always()
         uses: actions/upload-artifact@v4
