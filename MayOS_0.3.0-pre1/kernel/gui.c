@@ -1,7 +1,7 @@
 #include "cat_image.h"
 #include "core.h"
 #include "font.h"
-#define MAYOS_RELEASE "0.3.0-pre18"
+#define MAYOS_RELEASE "0.4.0-pre1"
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
 #define PLATFORM_BADGE "LINUX SESSION"
@@ -406,7 +406,7 @@ static void shell(void) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest");
-        emit("theme light|dark  net status  reboot  shutdown");
+        emit("theme light|dark  net status|ping|dns|renew  reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
         out_count = 0;
@@ -520,7 +520,7 @@ static void shell(void) {
         emit("HTTP: Explorer supports http:// text preview; HTTPS unavailable.");
 #else
         emit("Network: MayKernel has no native NIC / TCP/IP driver.");
-        emit("Boot Linux for DHCP, DNS, IP diagnostics and HTTP preview.");
+        net_command(argc > 1 ? argv[1] : "status");
 #endif
     } else if (!strcmp(c, "memtest")) {
         u32 before = free_pages;
@@ -1695,6 +1695,9 @@ static void key_event(int k) {
 }
 void kernel_main(u32 magic, u32 info) {
     hardware_init(magic, info);
+#ifndef MAYOS_LINUX
+    net_init();
+#endif
     fs_init();
     terminal_init();
     serial("MayOS: desktop ready\n");
@@ -1738,6 +1741,9 @@ void kernel_main(u32 magic, u32 info) {
         }
         if (dirty)
             render();
+#ifndef MAYOS_LINUX
+        net_poll();
+#endif
         platform_idle();
     }
 }
