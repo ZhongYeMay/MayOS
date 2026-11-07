@@ -24,6 +24,15 @@ int platform_network_status(char *destination, int capacity);
 int platform_fastfetch(char *destination, int capacity);
 void platform_idle(void);
 #else
+void net_init(void);
+void net_poll(void);
+int net_online(void);
+void net_status(void);
+void net_ping(void);
+void net_dns(void);
+void net_command(const char *);
+int net_http_start(const char *url);
+int net_http_poll(char *destination, int capacity);
 static inline const char *platform_kernel(void) { return "MayOS custom x86"; }
 static inline void platform_idle(void) { __asm__ volatile("hlt"); }
 #endif
@@ -43,6 +52,7 @@ void hardware_init(u32, u32);
 int input_poll(int *, int *, int *, int *);
 void poweroff(void);
 void reboot(void);
+void platform_clock(char *buffer);
 void present(u32 *);
 typedef struct {
     u32 used, dir, parent, size;

@@ -10,7 +10,7 @@ class VM:
     def __init__(self,disk,tag):
         self.sock=BUILD/f'{tag}.sock';self.sock.unlink(missing_ok=True)
         self.log=BUILD/f'{tag}.log'
-        args=[QEMU,'-machine','pc','-accel','tcg','-m','128','-vga','std','-display','none','-cdrom',str(BUILD/'mayos.iso'),'-boot','d','-serial',f'file:{self.log}','-qmp',f'unix:{self.sock},server=on,wait=off','-no-reboot','-no-shutdown']
+        args=[QEMU,'-machine','pc','-accel','tcg','-m','128','-vga','std','-display','none','-cdrom',str(BUILD/'mayos.iso'),'-boot','d','-nic','user,model=rtl8139','-serial',f'file:{self.log}','-qmp',f'unix:{self.sock},server=on,wait=off','-no-reboot','-no-shutdown']
         if disk is not None:args+=['-drive',f'file={disk},format=raw,if=ide,index=0']
         if os.environ.get('QEMU_DATA_DIR'):args+=['-L',os.environ['QEMU_DATA_DIR']]
         self.proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=(BUILD/f'{tag}-qemu.log').open('w'))
@@ -86,7 +86,7 @@ def main():
         vm.cmd('mv persist.txt saved.txt');vm.wait('Renamed')
         vm.cmd('touch delete.txt');vm.cmd('rm delete.txt');vm.wait('Moved to Trash')
         # Use the actual emulated mouse, GUI modal, editor and Ctrl-S.
-        vm.click(55,105);vm.shot('files')
+        vm.click(346,717);vm.shot('files')
         vm.click(370,212);vm.type('gui.txt\n');time.sleep(.3);vm.key('ret');time.sleep(.2)
         vm.type('GUI-PERSIST');vm.key('ctrl-s');time.sleep(.4);vm.shot('editor')
         data=entries(disk)
