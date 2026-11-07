@@ -86,9 +86,9 @@ def main():
 
         vm.key('ctrl-t')
         vm.wait("Explorer: new tab")
+        previous = count(vm, "MayNet: HTTP response received")
         vm.type(url + '/long\n')
-        wait_more(vm, "MayNet: HTTP response received",
-                  count(vm, "MayNet: HTTP response received") - 1)
+        wait_more(vm, "MayNet: HTTP response received", previous)
         vm.click(235, 165)
         vm.wait("Explorer: tab switch")
         vm.click(399, 165)
