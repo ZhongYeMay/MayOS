@@ -1063,17 +1063,17 @@ static void editor_draw(Window *w) {
 }
 /* Orange shares this UI across both kernels. Linux provides the HTTP transport. */
 static char explorer_query[72], explorer_bookmark[72];
-#ifdef MAYOS_LINUX
 static int explorer_loading;
 static char explorer_response[2048];
-#endif
 static void explorer_submit(void) {
 #ifdef MAYOS_LINUX
     explorer_loading = platform_web_start(explorer_query);
     platform_web_poll(explorer_response, sizeof(explorer_response));
     dirty = 1;
 #else
-    notify("MayKernel 尚无网络栈；请使用 Linux 启动项联网。");
+    explorer_loading = net_http_start(explorer_query);
+    net_http_poll(explorer_response, sizeof(explorer_response));
+    dirty = 1;
 #endif
 }
 static void explorer_draw(Window *w) {
@@ -1090,12 +1090,11 @@ static void explorer_draw(Window *w) {
     text(x + 114, y + 272, explorer_query[0] ? explorer_query : "http://example.com/", ink);
     button(x + w->w - 92, y + 267, 65, "转到", 1);
     text(x + 100, y + 337, "网络 / HTTP 文本预览。HTTPS 与完整浏览器尚未支持。", muted);
-#ifdef MAYOS_LINUX
     char network_report[384];
     int has_network = platform_network_status(network_report, sizeof(network_report));
     text(x + 100, y + 358, has_network ? "IP 已获取 · DHCP 网络可用" : "网络初始化中 · 检查 DHCP 或网卡", muted);
 
-    text(x + 100, y + 383, explorer_loading ? "HTTP 正在加载 / 10 秒超时" : "HTTP 文本预览 · 不支持 HTTPS / HTML 渲染", accent);
+    text(x + 100, y + 383, explorer_loading ? "HTTP 正在加载" : "HTTP 文本预览 / 不支持 HTTPS 与脚本", accent);
     const char *s = explorer_response;
     for (int row = 0; row < (w->h - 420) / 20 && *s; row++) {
         char part[80];
@@ -1106,10 +1105,7 @@ static void explorer_draw(Window *w) {
         part[n] = 0;
         text(x + 70, y + 414 + row * 20, part, muted);
     }
-#else
-    text(x + 100, y + 383, "Orange / MayKernel 网络栈尚未实现", accent);
-    text(x + 100, y + 417, "请选择 Linux 启动项使用 HTTP 文本预览。", muted);
-#endif
+
 }
 static void taskbar(void) {
     /* macOS placement; Material 3 tonal dock, rounded icon containers. */
@@ -1983,12 +1979,14 @@ void kernel_main(u32 magic, u32 info) {
             if (key)
                 key_event(key);
         }
-#ifdef MAYOS_LINUX
         if (explorer_loading) {
+#ifdef MAYOS_LINUX
             explorer_loading = platform_web_poll(explorer_response, sizeof(explorer_response));
+#else
+            explorer_loading = net_http_poll(explorer_response, sizeof(explorer_response));
+#endif
             dirty = 1;
         }
-#endif
         if (ticks / 50 != last) {
             last = ticks / 50;
             dirty = 1;
