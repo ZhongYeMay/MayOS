@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import socket
 import subprocess
@@ -217,12 +218,18 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--qemu', default=os.environ.get('QEMU64','qemu-system-x86_64'))
     parser.add_argument('--fps', type=int, default=10)
+    parser.add_argument('--release', required=True, help='MayOS release version shown by this build')
+    parser.add_argument('--source-commit', required=True, help='40-character Git commit used for the build')
     parser.add_argument('--ovmf-code', type=Path, default=os.environ.get('OVMF_CODE'))
     parser.add_argument('--ovmf-vars', type=Path, default=os.environ.get('OVMF_VARS'))
     args = parser.parse_args()
     args.iso, args.output = args.iso.resolve(), args.output.resolve()
     if not 1 <= args.fps <= 30:
         parser.error('--fps must be between 1 and 30')
+    if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-pre[1-9][0-9]*)?', args.release):
+        parser.error('--release must be a MayOS version')
+    if not re.fullmatch(r'[0-9a-f]{40}', args.source_commit):
+        parser.error('--source-commit must be a full Git commit SHA')
     if args.firmware=='uefi' and (not args.ovmf_code or not args.ovmf_vars):
         parser.error('UEFI recording requires --ovmf-code/--ovmf-vars or OVMF_CODE/OVMF_VARS')
     iso_hash = sha(args.iso)
@@ -258,6 +265,7 @@ def main():
     if sha(args.iso) != iso_hash:
         raise RuntimeError('ISO changed during capture; discard this recording and retry')
     result = {'iso':args.iso.name,'iso_sha256':iso_hash,'kernel':args.kernel,
+              'mayos_release':args.release,'source_commit':args.source_commit,
               'firmware':args.firmware,'started_at_utc':started,'fps':args.fps,
               'frames':vm.frames,'duration_seconds':vm.frames/args.fps,
               'video':args.output.name,'video_sha256':sha(args.output),

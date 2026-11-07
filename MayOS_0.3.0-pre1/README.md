@@ -161,9 +161,11 @@ make test-dual
 make test-uefi
 
 python3 scripts/record_boot.py --firmware uefi --kernel custom \
+  --release 0.3.0-pre2 --source-commit "$(git rev-parse HEAD)" \
   --ovmf-code /usr/share/OVMF/OVMF_CODE_4M.fd \
   --ovmf-vars /usr/share/OVMF/OVMF_VARS_4M.fd --output MayKernel-UEFI.mp4
 python3 scripts/record_boot.py --firmware uefi --kernel linux \
+  --release 0.3.0-pre2 --source-commit "$(git rev-parse HEAD)" \
   --ovmf-code /usr/share/OVMF/OVMF_CODE_4M.fd \
   --ovmf-vars /usr/share/OVMF/OVMF_VARS_4M.fd --output Linux-UEFI.mp4
 ```

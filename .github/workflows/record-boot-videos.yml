@@ -1,0 +1,70 @@
+name: Record and publish MayOS boot videos
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: record-mayos-boot-videos
+  cancel-in-progress: false
+
+jobs:
+  record:
+    if: github.repository == 'ZhongYeMay/MayOS' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: true
+      - name: Install build, test and recording tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools dosfstools \
+            qemu-system-x86 ovmf ffmpeg python3 python3-pil \
+            fonts-noto-cjk fonts-dejavu-core flex bison bc libelf-dev libssl-dev \
+            xz-utils busybox-static musl-tools rsync
+      - name: Build and test the dual-boot ISO
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+          make test-dual LINUX_VERSION=7.3.1
+          make test-uefi LINUX_VERSION=7.3.1
+      - name: Record both UEFI boot paths
+        working-directory: MayOS_0.3.0-pre1
+        env:
+          RELEASE_VERSION: 0.3.0-pre2
+        run: |
+          mkdir -p ../website/media
+          python3 scripts/record_boot.py --firmware uefi --kernel custom \
+            --release "$RELEASE_VERSION" --source-commit "$GITHUB_SHA" \
+            --ovmf-code /usr/share/OVMF/OVMF_CODE_4M.fd \
+            --ovmf-vars /usr/share/OVMF/OVMF_VARS_4M.fd \
+            --output ../website/media/MayOS-0.3.0-pre2-UEFI-MayKernel.mp4
+          python3 scripts/record_boot.py --firmware uefi --kernel linux \
+            --release "$RELEASE_VERSION" --source-commit "$GITHUB_SHA" \
+            --ovmf-code /usr/share/OVMF/OVMF_CODE_4M.fd \
+            --ovmf-vars /usr/share/OVMF/OVMF_VARS_4M.fd \
+            --output ../website/media/MayOS-0.3.0-pre2-UEFI-Linux.mp4
+          python3 scripts/verify_recordings.py \
+            --release "$RELEASE_VERSION" --commit "$GITHUB_SHA" \
+            ../website/media/MayOS-0.3.0-pre2-UEFI-MayKernel.json \
+            ../website/media/MayOS-0.3.0-pre2-UEFI-Linux.json
+      - name: Preserve recordings before publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-0.3.0-pre2-UEFI-recordings
+          path: website/media/
+          retention-days: 30
+      - name: Commit verified recordings to the website
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add website/media
+          git commit -m "Publish MayOS 0.3.0-pre2 boot recordings"
+          git push origin HEAD:main
