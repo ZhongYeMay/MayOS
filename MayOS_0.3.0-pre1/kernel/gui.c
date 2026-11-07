@@ -1130,30 +1130,36 @@ static int contains(const char *a, const char *b) {
     return 0;
 }
 static int search_match(int id) {
-    const char *names[] = {"files 文件 文档", "settings 设置 关于", "terminal 终端 shell",
-                           "trash 回收站"};
-    return contains(names[id], search);
+    const char *names[] = {"files 文件 文档 folder", "settings 设置 关于",
+                           "terminal 终端 shell", "editor 文本 编辑",
+                           "explorer 浏览器 network", "trash 回收站 删除"};
+    return id >= 0 && id < 6 && contains(names[id], search);
 }
 static void start_draw(void) {
-    int x = 12, y = H - 424;
-    roundrect(x + 3, y + 4, 326, 366, dark ? 0x141218 : 0xd8d1df);
-    roundrect(x, y, 326, 366, panel);
-    text(x + 22, y + 19, "应用程序 / Applications", ink);
-    roundrect(x + 18, y + 57, 290, 34, bg);
-    text(x + 30, y + 64, search[0] ? search : "搜索 / files, settings, terminal",
+    int x = 180, y = 130, width = 664, height = 500;
+    roundrect(x + 6, y + 8, width, height, dark ? 0x141218 : 0xd7d2da);
+    roundrect(x, y, width, height, panel);
+    text(x + 30, y + 24, "应用程序", ink);
+    text(x + 530, y + 24, "全部应用", muted);
+    roundrect(x + 28, y + 68, width - 56, 44, surface_high);
+    symbol(x + 41, y + 81, 4, 20, muted);
+    text(x + 77, y + 78, search[0] ? search : "搜索应用 / files, settings, terminal",
          search[0] ? ink : muted);
-    const char *names[] = {"文件管理器", "设置", "终端", "回收站"};
-    const char *desc[] = {"浏览文件与文件夹", "系统信息与外观", "命令与会话工具", "找回或删除文件"};
-    for (int i = 0; i < 4; i++)
-        if (search_match(i)) {
-            icon(x + 24, y + 109 + i * 47, i, 31);
-            text(x + 70, y + 105 + i * 47, names[i], ink);
-            text(x + 70, y + 125 + i * 47, desc[i], muted);
-        }
-    rect(x + 18, y + 306, 290, 1, line);
-    text(x + 25, y + 328, "may / 本地账户", muted);
-    text(x + 213, y + 328, "重启", ink);
-    text(x + 270, y + 328, "关机", ink);
+    const char *names[] = {"文件管理器", "系统设置", "终端", "文本编辑器", "Explorer", "回收站"};
+    const char *details[] = {"本机文件", "外观与系统", "MayShell", "编辑文本", "网络预览", "已删除项目"};
+    const int kinds[] = {0, 1, 2, 5, 4, 3};
+    for (int i = 0; i < 6; i++) {
+        if (!search_match(i)) continue;
+        int xx = x + 31 + (i % 3) * 210;
+        int yy = y + 147 + (i / 3) * 151;
+        roundrect(xx, yy, 186, 123, surface_high);
+        icon(xx + 14, yy + 15, kinds[i], 48);
+        text(xx + 14, yy + 73, names[i], ink);
+        text(xx + 14, yy + 98, details[i], muted);
+    }
+    text(x + 32, y + height - 38, "MayOS", muted);
+    text(x + width - 184, y + height - 38, "重启", ink);
+    text(x + width - 88, y + height - 38, "关机", ink);
 }
 static void context_draw(void) {
     roundrect(ctxx + 3, ctxy + 3, 184, 320, dark ? 0x141218 : 0xd8d1df);
@@ -1213,6 +1219,77 @@ static void easter_draw(void) {
     text(306, 653, "按 Esc 返回", muted);
     button(610, 646, 108, "返回桌面", 1);
 }
+static void quick_draw(void) {
+    int x = 689, y = 52;
+    roundrect(x + 4, y + 5, 319, 336, dark ? 0x141218 : 0xd7d2da);
+    roundrect(x, y, 319, 336, panel);
+    text(x + 24, y + 21, "快捷设置", ink);
+    text(x + 24, y + 70, "外观", muted);
+    roundrect(x + 18, y + 101, 283, 44, surface_high);
+    symbol(x + 31, y + 109, 9, 26, ink);
+    text(x + 72, y + 112, dark ? "深色模式" : "浅色模式", ink);
+    text(x + 244, y + 112, "切换", accent);
+    text(x + 24, y + 168, "显示亮度", ink);
+    roundrect(x + 18, y + 195, 283, 48, surface_high);
+    text(x + 38, y + 202, "-", ink);
+    rect(x + 80, y + 218, 167, 5, line);
+    rect(x + 80, y + 218, 167 * brightness_level / 100, 5, accent);
+    text(x + 267, y + 202, "+", ink);
+    text(x + 24, y + 267, "网络连接", ink);
+#ifdef MAYOS_LINUX
+    char report[240];
+    int online = platform_network_status(report, sizeof(report));
+#else
+    int online = net_online();
+#endif
+    symbol(x + 27, y + 298, 8, 24, online ? accent : muted);
+    text(x + 69, y + 297, online ? "网络已连接" : "未获取 IP 地址", ink);
+    text(x + 248, y + 297, "刷新", accent);
+}
+static void notifications_draw(void) {
+    int x = 683, y = 52;
+    roundrect(x + 4, y + 5, 324, 314, dark ? 0x141218 : 0xd7d2da);
+    roundrect(x, y, 324, 314, panel);
+    text(x + 23, y + 19, "通知中心", ink);
+    text(x + 250, y + 19, "清空", accent);
+    if (!notification_count) {
+        symbol(x + 143, y + 90, 7, 38, muted);
+        text(x + 88, y + 167, "暂无新通知", muted);
+    } else {
+        for (int i = 0; i < notification_count && i < 3; i++) {
+            int yy = y + 63 + i * 75;
+            roundrect(x + 15, yy, 293, 66, surface_high);
+            text(x + 27, yy + 12, "MayOS", accent);
+            text(x + 27, yy + 38, notification_log[i], ink);
+        }
+    }
+}
+static void overview_draw(void) {
+    int x = 158, y = 112;
+    roundrect(x + 6, y + 8, 708, 520, dark ? 0x141218 : 0xd7d2da);
+    roundrect(x, y, 708, 520, panel);
+    text(x + 26, y + 23, "窗口总览", ink);
+    text(x + 530, y + 23, "Esc 返回", muted);
+    int shown = 0;
+    for (int i = 0; i < WINDOW_COUNT; i++) {
+        if (!windows[i].open) continue;
+        int xx = x + 26 + (shown % 2) * 340;
+        int yy = y + 78 + (shown / 2) * 144;
+        roundrect(xx, yy, 317, 126, i == focus ? selected_fill : surface_high);
+        symbol(xx + 20, yy + 18, i == 3 ? 5 : i, 32, ink);
+        text(xx + 65, yy + 23, windows[i].title, ink);
+        text(xx + 65, yy + 58, windows[i].min ? "已最小化" : "正在运行", muted);
+        shown++;
+    }
+    if (!shown) text(x + 30, y + 110, "没有打开的窗口", muted);
+}
+static void desktop_context_draw(void) {
+    roundrect(desktop_x + 3, desktop_y + 4, 242, 179, dark ? 0x141218 : 0xd7d2da);
+    roundrect(desktop_x, desktop_y, 242, 179, panel);
+    const char *choices[] = {"新建桌面文件", "新建文件夹", "切换壁纸", "显示系统设置"};
+    for (int i = 0; i < 4; i++)
+        text(desktop_x + 18, desktop_y + 9 + i * 41, choices[i], ink);
+}
 static void cursor(void) {
     for (int y = 0; y < 20; y++)
         for (int x = 0; x <= y / 2; x++)
@@ -1241,8 +1318,11 @@ static void render(void) {
             explorer_draw(w);
     }
     taskbar();
-    if (start_open)
-        start_draw();
+    if (start_open) start_draw();
+    if (overview_open) overview_draw();
+    if (quick_open) quick_draw();
+    if (notifications_open) notifications_draw();
+    if (desktop_context_open) desktop_context_draw();
     if (context_open)
         context_draw();
     if (notice_until > ticks) {
