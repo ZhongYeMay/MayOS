@@ -13,7 +13,7 @@ BOOT_FIRMWARE ?= hybrid
 OVMF_CODE ?= /usr/share/OVMF/OVMF_CODE_4M.fd
 OVMF_VARS ?= /usr/share/OVMF/OVMF_VARS_4M.fd
 CFLAGS := -m32 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie -fno-pic -fno-stack-protector -fno-builtin -fno-strict-aliasing -mno-sse -mno-mmx -Ibuild -Ikernel
-OBJECTS := build/boot.o build/core.o build/fs.o build/gui.o
+OBJECTS := build/boot.o build/core.o build/fs.o build/gui.o build/net.o
 .PHONY: all clean run test linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
