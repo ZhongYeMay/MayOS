@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'MayOS_0.3.0-pre1/kernel/gui.c'
+      - 'MayOS_0.3.0-pre1/scripts/ui_smoke.py'
       - '.github/workflows/verify-mayos-gui.yml'
   workflow_dispatch:
 
@@ -27,3 +28,16 @@ jobs:
         run: |
           make all
           make test
+      - name: Upload real QEMU desktop screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-graphite-GUI-screenshots
+          path: |
+            MayOS_0.3.0-pre1/build/desktop.png
+            MayOS_0.3.0-pre1/build/dark-settings.png
+            MayOS_0.3.0-pre1/build/light-settings.png
+            MayOS_0.3.0-pre1/build/files.png
+            MayOS_0.3.0-pre1/build/terminal.png
+          if-no-files-found: warn
+          retention-days: 30
