@@ -1,6 +1,9 @@
 #include "cat_image.h"
 #include "core.h"
 #include "font.h"
+#ifdef MAYOS_LINUX
+#include "explorer_history.h"
+#endif
 #define MAYOS_RELEASE "0.4.0-pre4"
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
@@ -997,11 +1000,15 @@ static void editor_draw(Window *w) {
 static char explorer_query[72], explorer_bookmark[72];
 #ifdef MAYOS_LINUX
 static int explorer_loading;
+static int explorer_scroll;
+static ExplorerHistory explorer_history;
 static char explorer_response[2048];
 #endif
 static void explorer_submit(void) {
 #ifdef MAYOS_LINUX
     explorer_loading = platform_web_start(explorer_query);
+    explorer_scroll = 0;
+    if (explorer_loading) explorer_history_push(&explorer_history, explorer_query);
     platform_web_poll(explorer_response, sizeof(explorer_response));
     dirty = 1;
 #else
@@ -1032,15 +1039,22 @@ static void explorer_draw(Window *w) {
 
     text(x + 100, y + 383, explorer_loading ? "HTTP 正在加载 / 10 秒超时" : "HTTP 文本预览 · 不支持 HTTPS / HTML 渲染", accent);
     const char *s = explorer_response;
+    int cols = (w->w - 140) / 8;
+    if (cols > 79) cols = 79;
+    for (int row = 0; row < explorer_scroll && *s; row++) {
+        int n = 0;
+        while (*s && *s != '\n' && n < cols) { s++; n++; }
+        if (*s == '\n') s++;
+    }
     for (int row = 0; row < (w->h - 420) / 20 && *s; row++) {
         char part[80];
-        int n = 0, cols = (w->w - 140) / 8;
-        if (cols > 79) cols = 79;
+        int n = 0;
         while (*s && *s != '\n' && n < cols) part[n++] = *s++;
         if (*s == '\n') s++;
         part[n] = 0;
         text(x + 70, y + 414 + row * 20, part, muted);
     }
+    text(x + 70, y + w->h - 22, "↑ ↓ 滚动响应 · 点击收藏栏打开 · 会话历史最多 8 项", muted);
 #else
     text(x + 100, y + 383, "Orange / MayKernel 网络栈尚未实现", accent);
     text(x + 100, y + 417, "请选择 Linux 启动项使用 HTTP 文本预览。", muted);
@@ -1444,6 +1458,26 @@ static void left_click(void) {
             return;
         }
         if (id == 4) {
+#ifdef MAYOS_LINUX
+            if (inside(rx, ry, 18, 50, 90, 36)) {
+                const char *url = 0;
+                if (rx < 48) url = explorer_history_move(&explorer_history, -1);
+                else if (rx < 80) url = explorer_history_move(&explorer_history, 1);
+                else if (explorer_history.count) url = explorer_history.urls[explorer_history.position];
+                if (url) {
+                    copy(explorer_query, url, sizeof(explorer_query));
+                    explorer_loading = platform_web_start(explorer_query);
+                    explorer_scroll = 0;
+                    platform_web_poll(explorer_response, sizeof(explorer_response));
+                }
+                return;
+            }
+#endif
+            if (inside(rx, ry, 20, 96, w->w - 40, 28) && explorer_bookmark[0]) {
+                copy(explorer_query, explorer_bookmark, sizeof(explorer_query));
+                explorer_submit();
+                return;
+            }
             if (inside(rx, ry, w->w - 115, 53, 90, 30)) {
                 copy(explorer_bookmark, explorer_query, sizeof(explorer_bookmark));
                 notify(explorer_query[0] ? "已收藏到本次会话" : "请先输入搜索或链接");
@@ -1630,6 +1664,22 @@ static void key_event(int k) {
         return;
     }
     if (focus == 4 && windows[4].open && !windows[4].min) {
+#ifdef MAYOS_LINUX
+        if (k == 0x101 || k == 0x102) {
+            if (k == 0x101 && explorer_scroll > 0) explorer_scroll--;
+            if (k == 0x102) {
+                int cols = (windows[4].w - 140) / 8, rows = 0, n = 0;
+                if (cols > 79) cols = 79;
+                for (const char *s = explorer_response; *s; s++) {
+                    if (*s == '\n' || ++n == cols) { rows++; n = 0; }
+                }
+                if (n) rows++;
+                int visible = (windows[4].h - 420) / 20;
+                if (explorer_scroll < rows - visible) explorer_scroll++;
+            }
+            return;
+        }
+#endif
         int n = strlen(explorer_query);
         if (k == '\n') explorer_submit();
         else if (k == '\b' && n) explorer_query[n - 1] = 0;

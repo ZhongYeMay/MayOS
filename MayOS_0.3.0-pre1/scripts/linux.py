@@ -45,6 +45,7 @@ INPUT_FILES = {
     "desktop_session_sha256": ROOT / "linux/desktop-session",
     "desktop_backend_sha256": ROOT / "linux/desktop.c",
     "desktop_gui_sha256": ROOT / "kernel/gui.c",
+    "explorer_history_sha256": ROOT / "kernel/explorer_history.h",
     "desktop_fs_sha256": ROOT / "kernel/fs.c",
     "desktop_core_header_sha256": ROOT / "kernel/core.h",
     "font_core_source_sha256": ROOT / "kernel/core.c",

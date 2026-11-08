@@ -15,3 +15,13 @@ remain required. HTTPS, redirects and full HTML rendering are still pending.
 The VERSION baseline now follows the published 0.4.0 line. Automatic prerelease
 increments update VERSION, GUI, default-file labels and Linux os-release together.
 Published pre3 ISO files and videos retain their original version and metadata.
+
+## Navigation follow-up
+
+The Linux preview now supports back, forward, reload, opening the session
+bookmark, and Up/Down response scrolling. History retains eight requested URLs,
+suppresses consecutive duplicates, and discards forward entries on a new branch.
+These controls reload responses; they do not cache pages or implement HTML.
+Source publishing uses GitHub Actions for asset uploads and allows the website
+to keep pointing to the last verified ISO and video release. Existing binary
+releases are retained as required by the current release verification policy.

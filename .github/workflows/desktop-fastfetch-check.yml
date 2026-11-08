@@ -45,6 +45,8 @@ jobs:
           python3 scripts/network_config_test.py
           gcc -std=c11 -O2 -Wall -Wextra -Werror scripts/network_transport_test.c -o build/network-transport-test
           build/network-transport-test
+          gcc -std=c11 -O2 -Wall -Wextra -Werror scripts/explorer_history_test.c -o build/explorer-history-test
+          build/explorer-history-test
       - name: Download and execute pinned official Fastfetch
         working-directory: MayOS_0.3.0-pre1
         run: |

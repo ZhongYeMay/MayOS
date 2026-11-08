@@ -39,7 +39,7 @@ jobs:
           printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-pre[1-9][0-9]*$'
           grep -Fq "#define MAYOS_RELEASE \"$VERSION\"" MayOS_0.3.0-pre1/kernel/gui.c
           grep -Fq "VERSION=\"$VERSION\"" MayOS_0.3.0-pre1/scripts/linux.py
-          grep -Fq ">$VERSION<" website/download.html
+          test "$(cat MayOS_0.3.0-pre1/VERSION)" = "$VERSION"
           python3 website/check_site.py
           python3 -m py_compile MayOS_0.3.0-pre1/scripts/linux.py
           sh -n MayOS_0.3.0-pre1/linux/network-start MayOS_0.3.0-pre1/linux/dhcp-hook
@@ -49,7 +49,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          conclusion="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
+          checked_sha="$GITHUB_SHA"
+          if [ "$(git log -1 --format=%s)" = 'chore(version): increment MayOS prerelease [skip ci]' ]; then
+            git fetch --depth=2 origin "$GITHUB_SHA"
+            git diff --exit-code HEAD^ HEAD -- . ':!MayOS_0.3.0-pre1/VERSION' ':!MayOS_0.3.0-pre1/kernel/gui.c' ':!MayOS_0.3.0-pre1/kernel/fs.c' ':!MayOS_0.3.0-pre1/scripts/linux.py'
+            checked_sha="$(git rev-parse HEAD^)"
+          fi
+          conclusion="$(gh api "repos/$GITHUB_REPOSITORY/commits/$checked_sha/check-runs" \
             --jq '[.check_runs[] | select(.name == "build") | .conclusion] | first // ""')"
           test "$conclusion" = success
 
@@ -75,7 +81,7 @@ jobs:
             printf 'This version of MayOS is for test use only.\n'
           } > "$release_dir/NOTES.md"
 
-      - name: Publish prerelease and retain only the newest Release
+      - name: Publish source prerelease
         env:
           GH_TOKEN: ${{ github.token }}
           GH_PROMPT_DISABLED: "1"
@@ -94,12 +100,6 @@ jobs:
             --target "$GITHUB_SHA" --prerelease --latest=false \
             --title "MayOS $VERSION · source prerelease" \
             --notes-file "$release_dir/NOTES.md"
-          current_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .id)"
-          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
-            --jq ".[] | select(.id != $current_id) | .id" |
-          while read -r release_id; do
-            [ -z "$release_id" ] || gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/$release_id"
-          done
 
       - name: Preserve workflow artifact
         uses: actions/upload-artifact@v4

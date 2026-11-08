@@ -22,7 +22,7 @@ build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
 	$(PYTHON) scripts/font.py
 build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 	$(PYTHON) scripts/photo.py
-build/gui.o: build/cat_image.h
+build/gui.o: build/cat_image.h kernel/explorer_history.h
 build/boot.o: kernel/boot.S | build
 	$(CC) -m32 -c $< -o $@
 build/%.o: kernel/%.c kernel/core.h kernel/io.h build/font.h
