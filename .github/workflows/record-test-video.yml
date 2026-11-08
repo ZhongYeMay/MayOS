@@ -1,0 +1,43 @@
+name: Record test video from verified pre3 ISO
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 ovmf ffmpeg
+      - name: Download and verify published ISO
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist MayOS_0.3.0-pre1/build
+          gh release download v0.4.0-pre3 --pattern 'MayOS-0.4.0-pre3-dual-boot.iso' --pattern SHA256SUMS.txt --dir dist
+          cd dist
+          grep 'MayOS-0.4.0-pre3-dual-boot.iso$' SHA256SUMS.txt > iso-check.txt
+          test -s iso-check.txt
+          sha256sum -c iso-check.txt
+      - name: Capture actual Linux boot and desktop
+        run: |
+          source_commit="$(git rev-list -n 1 v0.4.0-pre3 2>/dev/null || true)"
+          if [ -z "$source_commit" ]; then
+            git fetch --depth=1 origin tag v0.4.0-pre3
+            source_commit="$(git rev-list -n 1 v0.4.0-pre3)"
+          fi
+          python3 MayOS_0.3.0-pre1/scripts/record_boot.py --kernel linux --firmware uefi \
+            --iso dist/MayOS-0.4.0-pre3-dual-boot.iso \
+            --release 0.4.0-pre3 --source-commit "$source_commit" \
+            --ovmf-code /usr/share/OVMF/OVMF_CODE_4M.fd \
+            --ovmf-vars /usr/share/OVMF/OVMF_VARS_4M.fd \
+            --output dist/MayOS-pre3-Linux-test.mp4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MayOS-Linux-test-video
+          path: |
+            dist/*.mp4
+            dist/*.json
+            MayOS_0.3.0-pre1/build/record-*.log
