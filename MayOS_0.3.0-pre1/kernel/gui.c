@@ -1668,12 +1668,15 @@ static void key_event(int k) {
         if (k == 0x101 || k == 0x102) {
             if (k == 0x101 && explorer_scroll > 0) explorer_scroll--;
             if (k == 0x102) {
-                int cols = (windows[4].w - 140) / 8, rows = 0, n = 0;
+                int cols = (windows[4].w - 140) / 8, rows = 0;
                 if (cols > 79) cols = 79;
-                for (const char *s = explorer_response; *s; s++) {
-                    if (*s == '\n' || ++n == cols) { rows++; n = 0; }
+                const char *s = explorer_response;
+                while (*s) {
+                    int n = 0;
+                    while (*s && *s != '\n' && n < cols) { s++; n++; }
+                    if (*s == '\n') s++;
+                    rows++;
                 }
-                if (n) rows++;
                 int visible = (windows[4].h - 420) / 20;
                 if (explorer_scroll < rows - visible) explorer_scroll++;
             }
