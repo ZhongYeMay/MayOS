@@ -51,11 +51,19 @@ jobs:
         run: |
           set -eu
           checked_sha="$GITHUB_SHA"
-          if [ "$(git log -1 --format=%s)" = 'chore(version): increment MayOS prerelease [skip ci]' ]; then
-            git fetch --depth=2 origin "$GITHUB_SHA"
-            git diff --exit-code HEAD^ HEAD -- . ':!MayOS_0.3.0-pre1/VERSION' ':!MayOS_0.3.0-pre1/kernel/gui.c' ':!MayOS_0.3.0-pre1/kernel/fs.c' ':!MayOS_0.3.0-pre1/scripts/linux.py'
-            checked_sha="$(git rev-parse HEAD^)"
-          fi
+          git fetch --depth=10 origin "$GITHUB_SHA"
+          for attempt in 1 2 3 4; do
+            subject="$(git log -1 --format=%s "$checked_sha")"
+            case "$subject" in
+              'chore(version): increment MayOS prerelease [skip ci]')
+                git diff --exit-code "$checked_sha^" "$checked_sha" -- . ':!MayOS_0.3.0-pre1/VERSION' ':!MayOS_0.3.0-pre1/kernel/gui.c' ':!MayOS_0.3.0-pre1/kernel/fs.c' ':!MayOS_0.3.0-pre1/scripts/linux.py'
+                checked_sha="$(git rev-parse "$checked_sha^")";;
+              'Publish verified MayOS desktop screenshot [skip ci]')
+                git diff --exit-code "$checked_sha^" "$checked_sha" -- . ':!website/media/MayOS-latest-desktop.png'
+                checked_sha="$(git rev-parse "$checked_sha^")";;
+              *) break;;
+            esac
+          done
           conclusion="$(gh api "repos/$GITHUB_REPOSITORY/commits/$checked_sha/check-runs" \
             --jq '[.check_runs[] | select(.name == "build") | .conclusion] | first // ""')"
           test "$conclusion" = success

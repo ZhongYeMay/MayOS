@@ -12,6 +12,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: mayos-gui-screenshot
+  cancel-in-progress: true
+
 jobs:
   test-gui:
     runs-on: ubuntu-24.04
@@ -56,6 +60,7 @@ jobs:
         run: |
           set -eu
           test -s MayOS_0.3.0-pre1/build/desktop.png
+          git pull --ff-only origin main
           mkdir -p website/media
           cp MayOS_0.3.0-pre1/build/desktop.png website/media/MayOS-latest-desktop.png
           git config user.name "github-actions[bot]"
@@ -66,5 +71,4 @@ jobs:
             exit 0
           fi
           git commit -m "Publish verified MayOS desktop screenshot [skip ci]"
-          git pull --rebase origin main
           git push origin HEAD:main
