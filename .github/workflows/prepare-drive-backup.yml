@@ -1,0 +1,105 @@
+name: Prepare complete MayOS versioned Google Drive backup bundles
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/prepare-drive-backup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: "0.3.0-pre1-source.1"
+            tag: "v0.3.0-pre1-source.1"
+          - version: "0.3.0"
+            tag: "v0.3.0"
+          - version: "0.4.0-pre1"
+            tag: "v0.4.0-pre1"
+          - version: "0.4.0-pre2"
+            tag: "v0.4.0-pre2"
+          - version: "0.4.0-pre3"
+            tag: "v0.4.0-pre3"
+          - version: "0.4.0-pre7"
+            tag: "v0.4.0-pre7"
+    name: Archive MayOS ${{ matrix.version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MAYOS_TAG: ${{ matrix.tag }}
+      MAYOS_VERSION: ${{ matrix.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download every published release asset unchanged
+        run: |
+          set -euo pipefail
+          mkdir -p downloaded backup/source backup/iso
+          gh release download "$MAYOS_TAG" --repo "$GITHUB_REPOSITORY" --dir downloaded
+          test "$(find downloaded -type f | wc -l)" -gt 0
+          git fetch origin "refs/tags/$MAYOS_TAG:refs/tags/$MAYOS_TAG" || git fetch --tags origin
+          git rev-parse "$MAYOS_TAG^{commit}" > backup/source/RELEASE_SOURCE_COMMIT.txt
+          git archive --format=tar "$MAYOS_TAG" | gzip -9 \
+            > "backup/source/MayOS-$MAYOS_VERSION-full-repository-snapshot.tar.gz"
+          for file in downloaded/*; do
+            filename="$(basename "$file")"
+            case "$filename" in
+              *source*|*Source*) cp "$file" backup/source/ ;;
+              *) cp "$file" backup/iso/ ;;
+            esac
+          done
+          if ! find backup/iso -maxdepth 1 -name '*.iso' | grep -q .; then
+            cat > backup/iso/NO_PUBLISHED_ISO.txt <<'EOF'
+          This release contains no published ISO asset.
+          No ISO was manufactured or inferred from another version.
+          Consult the release page or build an ISO from the corresponding source.
+          EOF
+          fi
+          cat > backup/source/BUILD_ORIGIN.txt <<EOF
+          Release: $MAYOS_TAG
+          Repository: https://github.com/ZhongYeMay/MayOS
+          Release URL: https://github.com/ZhongYeMay/MayOS/releases/tag/$MAYOS_TAG
+          Official website: https://zhongyemay.github.io/MayOS/
+          The full-repository snapshot includes tracked build scripts and source files.
+          Source package assets from the release are also preserved unchanged.
+          Prebuilt third-party toolchains may be required to reproduce the ISOs.
+          EOF
+          cat > backup/iso/RELEASE_ORIGIN.txt <<EOF
+          Release: $MAYOS_TAG
+          Repository: https://github.com/ZhongYeMay/MayOS
+          Release URL: https://github.com/ZhongYeMay/MayOS/releases/tag/$MAYOS_TAG
+          ISO files and supplementary release assets are copied unchanged.
+          EOF
+          (cd backup/source && sha256sum * > BACKUP_SHA256SUMS.txt)
+          (cd backup/iso && sha256sum * > BACKUP_SHA256SUMS.txt)
+          (cd backup/source && sha256sum -c BACKUP_SHA256SUMS.txt)
+          (cd backup/iso && sha256sum -c BACKUP_SHA256SUMS.txt)
+          echo "SOURCE CONTENTS:"
+          ls -lh backup/source
+          echo "RELEASED BINARY CONTENTS:"
+          ls -lh backup/iso
+      - name: Preserve complete build source and tools for Google Drive
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-source-${{ matrix.version }}
+          path: backup/source/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Preserve original released ISOs and media for Google Drive
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-ISO-${{ matrix.version }}
+          path: backup/iso/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
