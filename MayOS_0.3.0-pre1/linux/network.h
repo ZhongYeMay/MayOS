@@ -9,7 +9,7 @@
 #include <sys/time.h>
 static pid_t web_pid = -1;
 static int web_fd = -1, web_used;
-static time_t web_started;
+static struct timespec web_started;
 static char web_result[2048];
 
 static void web_stop(void) {
@@ -20,6 +20,10 @@ static void web_stop(void) {
     if (web_fd >= 0) close(web_fd);
     web_pid = -1;
     web_fd = -1;
+}
+void platform_web_cancel(void) {
+    web_stop();
+    snprintf(web_result, sizeof(web_result), "Request cancelled.");
 }
 static void web_child(const char *host, const char *port, const char *path) {
     struct addrinfo hints = {0}, *addresses = NULL;
@@ -72,8 +76,8 @@ int platform_web_start(const char *url) {
     web_stop(); web_used = 0;
     snprintf(web_result, sizeof(web_result), "Only http:// URLs are supported. HTTPS/search engines need TLS.");
     if (strncmp(url, "http://", 7) || strlen(url) > 600) return 0;
-    const char *authority = url + 7, *path = strchr(authority, '/');
-    size_t length = path ? (size_t)(path - authority) : strlen(authority);
+    const char *authority = url + 7;
+    size_t length = strcspn(authority, "/?#");
     if (!length || length >= 254) return 0;
     char host[254], port[6] = "80";
     memcpy(host, authority, length); host[length] = 0;
@@ -90,7 +94,12 @@ int platform_web_start(const char *url) {
     for (const char *c = host; *c; c++)
         if (!((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') ||
               (*c >= '0' && *c <= '9') || *c == '.' || *c == '-')) return 0;
-    if (!path) path = "/";
+    const char *suffix = authority + length;
+    char target[604];
+    size_t target_length = strcspn(suffix, "#");
+    snprintf(target, sizeof(target), "%s%.*s", *suffix == '/' ? "" : "/",
+             (int)target_length, suffix);
+    const char *path = target;
     for (const char *c = path; *c; c++) if (*c <= 32 || (unsigned char)*c >= 127) return 0;
     int fds[2];
     if (pipe(fds)) return 0;
@@ -102,8 +111,12 @@ int platform_web_start(const char *url) {
     close(fds[1]);
     if (web_pid < 0) { close(fds[0]); return 0; }
     web_fd = fds[0];
-    fcntl(web_fd, F_SETFL, O_NONBLOCK);
-    web_started = time(NULL);
+    if (fcntl(web_fd, F_SETFL, O_NONBLOCK) < 0) {
+        web_stop();
+        snprintf(web_result, sizeof(web_result), "Cannot start asynchronous request.");
+        return 0;
+    }
+    clock_gettime(CLOCK_MONOTONIC, &web_started);
     web_result[0] = 0;
     return 1;
 }
@@ -114,9 +127,14 @@ int platform_web_poll(char *destination, int capacity) {
         if (n > 0) { web_used += (int)n; web_result[web_used] = 0; }
         if (n == 0 || (n < 0 && errno != EAGAIN && errno != EINTR) || web_used >= (int)sizeof(web_result) - 1)
             web_stop();
-        else if (time(NULL) - web_started >= 10) {
+        else {
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            if (now.tv_sec - web_started.tv_sec > 10 ||
+                (now.tv_sec - web_started.tv_sec == 10 && now.tv_nsec >= web_started.tv_nsec)) {
             web_stop();
             snprintf(web_result, sizeof(web_result), "Request timed out after 10 seconds.");
+            }
         }
     }
     if (capacity > 0) snprintf(destination, (size_t)capacity, "%s", web_result);

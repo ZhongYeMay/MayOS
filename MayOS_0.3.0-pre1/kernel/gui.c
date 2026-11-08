@@ -1,7 +1,7 @@
 #include "cat_image.h"
 #include "core.h"
 #include "font.h"
-#define MAYOS_RELEASE "0.3.0-pre30"
+#define MAYOS_RELEASE "0.4.0-pre3"
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
 #define PLATFORM_BADGE "LINUX SESSION"
@@ -1021,6 +1021,9 @@ static void explorer_draw(Window *w) {
     roundrect(x + 100, y + 260, w->w - 200, 44, bg);
     text(x + 114, y + 272, explorer_query[0] ? explorer_query : "http://example.com/", ink);
     button(x + w->w - 92, y + 267, 65, "转到", 1);
+#ifdef MAYOS_LINUX
+    if (explorer_loading) button(x + w->w - 92, y + 312, 65, "停止", 0);
+#endif
     text(x + 100, y + 337, "网络 / HTTP 文本预览。HTTPS 与完整浏览器尚未支持。", muted);
 #ifdef MAYOS_LINUX
     char network_report[384];
@@ -1445,6 +1448,13 @@ static void left_click(void) {
                 copy(explorer_bookmark, explorer_query, sizeof(explorer_bookmark));
                 notify(explorer_query[0] ? "已收藏到本次会话" : "请先输入搜索或链接");
             } else if (inside(rx, ry, w->w - 92, 267, 65, 30)) explorer_submit();
+#ifdef MAYOS_LINUX
+            else if (explorer_loading && inside(rx, ry, w->w - 92, 312, 65, 30)) {
+                platform_web_cancel();
+                explorer_loading = 0;
+                platform_web_poll(explorer_response, sizeof(explorer_response));
+            }
+#endif
             return;
         }
         if (id == 1) {

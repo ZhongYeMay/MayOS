@@ -67,8 +67,16 @@ jobs:
               raise SystemExit("Could not locate MayOS GUI version constant")
           gui_file.write_text(source)
           version_file.write_text(next_version + "\n")
+          for relative in ("kernel/fs.c", "scripts/linux.py"):
+              path = version_file.parent / relative
+              source = path.read_text()
+              source = re.sub(r'(MayOS (?:Linux Live )?)\d+\.\d+\.\d+(?:-pre\d+)?',
+                              lambda m: m.group(1) + next_version, source)
+              source = re.sub(r'VERSION="\d+\.\d+\.\d+(?:-pre\d+)?"',
+                              f'VERSION="{next_version}"', source)
+              path.write_text(source)
           print("Advanced MayOS version:", version, "->", next_version)
           PY
-          git add MayOS_0.3.0-pre1/VERSION MayOS_0.3.0-pre1/kernel/gui.c
+          git add MayOS_0.3.0-pre1/VERSION MayOS_0.3.0-pre1/kernel/gui.c MayOS_0.3.0-pre1/kernel/fs.c MayOS_0.3.0-pre1/scripts/linux.py
           git commit -m "chore(version): increment MayOS prerelease [skip ci]"
           git push origin HEAD:main

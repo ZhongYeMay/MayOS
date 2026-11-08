@@ -31,7 +31,8 @@ int main(void) {
         assert(client >= 0);
         char request[1024] = {0};
         assert(read(client, request, sizeof(request) - 1) > 0);
-        assert(strstr(request, "GET /hello HTTP/1.0\r\n"));
+        assert(strstr(request, "GET /hello?name=MayOS HTTP/1.0\r\n"));
+        assert(!strstr(request, "fragment"));
         const char reply[] = "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\nMayOS network works\n";
         assert(write(client, reply, sizeof(reply) - 1) == (ssize_t)sizeof(reply) - 1);
         close(client);
@@ -41,7 +42,7 @@ int main(void) {
     close(server);
 
     char url[128];
-    snprintf(url, sizeof(url), "http://127.0.0.1:%u/hello", ntohs(address.sin_port));
+    snprintf(url, sizeof(url), "http://127.0.0.1:%u/hello?name=MayOS#fragment", ntohs(address.sin_port));
     assert(platform_web_start(url));
     char result[2048] = {0};
     for (int attempt = 0; attempt < 200 && platform_web_poll(result, sizeof(result)); attempt++)
@@ -55,6 +56,12 @@ int main(void) {
     platform_web_poll(result, sizeof(result));
     assert(strstr(result, "Only http://"));
     assert(!platform_web_start("http://bad host/"));
+    assert(!platform_web_start("http://example.com:99999/"));
+    assert(!platform_web_start("http://example.com/path\r\nInjected:yes"));
+    assert(platform_web_start("http://127.0.0.1:1/?q=test"));
+    platform_web_cancel();
+    assert(!platform_web_poll(result, sizeof(result)));
+    assert(strstr(result, "cancelled"));
     puts("PASS: asynchronous HTTP transport, response capture and URL rejection");
     return 0;
 }
