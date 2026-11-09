@@ -1252,10 +1252,10 @@ static void gal_wrap(int x, int y, const char *src, int maxw, u32 color) {
     while (*p && row < 8) {
         const char *begin = p; int c = utf(&p);
         int bytes = (int)(p - begin), cw = c < 128 ? 8 : 16;
-        if (c == '\\n' || width + cw > maxw || used + bytes >= (int)sizeof(buf) - 1) {
+        if (c == '\n' || width + cw > maxw || used + bytes >= (int)sizeof(buf) - 1) {
             buf[used] = 0; text(x, y + row * 27, buf, color);
             row++; used = 0; width = 0;
-            if (c == '\\n') continue;
+            if (c == '\n') continue;
         }
         for (int k = 0; k < bytes; k++) buf[used++] = begin[k];
         width += cw;
@@ -1300,13 +1300,13 @@ static void gal_key(int k) {
     if (k == 27) { windows[5].min = 1; return; }
     if (k == 'l' || k == 'L') { gal_load(); return; }
     if (!gal_active) {
-        if (k == '\\n' || k == ' ') { gal_active = 1; gal_goto("p0"); }
+        if (k == '\n' || k == ' ') { gal_active = 1; gal_goto("p0"); }
         return;
     }
     if (k == 's' || k == 'S') { gal_save(); return; }
     if (n->choices && (k == 0x101 || k == 0x102)) {
         gal_choice = (gal_choice + (k == 0x102 ? 1 : n->choices - 1)) % n->choices;
-    } else if (k == '\\n' || k == ' ') gal_advance();
+    } else if (k == '\n' || k == ' ') gal_advance();
 }
 static void gal_click(int rx, int ry) {
     if (!gal_active) {
