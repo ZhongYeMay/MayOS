@@ -1,6 +1,7 @@
 #include "cat_image.h"
 #include "core.h"
 #include "font.h"
+#include "galgame_story.h"
 #ifdef MAYOS_LINUX
 #include "explorer_history.h"
 #endif
@@ -230,13 +231,14 @@ typedef struct {
     int x, y, w, h, open, min, max, ox, oy, ow, oh;
     const char *title;
 } Window;
-#define WINDOW_COUNT 5
+#define WINDOW_COUNT 6
 static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "文件 / Files"},
                             {186, 74, 800, 620, 1, 0, 0, 0, 0, 0, 0, "系统设置 / System Settings"},
                             {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
                             {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
-                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
-static int order[WINDOW_COUNT] = {0, 2, 3, 4, 1}, focus = 1, dirty = 1;
+                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"},
+                            {120, 65, 850, 610, 0, 0, 0, 0, 0, 0, 0, "夏日未寄 / Native Galgame"}};
+static int order[WINDOW_COUNT] = {0, 2, 3, 4, 5, 1}, focus = 1, dirty = 1;
 static int mx = 530, my = 390, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
            cut = 0, settings_tab = 0;
@@ -683,6 +685,9 @@ static void desktop(void) {
         text(i == 3 ? 30 : 38, top + 58, names[i], muted);
     }
     symbol(35, 489, 4, 28, ink);
+    roundrect(22, 577, 60, 64, surface_high);
+    text(30, 583, "夏日", accent);
+    text(30, 607, "未寄", ink);
     text(17, 535, "Explorer", muted);
     large_text(728, 594, "MayOS", muted);
     text(729, 640, "MATERIAL WORKSPACE / " MAYOS_RELEASE, muted);
@@ -1070,17 +1075,17 @@ static void taskbar(void) {
     text(46, H - 34, "应用", ink);
     for (int i = 0; i < WINDOW_COUNT; i++)
         if (windows[i].open) {
-            int x = 110 + i * 126;
+            int x = 110 + i * 108;
             int active = focus == i && !windows[i].min;
-            rect(x, H - 38, 118, 31, active ? selected_fill : surface_high);
+            rect(x, H - 38, 104, 31, active ? selected_fill : surface_high);
             text(x + 14, H - 34,
-                 i == 0   ? "文件"
+                 i == 5 ? "夏日未寄" : i == 0   ? "文件"
                  : i == 1 ? "系统设置"
                  : i == 2 ? ">_ 终端"
                           : i == 3 ? "文本编辑器" : "Explorer",
                  active ? ink : muted);
             if (active)
-                rect(x + 12, H - 6, 94, 2, accent);
+                rect(x + 12, H - 6, 80, 2, accent);
         }
     circle(772, H - 23, 3, disk_ready ? accent : 0x86a5b2);
     text(785, H - 33,
@@ -1205,6 +1210,118 @@ static void cursor(void) {
     rect(mx + 6, my + 14, 3, 9, 0x223149);
     rect(mx + 7, my + 15, 1, 6, 0xffffff);
 }
+
+/* Native visual-novel runtime: no DOM, browser, network, or JavaScript. */
+static int gal_index = 0, gal_choice = 0, gal_active = 0;
+static int gal_find(const char *id) {
+    for (int i = 0; i < (int)GAL_NODES_COUNT; i++)
+        if (!strcmp(gal_nodes[i].id, id)) return i;
+    return -1;
+}
+static void gal_goto(const char *id) {
+    int i = gal_find(id);
+    if (i >= 0) { gal_index = i; gal_choice = 0; }
+}
+static void gal_save(void) {
+    int i = fs_find(1, "summer-save.txt");
+    if (i < 0) i = fs_create(1, "summer-save.txt", 0);
+    if (i < 0) { notify("存档失败：存储空间不足"); return; }
+    copy((char *)files[i].data, gal_nodes[gal_index].id, FILE_CAP);
+    files[i].size = strlen((char *)files[i].data);
+    if (!fs_sync())
+        notify("已保存到会话；此系统未启用持久化存储");
+    else notify("游戏进度已保存到 MayFS");
+}
+static void gal_load(void) {
+    int i = fs_find(1, "summer-save.txt");
+    if (i < 0) { notify("没有找到游戏存档"); return; }
+    int node = gal_find((char *)files[i].data);
+    if (node < 0) { notify("存档格式不正确"); return; }
+    gal_index = node; gal_choice = 0; gal_active = 1;
+    notify("游戏存档已读取");
+}
+static void gal_advance(void) {
+    const GalNode *n = &gal_nodes[gal_index];
+    if (n->ending) { gal_index = 0; gal_active = 0; return; }
+    if (n->choices) gal_goto(n->target[gal_choice]);
+    else if (n->next[0]) gal_goto(n->next);
+}
+static void gal_wrap(int x, int y, const char *src, int maxw, u32 color) {
+    char buf[320]; int used = 0, width = 0, row = 0;
+    const char *p = src;
+    while (*p && row < 8) {
+        const char *begin = p; int c = utf(&p);
+        int bytes = (int)(p - begin), cw = c < 128 ? 8 : 16;
+        if (c == '\\n' || width + cw > maxw || used + bytes >= (int)sizeof(buf) - 1) {
+            buf[used] = 0; text(x, y + row * 27, buf, color);
+            row++; used = 0; width = 0;
+            if (c == '\\n') continue;
+        }
+        for (int k = 0; k < bytes; k++) buf[used++] = begin[k];
+        width += cw;
+    }
+    if (used && row < 8) { buf[used] = 0; text(x, y + row * 27, buf, color); }
+}
+static void gal_draw(Window *w) {
+    int x = w->x, y = w->y, cw = w->w - 36;
+    rect(x + 1, y + 43, w->w - 2, w->h - 44, 0x171923);
+    rect(x + 18, y + 60, cw, w->h - 175, 0x303a4a);
+    /* A native graphical scene, intentionally not a webview. */
+    circle(x + w->w - 138, y + 150, 55, 0xc8a9a2);
+    rect(x + 18, y + 315, cw, 2, 0x8790a0);
+    text(x + 40, y + 82, "夏日未寄", 0xf3e7de);
+    text(x + 40, y + 114, "夏の便り  /  LETTERS TO SUMMER", 0xd3cad7);
+    text(x + 40, y + 148, "KAMAKURA · 2026", 0xc6b7ca);
+    if (!gal_active) {
+        large_text(x + 55, y + 237, "夏日未寄", 0xffffff);
+        text(x + 58, y + 290, "三封未寄的信 · 六种夏日的答案", 0xf4e8df);
+        button(x + 65, y + w->h - 118, 180, "开始新游戏", 1);
+        button(x + 265, y + w->h - 118, 160, "继续存档", 0);
+        text(x + 60, y + w->h - 60, "原生游戏 · MayKernel / Linux · 无需浏览器", 0xc9c9d5);
+        return;
+    }
+    const GalNode *n = &gal_nodes[gal_index];
+    roundrect(x + 26, y + w->h - 273, w->w - 52, 212, 0x242432);
+    text(x + 45, y + w->h - 257, n->who, 0xd0bcff);
+    gal_wrap(x + 45, y + w->h - 220, n->line, w->w - 100, 0xf5f0f7);
+    if (n->choices) {
+        for (int i = 0; i < n->choices; i++) {
+            rect(x + 45, y + 205 + i * 48, w->w - 90,
+                 40, i == gal_choice ? 0x5a447e : 0x393547);
+            gal_wrap(x + 57, y + 213 + i * 48, n->choice[i], w->w - 116, 0xf8f2ff);
+        }
+    }
+    text(x + 40, y + w->h - 43, n->ending ? "结局 · Enter 返回标题" :
+         n->choices ? "方向键选择 · Enter 确认" : "Enter / Space / 点击继续", 0xcac4d0);
+    text(x + w->w - 255, y + w->h - 43, "S 存档   L 读档", 0xcac4d0);
+}
+static void gal_key(int k) {
+    const GalNode *n = &gal_nodes[gal_index];
+    if (k == 27) { windows[5].min = 1; return; }
+    if (k == 'l' || k == 'L') { gal_load(); return; }
+    if (!gal_active) {
+        if (k == '\\n' || k == ' ') { gal_active = 1; gal_goto("p0"); }
+        return;
+    }
+    if (k == 's' || k == 'S') { gal_save(); return; }
+    if (n->choices && (k == 0x101 || k == 0x102)) {
+        gal_choice = (gal_choice + (k == 0x102 ? 1 : n->choices - 1)) % n->choices;
+    } else if (k == '\\n' || k == ' ') gal_advance();
+}
+static void gal_click(int rx, int ry) {
+    if (!gal_active) {
+        if (rx >= 65 && rx < 245 && ry >= windows[5].h - 118 && ry < windows[5].h - 80) {
+            gal_active = 1; gal_goto("p0");
+        } else if (rx >= 265 && rx < 425 && ry >= windows[5].h - 118 &&
+                   ry < windows[5].h - 80) gal_load();
+        return;
+    }
+    const GalNode *n = &gal_nodes[gal_index];
+    if (n->choices && ry >= 205 && ry < 205 + n->choices * 48) {
+        gal_choice = (ry - 205) / 48;
+    } else gal_advance();
+}
+
 static void render(void) {
     palette();
     desktop();
@@ -1222,8 +1339,10 @@ static void render(void) {
             terminal_draw(w);
         else if (i == 3)
             editor_draw(w);
-        else
+        else if (i == 4)
             explorer_draw(w);
+        else
+            gal_draw(w);
     }
     taskbar();
     if (start_open)
@@ -1382,6 +1501,7 @@ static void left_click(void) {
         }
         context_open = 0;
     }
+    if (inside(mx, my, 22, 577, 60, 64) && !start_open) { raise_window(5); return; }
     if (my >= H - 46) {
         if (mx < 100) {
             start_open = !start_open;
@@ -1389,7 +1509,7 @@ static void left_click(void) {
             return;
         }
         for (int i = 0; i < WINDOW_COUNT; i++)
-            if (windows[i].open && inside(mx, my, 110 + i * 126, H - 38, 118, 31)) {
+            if (windows[i].open && inside(mx, my, 110 + i * 108, H - 38, 104, 31)) {
                 if (focus == i && !windows[i].min)
                     windows[i].min = 1;
                 else
@@ -1457,6 +1577,7 @@ static void left_click(void) {
             }
             return;
         }
+        if (id == 5) { gal_click(rx, ry); return; }
         if (id == 4) {
 #ifdef MAYOS_LINUX
             if (inside(rx, ry, 18, 50, 90, 36)) {
@@ -1663,6 +1784,7 @@ static void key_event(int k) {
         }
         return;
     }
+    if (focus == 5 && windows[5].open && !windows[5].min) { gal_key(k); return; }
     if (focus == 4 && windows[4].open && !windows[4].min) {
 #ifdef MAYOS_LINUX
         if (k == 0x101 || k == 0x102) {
