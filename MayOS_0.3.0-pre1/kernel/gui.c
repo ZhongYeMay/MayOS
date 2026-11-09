@@ -4,7 +4,7 @@
 #ifdef MAYOS_LINUX
 #include "explorer_history.h"
 #endif
-#define MAYOS_RELEASE "0.4.0-pre32"
+#define MAYOS_RELEASE "0.4.0-pre33"
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
 #define PLATFORM_BADGE "LINUX SESSION"
