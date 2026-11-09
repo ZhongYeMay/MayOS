@@ -1,0 +1,116 @@
+name: Release verified Summer Letters native MayOS dual-kernel game
+
+on:
+  push:
+    branches: [feature/summer-letters-native]
+    paths:
+      - '.github/workflows/release-summer-letters-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: release-summer-letters-native-r1
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'ZhongYeMay/MayOS'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERIFIED_RUN: '42661733533'
+      SOURCE_SHA: 0104e2d1e60bf833d5a0e77a7a9facccb15ec705
+      TAG: summer-letters-mayos-native-r1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require exact successful QEMU MayKernel and Linux test run
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN" --jq .head_sha)" = "$SOURCE_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN" --jq .conclusion)" = success
+          test "$(git show "$SOURCE_SHA:MayOS_0.3.0-pre1/VERSION")" = "0.4.0-pre9"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_RUN/jobs" \
+            --jq '[.jobs[] | select(.conclusion=="success")] | length')" -ge 2
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Preview already published; refusing to overwrite" >&2
+            exit 1
+          fi
+      - name: Download only the validated ISOs and genuine QEMU captures
+        run: |
+          set -euo pipefail
+          mkdir -p verified/native verified/dual dist
+          gh run download "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name Summer-Letters-MayKernel-native-ISO-and-screenshots \
+            --dir verified/native
+          gh run download "$VERIFIED_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name Summer-Letters-dual-kernel-ISO-and-QEMU-captures \
+            --dir verified/dual
+          test -s verified/native/mayos.iso
+          test -s verified/native/summer-letters-title.png
+          test -s verified/dual/mayos-dual.iso
+          test -s verified/dual/galgame-dual-linux-title.png
+          test -s verified/dual/galgame-dual-maykernel-title.png
+          (cd verified/dual && sha256sum -c SUMMER-LETTERS-SHA256SUMS.txt)
+          cp verified/native/mayos.iso dist/MayOS-SummerLetters-MayKernel-x86.iso
+          cp verified/dual/mayos-dual.iso dist/MayOS-SummerLetters-Dual-BIOS-UEFI.iso
+          cp verified/native/summer-letters-title.png dist/MayOS-SummerLetters-MayKernel.png
+          cp verified/dual/galgame-dual-linux-title.png dist/MayOS-SummerLetters-Linux.png
+          cp verified/native/galgame_manifest.json dist/ORIGINAL-STORY-MANIFEST.json
+          git archive --format=tar "$SOURCE_SHA" | gzip -9 > dist/MayOS-SummerLetters-tested-source.tar.gz
+          cp SUMMER-LETTERS-PORT.md dist/PORTING-NOTES.md
+          (cd dist && sha256sum *.iso *.tar.gz > SHA256SUMS.txt)
+          (cd dist && sha256sum -c SHA256SUMS.txt)
+      - name: Write release description and tested feature list
+        run: |
+          cat > dist/RELEASE_NOTES.md <<'EOF'
+          # 夏日未寄 — MayOS 双内核原生移植预览 r1
+
+          Based on the exact tested **MayOS 0.4.0-pre9 development snapshot**.
+          This game-specific preview is **not** a replacement for the latest
+          numbered MayOS release.
+
+          **Original game:** https://github.com/ZhongYeMay/galgame
+          **MayOS source:** https://github.com/ZhongYeMay/MayOS
+
+          - Native 1024x768 QEMU visual novel app for MayKernel x86 and
+            MayOS Linux 7.3.1 x86_64.
+          - All 97 original story nodes, 3 routes, 6 standard endings.
+          - All 12 original generated AI WebP backgrounds and character
+            expression images reproduced as native indexed framebuffer art.
+          - Keyboard/mouse story choices, dialogue advance, gallery, backlog,
+            autoplay, 3 save/load slots and desktop launcher.
+          - MayKernel: MayFS saves survive cold reboots with writable virtual disk.
+          - Linux: saves remain available only within the current RAM session.
+          - Successful real QEMU custom-kernel ISO tests, dual-kernel BIOS and
+            UEFI boots, and actual GUI game input/save verification on each kernel.
+          - Bundled images are built into both ISO files and game does not need
+            a network connection at runtime.
+
+          **Not included:** HTML/CSS/JS browser runtime, audio/BGM, animated
+          web transitions, optional mature epilogues or physical PC support.
+          Previews and tests run in QEMU, not on a real physical computer.
+
+          Attachments include native MayKernel ISO, dual-kernel BIOS/UEFI ISO,
+          authentic QEMU screenshots for both kernels, exact tested source
+          archive, source provenance manifest, porting notes and SHA256SUMS.
+          EOF
+      - name: Publish immutable game-specific prerelease with real bootable ISOs
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            dist/MayOS-SummerLetters-MayKernel-x86.iso \
+            dist/MayOS-SummerLetters-Dual-BIOS-UEFI.iso \
+            dist/MayOS-SummerLetters-MayKernel.png \
+            dist/MayOS-SummerLetters-Linux.png \
+            dist/MayOS-SummerLetters-tested-source.tar.gz \
+            dist/ORIGINAL-STORY-MANIFEST.json \
+            dist/PORTING-NOTES.md dist/SHA256SUMS.txt \
+            --target "$SOURCE_SHA" \
+            --title 'MayOS × 夏日未寄：双内核原生移植预览 r1' \
+            --notes-file dist/RELEASE_NOTES.md --prerelease
