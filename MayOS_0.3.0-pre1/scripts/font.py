@@ -5,7 +5,7 @@ import os
 from PIL import Image, ImageFont, ImageDraw
 root=Path(__file__).resolve().parents[1]
 chars=set(range(32,127))
-for source in list((root/'kernel').glob('*.c')) + list((root/'kernel').glob('galgame_*.h')):
+for source in (root/'kernel').glob('*.c'):
     chars.update(map(ord,source.read_text()))
 chars=sorted(c for c in chars if c>=32 and c<65536)
 font_path=os.environ.get('MAYOS_FONT','/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc')
