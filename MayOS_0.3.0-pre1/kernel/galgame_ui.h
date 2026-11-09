@@ -314,7 +314,10 @@ static void gn_click(Window *w, int rx, int ry) {
         return;
     }
     if (gn_mode == 0) {
-        if (inside(mx, my, x + 79, y + 273, 277, 42)) gn_visit(gn_find("p0"));
+        if (inside(mx, my, x + 79, y + 273, 277, 42)) {
+            gn_visit(gn_find("p0"));
+            serial("SummerLetters: start\n");
+        }
         else if (inside(mx, my, x + 79, y + 326, 277, 42)) gn_overlay = 2;
         else if (inside(mx, my, x + 79, y + 378, 277, 40)) gn_overlay = 4;
         return;
