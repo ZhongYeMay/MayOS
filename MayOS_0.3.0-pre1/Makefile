@@ -18,11 +18,13 @@ OBJECTS := build/boot.o build/core.o build/fs.o build/gui.o
 all: build/mayos.iso build/mayos-disk.img
 build:
 	mkdir -p build
-build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
+build/galgame_story.h build/galgame_assets.h &: scripts/galgame_assets.py | build
+	$(PYTHON) scripts/galgame_assets.py
+build/font.h: scripts/font.py $(wildcard kernel/*.c) build/galgame_story.h | build
 	$(PYTHON) scripts/font.py
 build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 	$(PYTHON) scripts/photo.py
-build/gui.o: build/cat_image.h kernel/explorer_history.h
+build/gui.o: build/cat_image.h kernel/explorer_history.h kernel/galgame_ui.h build/galgame_story.h build/galgame_assets.h
 build/boot.o: kernel/boot.S | build
 	$(CC) -m32 -c $< -o $@
 build/%.o: kernel/%.c kernel/core.h kernel/io.h build/font.h
@@ -59,4 +61,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h build/galgame_story.h build/galgame_assets.h
