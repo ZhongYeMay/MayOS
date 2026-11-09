@@ -47,3 +47,8 @@ jobs:
           cd MayOS_0.3.0-pre1/native-game
           gcc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I. webp.c qa/test-webp.c -lwebp -o /tmp/summer-webp-test
           /tmp/summer-webp-test /tmp/galgame/site
+      - name: Test persistent native save files and tamper detection
+        run: |
+          cd MayOS_0.3.0-pre1/native-game
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I. engine.c storage.c qa/test-storage.c -o /tmp/summer-storage-test
+          /tmp/summer-storage-test
