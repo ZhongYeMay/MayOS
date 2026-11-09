@@ -8,8 +8,8 @@ void summer_fill(SummerCanvas *d,uint32_t rgb){
 void summer_rect(SummerCanvas *d,int x,int y,int w,int h,uint32_t rgb){
  if(!d||!d->pixels||w<=0||h<=0||d->stride<d->width)return;
  int x0=clamp(x,0,d->width),y0=clamp(y,0,d->height);
- int x1=clamp((long long)x+w>2147483647LL?2147483647:x+w,0,d->width);
- int y1=clamp((long long)y+h>2147483647LL?2147483647:y+h,0,d->height);
+ long long xx=(long long)x+w;int x1=clamp(xx>2147483647LL?2147483647:xx< -2147483647LL?-2147483647:(int)xx,0,d->width);
+ long long yy=(long long)y+h;int y1=clamp(yy>2147483647LL?2147483647:yy< -2147483647LL?-2147483647:(int)yy,0,d->height);
  for(int yy=y0;yy<y1;yy++)for(int xx=x0;xx<x1;xx++)d->pixels[(size_t)yy*d->stride+xx]=rgb&0xffffffu;
 }
 void summer_blit(SummerCanvas *d,const SummerImage *s,int x,int y,unsigned opacity){
