@@ -14,7 +14,7 @@ OVMF_CODE ?= /usr/share/OVMF/OVMF_CODE_4M.fd
 OVMF_VARS ?= /usr/share/OVMF/OVMF_VARS_4M.fd
 CFLAGS := -m32 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie -fno-pic -fno-stack-protector -fno-builtin -fno-strict-aliasing -mno-sse -mno-mmx -Ibuild -Ikernel
 OBJECTS := build/boot.o build/core.o build/fs.o build/gui.o
-.PHONY: all clean run test linux linux-update dual run-dual test-dual run-uefi test-uefi
+.PHONY: all clean run test linux linux-update dual run-dual test-dual run-uefi test-uefi test-galgame test-galgame-dual
 all: build/mayos.iso build/mayos-disk.img
 build:
 	mkdir -p build
@@ -42,6 +42,8 @@ test: all
 	$(PYTHON) scripts/smoke.py
 	$(PYTHON) scripts/ui_smoke.py
 	$(PYTHON) scripts/easter_smoke.py
+test-galgame: all
+	$(PYTHON) scripts/galgame_smoke.py
 # An explicit Linux build resolves latest stable at kernel.org. `dual` reuses
 # verified local payloads; run `linux-update` when a newer stable is wanted.
 linux: | build
@@ -54,6 +56,8 @@ run-dual: dual
 	$(QEMU64) $(if $(QEMU_DATA_DIR),-L "$(QEMU_DATA_DIR)") -machine pc -accel tcg -cpu max -m 512 -vga std -cdrom build/mayos-dual.iso -drive file=build/mayos-disk.img,format=raw,if=ide,index=0 -boot d -serial stdio -no-reboot
 test-dual: dual
 	QEMU64="$(QEMU64)" $(PYTHON) scripts/dual_boot_smoke.py
+test-galgame-dual: dual
+	QEMU64="$(QEMU64)" $(PYTHON) scripts/galgame_dual_smoke.py
 run-uefi: dual
 	test -f "$(OVMF_CODE)" && test -f "$(OVMF_VARS)"
 	test -f build/mayos-uefi-vars.fd || cp "$(OVMF_VARS)" build/mayos-uefi-vars.fd
