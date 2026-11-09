@@ -86,7 +86,7 @@ void maygame_draw(MayGameFill fill,MayGameText text){
     fill(80,438,864,60,0x413d4a);
     text(98,458,draft[0]?draft:"Type your reply here...",0xf2edf5);
     text(80,520,status,0xffd5af);
-    text(80,573,"Enter: 发送（联网前拒绝）   F5: 保存草稿",0xcdc8d3);
+    text(80,573,"Enter: 发送（联网前拒绝）   Ctrl+S: 保存草稿",0xcdc8d3);
     text(80,611,"↑ ↓: 切换角色  ESC: 返回桌面",0xcdc8d3);
     text(80,650,dirty_draft?"草稿未保存":"独立自研实现 / 无 SDL、Linux、WebView",0x99afa9);
 }
