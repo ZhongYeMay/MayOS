@@ -360,7 +360,7 @@ def build_initramfs(busybox: Path, fastfetch: Path, version: str) -> dict:
                                  ("usr/share/doc/mayos/linux-readme.txt", "README.md", 0o644)):
         entries.append((target, stat.S_IFREG | mode, (ROOT / "linux" / source).read_bytes(), 0, 0))
     text_files = {
-        "etc/os-release": 'NAME="MayOS Linux Live"\nID=mayos-linux\nVERSION="0.4.0-pre34"\nPRETTY_NAME="MayOS Linux Live 0.4.0-pre34"\n',
+        "etc/os-release": 'NAME="MayOS Linux Live"\nID=mayos-linux\nVERSION="0.4.0-pre35"\nPRETTY_NAME="MayOS Linux Live 0.4.0-pre35"\n',
         "etc/passwd": "root:x:0:0:root:/root:/bin/sh\n",
         "etc/group": "root:x:0:\n",
         "etc/hostname": "MayOS-Linux\n",
