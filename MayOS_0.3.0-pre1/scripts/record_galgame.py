@@ -47,7 +47,7 @@ def main():
         session.hold(2)
         session.command("HELLO FROM MAYKERNEL")
         session.hold(2)
-        session.key("f5")
+        session.key("ctrl-s")
         session.hold(2)
         session.key("down")
         session.hold(2)
