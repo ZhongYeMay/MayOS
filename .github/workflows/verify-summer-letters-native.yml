@@ -1,0 +1,116 @@
+name: Verify Summer Letters native MayOS dual-kernel game
+
+on:
+  push:
+    branches:
+      - feature/summer-letters-native
+    paths:
+      - 'MayOS_0.3.0-pre1/**'
+      - '.github/workflows/verify-summer-letters-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mayos-summer-letters-native
+  cancel-in-progress: true
+
+jobs:
+  maykernel:
+    name: Compile original art and verify MayKernel gameplay / persistent saves
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install BIOS/UEFI toolchain and source image decoder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib grub-pc-bin \
+            grub-efi-amd64-bin grub-common xorriso mtools \
+            qemu-system-x86 python3 python3-pil fonts-noto-cjk fonts-dejavu-core
+      - name: Reproduce original AI images and complete visual novel story
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          python3 scripts/galgame_assets.py
+          test -s build/galgame_story.h
+          test -s build/galgame_assets.h
+          grep -q '夏日未寄' build/galgame_story.h
+          test -s build/galgame_manifest.json
+      - name: Build bootable native MayKernel ISO
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          make all
+          test -s build/mayos.iso
+      - name: Existing GUI and MayFS regressions
+        working-directory: MayOS_0.3.0-pre1
+        run: make test
+      - name: Real QEMU game play, artwork, load/save and cold reboot
+        working-directory: MayOS_0.3.0-pre1
+        run: make test-galgame
+      - name: Preserve screenshots, MayKernel ISO and port manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Summer-Letters-MayKernel-native-ISO-and-screenshots
+          path: |
+            MayOS_0.3.0-pre1/build/mayos.iso
+            MayOS_0.3.0-pre1/build/galgame_manifest.json
+            MayOS_0.3.0-pre1/build/summer-letters*.png
+            MayOS_0.3.0-pre1/build/test-galgame*.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  linux:
+    name: Build both kernels and test game on Linux and MayKernel
+    needs: maykernel
+    runs-on: ubuntu-24.04
+    timeout-minutes: 160
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install native Linux rootfs and UEFI dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools dosfstools \
+            qemu-system-x86 ovmf python3 python3-pil fonts-noto-cjk \
+            fonts-dejavu-core flex bison bc libelf-dev libssl-dev \
+            xz-utils busybox-static musl-tools rsync
+      - name: Create actual dual-kernel ISO containing the game
+        working-directory: MayOS_0.3.0-pre1
+        run: make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+      - name: Recheck BIOS boot on both kernels
+        working-directory: MayOS_0.3.0-pre1
+        run: make test-dual LINUX_VERSION=7.3.1
+      - name: Recheck UEFI boot on both kernels
+        working-directory: MayOS_0.3.0-pre1
+        run: make test-uefi LINUX_VERSION=7.3.1
+      - name: Real QEMU interactive visual novel test on both kernels
+        working-directory: MayOS_0.3.0-pre1
+        run: make test-galgame-dual LINUX_VERSION=7.3.1
+      - name: Hash verified ISO
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          cd build
+          sha256sum mayos-dual.iso > SUMMER-LETTERS-SHA256SUMS.txt
+          sha256sum -c SUMMER-LETTERS-SHA256SUMS.txt
+      - name: Preserve playable dual-kernel ISO and actual QEMU captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Summer-Letters-dual-kernel-ISO-and-QEMU-captures
+          path: |
+            MayOS_0.3.0-pre1/build/mayos-dual.iso
+            MayOS_0.3.0-pre1/build/SUMMER-LETTERS-SHA256SUMS.txt
+            MayOS_0.3.0-pre1/build/galgame-dual*.png
+            MayOS_0.3.0-pre1/build/galgame-dual*.log
+          if-no-files-found: warn
+          retention-days: 30
