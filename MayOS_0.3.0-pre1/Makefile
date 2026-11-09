@@ -14,6 +14,19 @@ OVMF_CODE ?= /usr/share/OVMF/OVMF_CODE_4M.fd
 OVMF_VARS ?= /usr/share/OVMF/OVMF_VARS_4M.fd
 CFLAGS := -m32 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie -fno-pic -fno-stack-protector -fno-builtin -fno-strict-aliasing -mno-sse -mno-mmx -Ibuild -Ikernel
 OBJECTS := build/boot.o build/core.o build/fs.o build/gui.o build/galgame.o
+
+# MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
+# No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
+# Set SUMMER_SITE=/absolute/path/to/galgame/site to include all 12 original assets.
+ifneq ($(strip $(SUMMER_SITE)),)
+CFLAGS += -DMAYGAME_WITH_ART
+OBJECTS += build/summer_art.o
+build/summer_art.h: scripts/pack_summer_art.py $(wildcard $(SUMMER_SITE)/assets/retro/*.webp) | build
+	$(PYTHON) scripts/pack_summer_art.py --site "$(SUMMER_SITE)" --output build
+build/summer_art.o: build/summer_art.h
+	$(LD) -m elf_i386 -r -b binary -o $@ build/summer_art.bin
+build/galgame.o: build/summer_art.h
+endif
 .PHONY: all clean run test linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
@@ -60,4 +73,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h build/summer_art.h build/summer_art.bin
