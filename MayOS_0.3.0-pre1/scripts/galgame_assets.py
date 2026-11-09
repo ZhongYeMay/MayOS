@@ -27,7 +27,7 @@ HASHES = {
     "assets/retro/nagi-0.webp": "8617be51203ddc08b4ec3ed5e79dc23b978da5cb",
     "assets/retro/nagi-1.webp": "490686cd08b903f17636b8464094483ca1d99baf",
     "assets/retro/nagi-2.webp": "4bdf1879579be79f904f30ef7afb07798651fd52",
-    "assets/retro/shiori-0.webp": "e424ac6446b128dfd8417737ef81bb7ba9330fb",
+    "assets/retro/shiori-0.webp": "e424ac6446b128dfd8417737ef81bb7ba9330fb3",
     "assets/retro/shiori-1.webp": "ba17f717dc1a45a4f0d9794a2d7bfbb0a2e93377",
     "assets/retro/shiori-2.webp": "a44238fc64ccf75e627b803102670e251343cc7a",
     "assets/retro/studio.webp": "9908534b21f7981b69dca4f053a5072608e227ec",
