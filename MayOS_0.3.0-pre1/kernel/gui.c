@@ -230,13 +230,14 @@ typedef struct {
     int x, y, w, h, open, min, max, ox, oy, ow, oh;
     const char *title;
 } Window;
-#define WINDOW_COUNT 5
+#define WINDOW_COUNT 6
 static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "文件 / Files"},
                             {186, 74, 800, 620, 1, 0, 0, 0, 0, 0, 0, "系统设置 / System Settings"},
                             {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
                             {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
-                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
-static int order[WINDOW_COUNT] = {0, 2, 3, 4, 1}, focus = 1, dirty = 1;
+                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"},
+                            {98, 71, 908, 629, 0, 0, 0, 0, 0, 0, 0, "夏日未寄 / Letters to Summer"}};
+static int order[WINDOW_COUNT] = {5, 0, 2, 3, 4, 1}, focus = 1, dirty = 1;
 static int mx = 530, my = 390, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
            cut = 0, settings_tab = 0;
@@ -662,6 +663,7 @@ static void palette(void) {
     on_accent = dark ? 0x381e72 : 0xffffff;
     selected_fill = dark ? 0x4f378b : 0xeaddff;
 }
+#include "galgame_ui.h"
 static void desktop(void) {
     /* Material 3: tonal canvas, navigation rail, compact status area. */
     for (int y = 0; y < H; y++)
@@ -684,6 +686,10 @@ static void desktop(void) {
     }
     symbol(35, 489, 4, 28, ink);
     text(17, 535, "Explorer", muted);
+    roundrect(14, 581, 76, 99, panel);
+    roundrect(27, 595, 50, 48, surface_high);
+    text(34, 605, "夏", accent);
+    text(17, 651, "夏日未寄", muted);
     large_text(728, 594, "MayOS", muted);
     text(729, 640, "MATERIAL WORKSPACE / " MAYOS_RELEASE, muted);
 }
@@ -693,7 +699,7 @@ static void frame(int id) {
     roundrect(w->x, w->y, w->w, w->h, panel);
     rect(w->x + 1, w->y + 1, w->w - 2, 40, surface_high);
     rect(w->x + 1, w->y + 41, w->w - 2, 1, line);
-    symbol(w->x + 13, w->y + 10, id == 0 ? 0 : id == 1 ? 1 : id == 4 ? 4 : 2, 22, ink);
+    symbol(w->x + 13, w->y + 10, id == 0 ? 0 : id == 1 ? 1 : id == 4 || id == 5 ? 4 : 2, 22, ink);
     text(w->x + 45, w->y + 10, w->title, focus == id ? ink : muted);
     int controls = w->x + w->w - 119;
     for (int i = 0; i < 3; i++)
@@ -885,7 +891,7 @@ static void files_draw(Window *w) {
     }
     text(x + 20, y + w->h - 55,
 #ifdef MAYOS_LINUX
-         "RAM SESSION",
+         "RAM",
 #else
          "MayFS",
 #endif
@@ -1077,17 +1083,18 @@ static void taskbar(void) {
                  i == 0   ? "文件"
                  : i == 1 ? "系统设置"
                  : i == 2 ? ">_ 终端"
-                          : i == 3 ? "文本编辑器" : "Explorer",
+                 : i == 3 ? "文本编辑器"
+                 : i == 4 ? "Explorer" : "夏日未寄",
                  active ? ink : muted);
             if (active)
                 rect(x + 12, H - 6, 94, 2, accent);
         }
-    circle(772, H - 23, 3, disk_ready ? accent : 0x86a5b2);
-    text(785, H - 33,
+    circle(872, H - 23, 3, disk_ready ? accent : 0x86a5b2);
+    text(884, H - 33,
 #ifdef MAYOS_LINUX
          "RAM SESSION",
 #else
-         disk_ready ? "MayFS / disk" : "RAM / session",
+         disk_ready ? "MayFS" : "RAM",
 #endif
          0x87a0ae);
     u32 sec = ticks / 100;
@@ -1116,29 +1123,29 @@ static int contains(const char *a, const char *b) {
 }
 static int search_match(int id) {
     const char *names[] = {"files 文件 文档", "settings 设置 关于", "terminal 终端 shell",
-                           "trash 回收站"};
+                           "trash 回收站", "夏日未寄 galgame visual novel 故事 游戏"};
     return contains(names[id], search);
 }
 static void start_draw(void) {
-    int x = 12, y = H - 424;
-    roundrect(x + 3, y + 4, 326, 366, dark ? 0x141218 : 0xd8d1df);
-    roundrect(x, y, 326, 366, panel);
+    int x = 12, y = H - 474;
+    roundrect(x + 3, y + 4, 326, 420, dark ? 0x141218 : 0xd8d1df);
+    roundrect(x, y, 326, 420, panel);
     text(x + 22, y + 19, "应用程序 / Applications", ink);
     roundrect(x + 18, y + 57, 290, 34, bg);
     text(x + 30, y + 64, search[0] ? search : "搜索 / files, settings, terminal",
          search[0] ? ink : muted);
-    const char *names[] = {"文件管理器", "设置", "终端", "回收站"};
-    const char *desc[] = {"浏览文件与文件夹", "系统信息与外观", "命令与会话工具", "找回或删除文件"};
-    for (int i = 0; i < 4; i++)
+    const char *names[] = {"文件管理器", "设置", "终端", "回收站", "夏日未寄"};
+    const char *desc[] = {"浏览文件与文件夹", "系统信息与外观", "命令与会话工具", "找回或删除文件", "原生视觉小说 · 三条故事线"};
+    for (int i = 0; i < 5; i++)
         if (search_match(i)) {
             icon(x + 24, y + 109 + i * 47, i, 31);
             text(x + 70, y + 105 + i * 47, names[i], ink);
             text(x + 70, y + 125 + i * 47, desc[i], muted);
         }
-    rect(x + 18, y + 306, 290, 1, line);
-    text(x + 25, y + 328, "may / 本地账户", muted);
-    text(x + 213, y + 328, "重启", ink);
-    text(x + 270, y + 328, "关机", ink);
+    rect(x + 18, y + 350, 290, 1, line);
+    text(x + 25, y + 372, "may / 本地账户", muted);
+    text(x + 213, y + 372, "重启", ink);
+    text(x + 270, y + 372, "关机", ink);
 }
 static void context_draw(void) {
     roundrect(ctxx + 3, ctxy + 3, 184, 320, dark ? 0x141218 : 0xd8d1df);
@@ -1222,8 +1229,10 @@ static void render(void) {
             terminal_draw(w);
         else if (i == 3)
             editor_draw(w);
-        else
+        else if (i == 4)
             explorer_draw(w);
+        else
+            gn_draw(w);
     }
     taskbar();
     if (start_open)
@@ -1400,11 +1409,12 @@ static void left_click(void) {
         return;
     }
     if (start_open) {
-        int x = 12, y = H - 424;
-        if (inside(mx, my, x, y, 326, 366)) {
-            for (int i = 0; i < 4; i++)
+        int x = 12, y = H - 474;
+        if (inside(mx, my, x, y, 326, 420)) {
+            for (int i = 0; i < 5; i++)
                 if (search_match(i) && inside(mx, my, x + 16, y + 100 + i * 47, 294, 46)) {
-                    if (i == 3) {
+                    if (i == 4) { gn_open(); }
+                    else if (i == 3) {
                         folder = 3;
                         file_scroll = 0;
                         selected = -1;
@@ -1413,7 +1423,7 @@ static void left_click(void) {
                         raise_window(i);
                     return;
                 }
-            if (my >= y + 320) {
+            if (my >= y + 366) {
                 if (mx > x + 267) {
                     fs_sync();
                     poweroff();
@@ -1457,6 +1467,7 @@ static void left_click(void) {
             }
             return;
         }
+        if (id == 5) { gn_click(w, rx, ry); return; }
         if (id == 4) {
 #ifdef MAYOS_LINUX
             if (inside(rx, ry, 18, 50, 90, 36)) {
@@ -1570,6 +1581,7 @@ static void left_click(void) {
         }
         return;
     }
+    if (inside(mx, my, 14, 581, 76, 99)) { gn_open(); return; }
     if (inside(mx, my, 12, 486, 76, 72)) {
         raise_window(4);
         return;
@@ -1639,6 +1651,7 @@ static void key_event(int k) {
         }
         return;
     }
+    if (focus == 5 && windows[5].open && !windows[5].min && gn_key(k)) return;
     if (k == 27) {
         start_open = context_open = 0;
         return;
@@ -1799,6 +1812,7 @@ void kernel_main(u32 magic, u32 info) {
             last = ticks / 50;
             dirty = 1;
         }
+        gn_tick();
         if (dirty)
             render();
         platform_idle();
