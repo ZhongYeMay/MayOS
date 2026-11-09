@@ -6,9 +6,10 @@
    No SDL, Linux ABI, webview or compatibility code. */
 typedef void (*MayGameFill)(int,int,int,int,u32);
 typedef int (*MayGameText)(int,int,const char*,u32);
+typedef void (*MayGameBlit)(int,int,int,int,const u8*,int,int);
 void maygame_open(void);
 int maygame_active(void);
 void maygame_key(int key);
 void maygame_click(int x,int y);
-void maygame_draw(MayGameFill fill,MayGameText text);
+void maygame_draw(MayGameFill fill,MayGameText text,MayGameBlit blit);
 #endif
