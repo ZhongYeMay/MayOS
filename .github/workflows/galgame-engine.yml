@@ -52,3 +52,11 @@ jobs:
           cd MayOS_0.3.0-pre1/native-game
           gcc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I. engine.c storage.c qa/test-storage.c -o /tmp/summer-storage-test
           /tmp/summer-storage-test
+      - name: Compile Linux native SDL2 integration harness
+        run: |
+          sudo apt-get install -y -qq libsdl2-dev
+          cd MayOS_0.3.0-pre1/native-game
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I. \
+            engine.c render.c audio.c webp.c storage.c linux.c \
+            $(sdl2-config --cflags --libs) -lwebp -lm -o /tmp/summer-native-linux-harness
+          test -x /tmp/summer-native-linux-harness
