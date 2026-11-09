@@ -216,6 +216,7 @@ static void gn_draw(Window *w) {
         const GNStory *n = &gn_story[gn_node];
         roundrect(x + 44, y + 137, 630, 302, 0x1a1a22);
         text(x + 69, y + 157, n->kind, 0xd3c4e9);
+        text(x + 69, y + 178, gn_names[art_scene], 0xe8dfef);
         large_text(x + 68, y + 196, n->title, 0xffffff);
         gn_para(x + 70, y + 285, 570, 4, n->dialogue, 0xf1eced);
         text(x + 75, y + hh - 58, "点击继续，返回标题", 0xffffff);
