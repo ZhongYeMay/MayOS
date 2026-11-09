@@ -29,7 +29,8 @@ void summer_audio_render(SummerAudio *a,int16_t *pcm,unsigned frames){
     sample+=(main_note*0.13+bass*0.025)*env*a->volume;
    }
   }
-  if(sample>1)sample=1;if(sample< -1)sample=-1;
+  if(sample>1)sample=1;
+  if(sample< -1)sample=-1;
   pcm[i]=(int16_t)(sample*32767.0);
   a->time+=1.0/a->sample_rate;
   if(a->time>=a->next_note){a->note++;a->next_note+=0.95;}
