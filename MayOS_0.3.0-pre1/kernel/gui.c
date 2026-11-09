@@ -235,8 +235,7 @@ static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0,
                             {186, 74, 800, 620, 1, 0, 0, 0, 0, 0, 0, "系统设置 / System Settings"},
                             {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
                             {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
-                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"},
-                            {120, 65, 850, 610, 0, 0, 0, 0, 0, 0, 0, "夏日未寄 / Native Galgame"}};
+                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
 static int order[WINDOW_COUNT] = {0, 2, 3, 4, 1}, focus = 1, dirty = 1;
 static int mx = 530, my = 390, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
