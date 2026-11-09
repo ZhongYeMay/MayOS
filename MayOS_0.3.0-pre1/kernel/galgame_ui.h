@@ -18,10 +18,10 @@ typedef struct {
 static int gn_mode;      /* 0=title, 1=dialogue, 2=ending */
 static int gn_overlay;   /* 0=none, 1=save, 2=load, 3=backlog, 4=gallery */
 static int gn_node;
-static int gn_backlog[32], gn_backlog_count, gn_scroll;
+static int gn_backlog[32], gn_backlog_count;
 static u8 gn_read[GN_READ_CAP];
 static u32 gn_unlocked, gn_last_advance;
-static int gn_auto, gn_opened;
+static int gn_auto;
 
 static int gn_find(const char *id) {
     for (int i = 0; i < GN_STORY_COUNT; i++)
@@ -45,16 +45,6 @@ static void gn_draw_art(int art, int x, int y) {
                 pixels[dy * W + dx] = image->pal[pixel];
         }
     }
-}
-static int gn_text_width(const char *s) {
-    int result = 0;
-    while (*s) {
-        const char *start = s;
-        int codepoint = utf(&s);
-        if (s <= start) break;
-        result += codepoint >= 128 ? 16 : 8;
-    }
-    return result;
 }
 static int gn_para(int x, int y, int maxw, int maxlines, const char *s, u32 c) {
     char buffer[240];
@@ -101,6 +91,7 @@ static void gn_visit(int index) {
     if (gn_mode == 2) {
         int bit = gn_ending_bit(gn_story[index].id);
         if (bit >= 0) gn_unlocked |= (u32)1 << bit;
+        serial("SummerLetters: ending screen\n");
     }
     gn_last_advance = ticks;
     dirty = 1;
@@ -175,8 +166,11 @@ static int gn_load_slot(int slot) {
     }
     GNSave save;
     memcpy(&save, files[file].data, sizeof(save));
-    if (memcmp(save.signature, "NATSU001", 8) ||
-        save.node >= GN_STORY_COUNT || save.check != gn_hash_save(&save)) {
+    int valid = 1;
+    for (int i = 0; i < 8; i++)
+        if (save.signature[i] != "NATSU001"[i]) valid = 0;
+    if (!valid || save.node >= GN_STORY_COUNT ||
+        save.check != gn_hash_save(&save)) {
         notify("存档损坏或版本不兼容");
         return 0;
     }
@@ -188,13 +182,7 @@ static int gn_load_slot(int slot) {
     serial("SummerLetters: load\n");
     return 1;
 }
-static int gn_resume(void) {
-    for (int i = 0; i < 3; i++)
-        if (gn_load_slot(i)) return 1;
-    return 0;
-}
 static void gn_open(void) {
-    gn_opened = 1;
     raise_window(5);
     serial("SummerLetters: app opened\n");
 }
@@ -231,7 +219,6 @@ static void gn_draw(Window *w) {
         large_text(x + 68, y + 196, n->title, 0xffffff);
         gn_para(x + 70, y + 285, 570, 4, n->dialogue, 0xf1eced);
         text(x + 75, y + hh - 58, "点击继续，返回标题", 0xffffff);
-        serial("SummerLetters: ending screen\n");
     } else {
         const GNStory *n = &gn_story[gn_node];
         if (n->choices) {
