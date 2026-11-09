@@ -18,7 +18,7 @@ CACHE = ROOT / "assets" / "galgame-cache"
 COMMIT = "fa34344a1cff46025e8d169f56411e290e9fafbd"
 ROOT_URL = f"https://raw.githubusercontent.com/ZhongYeMay/galgame/{COMMIT}/site/"
 HASHES = {
-    "story.js": "STORY_SHA_FILL",
+    "story.js": "3d36fe369c59fcbfa806b75c8a12a3849b2c33a5",
     "assets/retro/bookshop.webp": "69ed280f1c9185600a8aab258ba0a8d8d422de6d",
     "assets/retro/coast.webp": "71e6b888a0574bc94a41980c5a9f9a14cf4dc5a6",
     "assets/retro/mio-0.webp": "edf2600210d90674230abdd121db99c6807f61c8",
