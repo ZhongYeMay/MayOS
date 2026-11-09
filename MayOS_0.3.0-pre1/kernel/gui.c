@@ -1,6 +1,9 @@
 #include "cat_image.h"
 #include "core.h"
 #include "font.h"
+#ifndef MAYOS_LINUX
+#include "galgame.h"
+#endif
 #ifdef MAYOS_LINUX
 #include "explorer_history.h"
 #endif
@@ -684,6 +687,11 @@ static void desktop(void) {
     }
     symbol(35, 489, 4, 28, ink);
     text(17, 535, "Explorer", muted);
+#ifndef MAYOS_LINUX
+    roundrect(14, 577, 76, 86, surface_high);
+    border(30, 592, 45, 29, accent);
+    text(17, 637, "夏日未寄", muted);
+#endif
     large_text(728, 594, "MayOS", muted);
     text(729, 640, "MATERIAL WORKSPACE / " MAYOS_RELEASE, muted);
 }
@@ -1239,6 +1247,10 @@ static void render(void) {
         modal_draw();
     if (egg_open)
         easter_draw();
+#ifndef MAYOS_LINUX
+    if (maygame_active())
+        maygame_draw(rect, text);
+#endif
     cursor();
     present(pixels);
     dirty = 0;
@@ -1360,6 +1372,9 @@ static void context_action(int i) {
 
 static void left_click(void) {
     dirty = 1;
+#ifndef MAYOS_LINUX
+    if (maygame_active()) { maygame_click(mx,my); return; }
+#endif
     if (egg_open) {
         if (inside(mx, my, 696, 76, 38, 34) || inside(mx, my, 610, 646, 108, 30))
             egg_open = 0;
@@ -1571,6 +1586,9 @@ static void left_click(void) {
         }
         return;
     }
+ #ifndef MAYOS_LINUX
+    if (inside(mx, my, 14, 577, 76, 86)) { maygame_open(); return; }
+ #endif
     if (inside(mx, my, 12, 486, 76, 72)) {
         raise_window(4);
         return;
@@ -1588,6 +1606,9 @@ static void left_click(void) {
         }
 }
 static void right_click(void) {
+#ifndef MAYOS_LINUX
+    if (maygame_active()) return;
+#endif
     if (egg_open)
         return;
     if (modal)
@@ -1611,6 +1632,9 @@ static void right_click(void) {
 }
 static void key_event(int k) {
     dirty = 1;
+#ifndef MAYOS_LINUX
+    if (maygame_active()) { maygame_key(k); return; }
+#endif
     if (egg_open) {
         if (k == 27 || k == '\n')
             egg_open = 0;
