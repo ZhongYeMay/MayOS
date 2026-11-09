@@ -106,6 +106,30 @@ static u32 blend(u32 b, u32 f, u32 a) {
         v = (((b & 255) * (255 - a) + (f & 255) * a) / 255);
     return r << 16 | g << 8 | v;
 }
+#ifndef MAYOS_LINUX
+/* Independently implemented software RGBA renderer for MayKernel game artwork.
+   Pixel data is packed from the unchanged original WebP source at build time. */
+static void maygame_blit(int x,int y,int width,int height,
+                         const u8 *rgba,int srcw,int srch) {
+    if(!rgba||width<=0||height<=0||srcw<=0||srch<=0)return;
+    for(int dy=0;dy<height;dy++){
+        int py=y+dy;
+        if(py<0||py>=H)continue;
+        int sy=(dy*srch)/height;
+        for(int dx=0;dx<width;dx++){
+            int px=x+dx;
+            if(px<0||px>=W)continue;
+            int sx=(dx*srcw)/width;
+            const u8 *source=rgba+((u32)sy*(u32)srcw+(u32)sx)*4u;
+            u32 alpha=source[3];
+            if(!alpha)continue;
+            u32 color=((u32)source[0]<<16)|((u32)source[1]<<8)|(u32)source[2];
+            if(alpha==255) pixels[py*W+px]=color;
+            else pixels[py*W+px]=blend(pixels[py*W+px],color,alpha);
+        }
+    }
+}
+#endif
 static int text(int x, int y, const char *s, u32 color) {
     int start = x;
     while (*s) {
@@ -1249,7 +1273,7 @@ static void render(void) {
         easter_draw();
 #ifndef MAYOS_LINUX
     if (maygame_active())
-        maygame_draw(rect, text);
+        maygame_draw(rect, text, maygame_blit);
 #endif
     cursor();
     present(pixels);
