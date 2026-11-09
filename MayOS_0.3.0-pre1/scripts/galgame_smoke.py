@@ -49,7 +49,7 @@ def main():
         vm.click(420, 310)  # slot 1
         vm.wait("SummerLetters: load")
         vm.shot("summer-letters-loaded")
-        vm.click(591, 679)  # backlog
+        vm.click(455, 679)  # backlog
         vm.shot("summer-letters-backlog")
         vm.key("esc")
         print("PASS: native original AI artwork, dialogue, progression, 3-slot save/load and backlog", flush=True)
