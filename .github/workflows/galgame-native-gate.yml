@@ -1,0 +1,65 @@
+name: Native Galgame completion gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'MayOS_0.3.0-pre1/linux/install-summer-letters.sh'
+      - 'MayOS_0.3.0-pre1/native-game/**'
+      - '.github/workflows/galgame-native-gate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  fidelity:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate original story and all branch destinations
+        run: |
+          git clone --quiet https://github.com/ZhongYeMay/galgame.git /tmp/galgame
+          cd /tmp/galgame
+          git checkout --quiet fa34344a1cff46025e8d169f56411e290e9fafbd
+          node - <<'JS'
+          const fs=require('fs'),vm=require('vm'),assert=require('assert');
+          const source=fs.readFileSync('site/story.js','utf8');
+          const data=vm.runInNewContext(source+';({STORY,CHARACTERS,ENDINGS})');
+          const {STORY,CHARACTERS,ENDINGS}=data;
+          assert.equal(Object.keys(CHARACTERS).length,3);
+          assert.equal(Object.keys(ENDINGS).length,6);
+          for(const [id,n] of Object.entries(STORY)){
+            for(const next of [n.next,n.matureNext,...(n.choices||[]).map(c=>c[1])]){
+              if(next)assert(STORY[next],id+' -> missing '+next);
+            }
+          }
+          const reachable=new Set();
+          function walk(id){if(reachable.has(id))return;reachable.add(id);const n=STORY[id];if(!n)return;for(const next of [n.next,n.matureNext,...(n.choices||[]).map(c=>c[1])])if(next)walk(next);}
+          walk('p0');
+          for(const id of Object.keys(ENDINGS))assert(reachable.has(id),'unreachable '+id);
+          for(const route of ['mio','nagi','shiori']){
+            for(let i=0;i<3;i++)assert(fs.existsSync('site/assets/retro/'+route+'-'+i+'.webp'));
+          }
+          for(const bg of ['studio','coast','bookshop'])assert(fs.existsSync('site/assets/retro/'+bg+'.webp'));
+          console.log('Validated '+Object.keys(STORY).length+' story nodes, 6 endings, 12 original images.');
+          JS
+      - name: Validate installer shell syntax
+        run: sh -n MayOS_0.3.0-pre1/linux/install-summer-letters.sh
+      - name: Check complete native port exists before certification
+        run: |
+          set -eu
+          for f in \
+            MayOS_0.3.0-pre1/native-game/engine.c \
+            MayOS_0.3.0-pre1/native-game/render.c \
+            MayOS_0.3.0-pre1/native-game/audio.c \
+            MayOS_0.3.0-pre1/native-game/storage.c \
+            MayOS_0.3.0-pre1/native-game/maykernel.c \
+            MayOS_0.3.0-pre1/native-game/linux.c \
+            MayOS_0.3.0-pre1/native-game/qa/complete-test.py; do
+              if [ ! -s "$f" ]; then
+                echo "::error::Full native port not complete: $f"
+                exit 1
+              fi
+          done
+          echo "Source prerequisites present. Real build, QEMU, and gameplay tests still required."
