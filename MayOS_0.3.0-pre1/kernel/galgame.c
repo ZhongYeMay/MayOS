@@ -5,6 +5,10 @@
  * when native MayKernel TCP+TLS+HTTPS+JSON support is implemented.
  */
 #include "galgame.h"
+#ifdef MAYGAME_WITH_ART
+#include "summer_art.h"
+extern const u8 _binary_build_summer_art_bin_start[];
+#endif
 static int active=0,route=0,dirty_draft=0;
 static char draft[512],status[128];
 static const char *names[3]={"白石 澪","橘 凪","月島 栞"};
@@ -62,13 +66,34 @@ void maygame_click(int x,int y){
             if(x>=80+i*275 && x<300+i*275){route_set(i);return;}
     }
 }
-void maygame_draw(MayGameFill fill,MayGameText text){
+void maygame_draw(MayGameFill fill,MayGameText text,MayGameBlit blit){
+#ifndef MAYGAME_WITH_ART
+    (void)blit;
+#endif
     if(!active)return;
     fill(0,0,W,H,0x15141b);
+#ifdef MAYGAME_WITH_ART
+    /* Original pixels are losslessly packed at build time. The independent
+       MayKernel blitter applies RGBA alpha in its framebuffer, no SDL decoder. */
+    const MayGameArtMeta *background=&maygame_original_art[route];
+    int natural_h=(int)(W*background->height/background->width);
+    if(natural_h>H)natural_h=H;
+    blit(0,(H-natural_h)/2,W,natural_h,
+         _binary_build_summer_art_bin_start+background->offset,
+         (int)background->width,(int)background->height);
+    const MayGameArtMeta *sprite=&maygame_original_art[3+route*3];
+    int portrait_h=400;
+    int portrait_w=(int)(portrait_h*sprite->width/sprite->height);
+    if(portrait_w>370){portrait_w=370;portrait_h=(int)(portrait_w*sprite->height/sprite->width);}
+    blit(570,180,portrait_w,portrait_h,
+         _binary_build_summer_art_bin_start+sprite->offset,
+         (int)sprite->width,(int)sprite->height);
+#endif
     fill(0,0,W,66,0x25232d);
     text(36,22,"夏日未寄 / MAYKERNEL 原生游戏",0xf3eef6);
     text(941,18,"×",0xffffff);
-    fill(48,88,928,594,0x211e28);
+    fill(48,88,928,86,0x211e28);
+    fill(48,391,928,291,0x211e28);
     text(80,95,"角色 / HEROINES",0xb0e8de);
     for(int i=0;i<3;i++){
         u32 color=i==route?0x53665f:0x36343e;
@@ -77,11 +102,15 @@ void maygame_draw(MayGameFill fill,MayGameText text){
     }
     /* The complete original artwork is NOT substituted with fake images.
        Framebuffer asset preparation and native decoding remain required. */
+#ifndef MAYGAME_WITH_ART
     fill(80,182,864,186,0x35323d);
     text(105,202,"原版 WebP 场景与人物立绘：等待内核资源加载器。",0xcac5d3);
-    text(105,243,places[route],0xd2f2e9);
-    text(105,288,"女主主动台词：必须由 DeepSeek 实时生成。",0xf1e9e9);
-    text(105,316,"当前不具备 TLS 网络能力，因此不会展示预设回复。",0xe0d8d4);
+#endif
+    fill(80,185,460,34,0x211e28);
+    text(105,191,places[route],0xd2f2e9);
+    fill(80,327,740,56,0x211e28);
+    text(105,332,"女主主动台词：必须由 DeepSeek 实时生成。",0xf1e9e9);
+    text(105,355,"当前无 TLS 网络，不会展示预设回复。",0xe0d8d4);
     text(82,405,"自由输入 / 每轮填写自己的回答（无固定选项）",0xb0e8de);
     fill(80,438,864,60,0x413d4a);
     text(98,458,draft[0]?draft:"Type your reply here...",0xf2edf5);
