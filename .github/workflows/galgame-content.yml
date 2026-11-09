@@ -1,0 +1,80 @@
+name: Preserve original Galgame content for native ports
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/galgame-content.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-original-content:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned original game without modifying its files
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none https://github.com/ZhongYeMay/galgame.git original
+          cd original
+          git checkout --detach fa34344a1cff46025e8d169f56411e290e9fafbd
+          test "$(git rev-parse HEAD)" = "fa34344a1cff46025e8d169f56411e290e9fafbd"
+      - name: Audit and package every original game file
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, tarfile
+          base = Path("original/site")
+          files = sorted(p for p in base.rglob("*") if p.is_file())
+          expected = {
+              "index.html", "game.js", "story.js", "style.css",
+              "assets/retro/bookshop.webp", "assets/retro/coast.webp",
+              "assets/retro/studio.webp",
+              *{f"assets/retro/{name}-{i}.webp" for name in ("mio","nagi","shiori") for i in range(3)}
+          }
+          found = {p.relative_to(base).as_posix() for p in files}
+          assert expected <= found, sorted(expected-found)
+          assert len([x for x in found if x.endswith(".webp")]) == 12
+          out = Path("dist"); out.mkdir()
+          manifest = {
+              "upstream": "https://github.com/ZhongYeMay/galgame",
+              "commit": "fa34344a1cff46025e8d169f56411e290e9fafbd",
+              "content_policy": "original bytes unchanged; no asset substitutions",
+              "files": [
+                  {"path": p.relative_to(base).as_posix(),
+                   "size": p.stat().st_size,
+                   "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+                  for p in files
+              ],
+          }
+          (out/"manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n")
+          with tarfile.open(out/"galgame-original-content.tar.gz","w:gz") as archive:
+              for p in files: archive.add(p,arcname="game/"+p.relative_to(base).as_posix())
+          print(f"Verified {len(files)} original files, {sum(p.stat().st_size for p in files)} bytes")
+          PY
+      - name: Verify package can be extracted and hashes match
+        run: |
+          set -euo pipefail
+          mkdir -p extracted
+          tar -xzf dist/galgame-original-content.tar.gz -C extracted
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          manifest=json.loads(Path("dist/manifest.json").read_text())
+          for item in manifest["files"]:
+              p=Path("extracted/game")/item["path"]
+              assert p.stat().st_size==item["size"]
+              assert hashlib.sha256(p.read_bytes()).hexdigest()==item["sha256"]
+          print("All original files preserved byte-for-byte.")
+          PY
+      - name: Upload verified source and artwork bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: galgame-original-content-fa34344a
+          path: dist/
+          if-no-files-found: error
+          retention-days: 90
