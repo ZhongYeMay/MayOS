@@ -40,3 +40,10 @@ jobs:
           cd MayOS_0.3.0-pre1/native-game
           gcc -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I. render.c audio.c qa/test-media.c -lm -o /tmp/summer-media-sanitized
           /tmp/summer-media-sanitized
+      - name: Install native WebP development library
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libwebp-dev
+      - name: Decode and validate all twelve unmodified original WebP files
+        run: |
+          cd MayOS_0.3.0-pre1/native-game
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I. webp.c qa/test-webp.c -lwebp -o /tmp/summer-webp-test
+          /tmp/summer-webp-test /tmp/galgame/site
