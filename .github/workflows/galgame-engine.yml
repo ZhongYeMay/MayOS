@@ -30,3 +30,13 @@ jobs:
           cd MayOS_0.3.0-pre1/native-game
           gcc -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I. engine.c qa/test-engine.c -o /tmp/summer-sanitized
           /tmp/summer-sanitized
+      - name: Compile and test native rendering, animation, and PCM audio
+        run: |
+          cd MayOS_0.3.0-pre1/native-game
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I. render.c audio.c qa/test-media.c -lm -o /tmp/summer-media-test
+          /tmp/summer-media-test
+      - name: Media runtime sanitizer checks
+        run: |
+          cd MayOS_0.3.0-pre1/native-game
+          gcc -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I. render.c audio.c qa/test-media.c -lm -o /tmp/summer-media-sanitized
+          /tmp/summer-media-sanitized
