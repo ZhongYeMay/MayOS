@@ -1,0 +1,32 @@
+name: Test native Galgame engine
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'MayOS_0.3.0-pre1/native-game/**'
+      - '.github/workflows/galgame-engine.yml'
+permissions:
+  contents: read
+jobs:
+  story-engine:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin original game
+        run: |
+          git clone --quiet https://github.com/ZhongYeMay/galgame.git /tmp/galgame
+          git -C /tmp/galgame checkout --quiet fa34344a1cff46025e8d169f56411e290e9fafbd
+      - name: Export unchanged original story and verify all links
+        run: |
+          node MayOS_0.3.0-pre1/native-game/export-story.js /tmp/galgame/site/story.js MayOS_0.3.0-pre1/native-game/story_data.h
+      - name: Compile native engine with strict warnings and run regression tests
+        run: |
+          cd MayOS_0.3.0-pre1/native-game
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -I. engine.c qa/test-engine.c -o /tmp/summer-native-test
+          /tmp/summer-native-test
+      - name: Test with address and undefined-behavior sanitizers
+        run: |
+          cd MayOS_0.3.0-pre1/native-game
+          gcc -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I. engine.c qa/test-engine.c -o /tmp/summer-sanitized
+          /tmp/summer-sanitized
