@@ -61,6 +61,7 @@ def test_http2(cert, key):
     context.set_alpn_protocols(["h2"])
     failures = []
     def respond():
+        answered = False
         try:
             listener.settimeout(10)
             raw, _ = listener.accept()
@@ -79,8 +80,10 @@ def test_http2(cert, key):
                             protocol.send_headers(event.stream_id, [(":status", "200"), ("content-type", "text/plain")])
                             protocol.send_data(event.stream_id, b"MayOS HTTP2 works", end_stream=True)
                             connection.sendall(protocol.data_to_send())
-                            return
+                            answered = True
                     connection.sendall(protocol.data_to_send())
+        except (ssl.SSLEOFError, ConnectionResetError) as error:
+            if not answered: failures.append(error)
         except Exception as error: failures.append(error)
     worker = threading.Thread(target=respond, daemon=True); worker.start()
     try:
