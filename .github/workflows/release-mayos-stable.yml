@@ -69,7 +69,7 @@ jobs:
             grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools dosfstools \
             qemu-system-x86 ovmf python3 python3-pil fonts-noto-cjk \
             fonts-dejavu-core flex bison bc libelf-dev libssl-dev \
-            xz-utils busybox-static musl-tools rsync
+            xz-utils busybox-static musl-tools rsync libcurl4-openssl-dev pkg-config ca-certificates
       - name: Build custom ISO
         working-directory: MayOS_0.3.0-pre1
         run: make all

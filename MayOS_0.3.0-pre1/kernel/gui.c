@@ -547,7 +547,7 @@ static void shell(void) {
         char report[384];
         platform_network_status(report, sizeof(report));
         emit(report);
-        emit("HTTP: Explorer supports http:// text preview; HTTPS unavailable.");
+        emit("Explorer: HTTP(S), certificate-verified TLS, HTTP/2 and IPv6 (Linux).");
 #else
         emit("Network: MayKernel has no native NIC / TCP/IP driver.");
         emit("Boot Linux for DHCP, DNS, IP diagnostics and HTTP preview.");
@@ -1051,25 +1051,25 @@ static void explorer_draw(Window *w) {
     int x = w->x, y = w->y;
     text(x + 24, y + 58, "<   >   ↻", muted);
     roundrect(x + 120, y + 51, w->w - 250, 34, bg);
-    text(x + 132, y + 58, "输入 http:// 地址 / ASCII", muted);
+    text(x + 132, y + 58, "输入 HTTP(S) 地址 / ASCII", muted);
     button(x + w->w - 115, y + 53, 90, "收藏", 0);
     text(x + 25, y + 100, explorer_bookmark[0] ? explorer_bookmark : "收藏夹为空（仅本次会话）", muted);
     circle(x + 130, y + 207, 24, accent);
     circle(x + 130, y + 207, 18, panel);
     large_text(x + 177, y + 187, "MayOS Explorer", ink);
     roundrect(x + 100, y + 260, w->w - 200, 44, bg);
-    text(x + 114, y + 272, explorer_query[0] ? explorer_query : "http://example.com/", ink);
+    text(x + 114, y + 272, explorer_query[0] ? explorer_query : "https://example.com/", ink);
     button(x + w->w - 92, y + 267, 65, "转到", 1);
 #ifdef MAYOS_LINUX
     if (explorer_loading) button(x + w->w - 92, y + 312, 65, "停止", 0);
 #endif
-    text(x + 100, y + 337, "网络 / HTTP 文本预览。HTTPS 与完整浏览器尚未支持。", muted);
+    text(x + 100, y + 337, "Linux: HTTPS / TLS / HTTP2 / IPv6 · 文本预览", muted);
 #ifdef MAYOS_LINUX
     char network_report[384];
     int has_network = platform_network_status(network_report, sizeof(network_report));
-    text(x + 100, y + 358, has_network ? "IP 已获取 · DHCP 网络可用" : "网络初始化中 · 检查 DHCP 或网卡", muted);
+    text(x + 100, y + 358, has_network ? "IP 已分配 · 点击转到测试连接" : "网络初始化中 · 检查 DHCP 或网卡", muted);
 
-    text(x + 100, y + 383, explorer_loading ? "HTTP 正在加载 / 10 秒超时" : "HTTP 文本预览 · 不支持 HTTPS / HTML 渲染", accent);
+    text(x + 100, y + 383, explorer_loading ? "HTTP(S) 正在加载 / 10 秒超时" : "证书校验开启 · 不支持 HTML / JavaScript 渲染", accent);
     const char *s = explorer_response;
     int cols = (w->w - 140) / 8;
     if (cols > 79) cols = 79;

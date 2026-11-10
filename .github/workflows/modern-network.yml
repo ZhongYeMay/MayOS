@@ -1,0 +1,42 @@
+name: Verify native modern network in MayOS Linux guest
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/modern-network.yml'
+      - 'MayOS_0.3.0-pre1/linux/**'
+      - 'MayOS_0.3.0-pre1/scripts/modern*'
+      - 'MayOS_0.3.0-pre1/scripts/network_runtime_test.py'
+permissions:
+  contents: read
+jobs:
+  guest-network:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native build, TLS and VM dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib musl-tools \
+            grub-common grub-pc-bin grub-efi-amd64-bin xorriso mtools \
+            qemu-system-x86 python3-pil python3-h2 fonts-noto-cjk fonts-dejavu-core \
+            flex bison bc libelf-dev libssl-dev xz-utils busybox-static rsync \
+            libcurl4-openssl-dev pkg-config ca-certificates
+      - name: Build actual MayOS dual-boot image
+        working-directory: MayOS_0.3.0-pre1
+        run: make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+      - name: Verify native worker inside packaged root and running guest
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          python3 scripts/network_runtime_test.py --chroot
+          python3 scripts/modern_guest_test.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: modern-network-guest-evidence
+          path: |
+            MayOS_0.3.0-pre1/build/test-modern-network*.log
+            MayOS_0.3.0-pre1/build/linux/network-runtime.json
+          if-no-files-found: warn

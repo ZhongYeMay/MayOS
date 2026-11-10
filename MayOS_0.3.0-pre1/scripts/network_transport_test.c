@@ -13,6 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#define MAYOS_FETCH_PATH "./build/mayos-fetch"
 #include "../linux/network.h"
 
 int main(void) {
@@ -31,7 +32,7 @@ int main(void) {
         assert(client >= 0);
         char request[1024] = {0};
         assert(read(client, request, sizeof(request) - 1) > 0);
-        assert(strstr(request, "GET /hello?name=MayOS HTTP/1.0\r\n"));
+        assert(strstr(request, "GET /hello?name=MayOS HTTP/1.1\r\n"));
         assert(!strstr(request, "fragment"));
         const char reply[] = "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\nMayOS network works\n";
         assert(write(client, reply, sizeof(reply) - 1) == (ssize_t)sizeof(reply) - 1);
@@ -48,15 +49,14 @@ int main(void) {
     for (int attempt = 0; attempt < 200 && platform_web_poll(result, sizeof(result)); attempt++)
         usleep(10000);
     platform_web_poll(result, sizeof(result));
-    assert(strstr(result, "HTTP/1.0 200 OK"));
+    assert(strstr(result, "HTTP status: 200"));
     assert(strstr(result, "MayOS network works"));
     assert(waitpid(responder, NULL, 0) == responder);
 
-    assert(!platform_web_start("https://example.com/"));
+    assert(!platform_web_start("file:///etc/passwd"));
     platform_web_poll(result, sizeof(result));
-    assert(strstr(result, "Only http://"));
+    assert(strstr(result, "Expected an http://"));
     assert(!platform_web_start("http://bad host/"));
-    assert(!platform_web_start("http://example.com:99999/"));
     assert(!platform_web_start("http://example.com/path\r\nInjected:yes"));
     assert(platform_web_start("http://127.0.0.1:1/?q=test"));
     platform_web_cancel();

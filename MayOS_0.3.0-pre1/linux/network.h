@@ -1,4 +1,4 @@
-/* Minimal asynchronous HTTP/1.0 text transport. No TLS, redirects or HTML execution.
+/* Asynchronous native HTTP(S) worker transport. HTML execution is not supported.
    Included by desktop.c after libc headers and helper-name undefinitions. */
 #include <ifaddrs.h>
 #include <arpa/inet.h>
@@ -25,88 +25,24 @@ void platform_web_cancel(void) {
     web_stop();
     snprintf(web_result, sizeof(web_result), "Request cancelled.");
 }
-static void web_child(const char *host, const char *port, const char *path) {
-    struct addrinfo hints = {0}, *addresses = NULL;
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    if (getaddrinfo(host, port, &hints, &addresses)) {
-        dprintf(STDOUT_FILENO, "DNS lookup failed. Check DHCP and /etc/resolv.conf.");
-        _exit(1);
-    }
-    int sock = -1;
-    for (struct addrinfo *a = addresses; a; a = a->ai_next) {
-        sock = socket(a->ai_family, a->ai_socktype, a->ai_protocol);
-        if (sock < 0) continue;
-        struct timeval timeout = {.tv_sec = 5};
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-        setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-        if (!connect(sock, a->ai_addr, a->ai_addrlen)) break;
-        close(sock); sock = -1;
-    }
-    freeaddrinfo(addresses);
-    if (sock < 0) { dprintf(1, "Connection failed. Check interface and route."); _exit(1); }
-    char request[1024];
-    int count = snprintf(request, sizeof(request), "GET %s HTTP/1.0\r\nHost: %s:%s\r\nConnection: close\r\nUser-Agent: MayOS-Orange/0.1\r\n\r\n", path, host, port);
-    int sent = 0;
-    while (sent < count) {
-        ssize_t n = send(sock, request + sent, (size_t)(count - sent), MSG_NOSIGNAL);
-        if (n <= 0) { dprintf(1, "HTTP request failed."); _exit(1); }
-        sent += (int)n;
-    }
-    char buffer[512];
-    int total = 0;
-    while (total < 1800) {
-        ssize_t n = recv(sock, buffer, sizeof(buffer), 0);
-        if (n <= 0) {
-            if (!total) dprintf(1, "Empty response or read timeout.");
-            break;
-        }
-        if (n > 1800 - total) n = 1800 - total;
-        for (ssize_t i = 0; i < n; i++)
-            if ((unsigned char)buffer[i] < 32 && buffer[i] != '\n') buffer[i] = ' ';
-            else if ((unsigned char)buffer[i] > 126) buffer[i] = '?';
-        if (write(1, buffer, (size_t)n) != n) break;
-        total += (int)n;
-    }
-    if (total >= 1800) dprintf(1, "\n[Preview truncated at 1800 bytes]");
-    close(sock);
-    _exit(0);
-}
+#ifndef MAYOS_FETCH_PATH
+#define MAYOS_FETCH_PATH "/usr/bin/mayos-fetch"
+#endif
 int platform_web_start(const char *url) {
     web_stop(); web_used = 0;
-    snprintf(web_result, sizeof(web_result), "Only http:// URLs are supported. HTTPS/search engines need TLS.");
-    if (strncmp(url, "http://", 7) || strlen(url) > 600) return 0;
-    const char *authority = url + 7;
-    size_t length = strcspn(authority, "/?#");
-    if (!length || length >= 254) return 0;
-    char host[254], port[6] = "80";
-    memcpy(host, authority, length); host[length] = 0;
-    char *colon = strchr(host, ':');
-    if (colon) {
-        *colon++ = 0;
-        if (!*colon || strlen(colon) > 5) return 0;
-        for (const char *c = colon; *c; c++) if (*c < '0' || *c > '9') return 0;
-        long value = strtol(colon, NULL, 10);
-        if (value < 1 || value > 65535) return 0;
-        snprintf(port, sizeof(port), "%s", colon);
-    }
-    if (!host[0]) return 0;
-    for (const char *c = host; *c; c++)
-        if (!((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') ||
-              (*c >= '0' && *c <= '9') || *c == '.' || *c == '-')) return 0;
-    const char *suffix = authority + length;
-    char target[604];
-    size_t target_length = strcspn(suffix, "#");
-    snprintf(target, sizeof(target), "%s%.*s", *suffix == '/' ? "" : "/",
-             (int)target_length, suffix);
-    const char *path = target;
-    for (const char *c = path; *c; c++) if (*c <= 32 || (unsigned char)*c >= 127) return 0;
+    snprintf(web_result, sizeof(web_result), "Expected an http:// or https:// URL.");
+    if (!url || strlen(url) > 600 ||
+        (strncmp(url, "http://", 7) && strncmp(url, "https://", 8))) return 0;
+    for (const unsigned char *c = (const unsigned char *)url; *c; c++)
+        if (*c <= 32 || *c >= 127) return 0;
     int fds[2];
     if (pipe(fds)) return 0;
     web_pid = fork();
     if (!web_pid) {
         close(fds[0]); dup2(fds[1], STDOUT_FILENO); close(fds[1]);
-        web_child(host, port, path);
+        execl(MAYOS_FETCH_PATH, "mayos-fetch", url, (char *)NULL);
+        dprintf(1, "Modern transport unavailable: mayos-fetch could not start.\n");
+        _exit(1);
     }
     close(fds[1]);
     if (web_pid < 0) { close(fds[0]); return 0; }
@@ -141,13 +77,15 @@ int platform_web_poll(char *destination, int capacity) {
     return web_pid > 0;
 }
 
-/* Lightweight IPv4 diagnostics for MayOS Settings, Explorer and MayShell.
+/* Lightweight IPv4/IPv6 diagnostics for MayOS Settings, Explorer and MayShell.
    Reports actual Linux interface, DHCP-assigned address, default route and DNS.
-   Not a Wi-Fi manager, TLS client or custom-kernel network stack. */
+   Not a Wi-Fi manager or custom-kernel network stack. */
 int platform_network_status(char *destination, int capacity) {
     if (!destination || capacity < 16) return 0;
     char iface[32] = "none", address[INET_ADDRSTRLEN] = "unassigned";
     char gateway[INET_ADDRSTRLEN] = "none", dns[64] = "none";
+    char ipv6[INET6_ADDRSTRLEN] = "unassigned";
+    int has_ipv6 = 0;
     struct ifaddrs *interfaces = NULL;
     int connected = 0;
     if (getifaddrs(&interfaces) == 0) {
@@ -158,6 +96,18 @@ int platform_network_status(char *destination, int capacity) {
             if (inet_ntop(AF_INET, &ipv4->sin_addr, address, sizeof(address))) {
                 snprintf(iface, sizeof(iface), "%.31s", a->ifa_name);
                 connected = 1;
+                break;
+            }
+        }
+        for (struct ifaddrs *a = interfaces; a; a = a->ifa_next) {
+            if (!a->ifa_addr || a->ifa_addr->sa_family != AF_INET6 ||
+                !(a->ifa_flags & IFF_UP) || (a->ifa_flags & IFF_LOOPBACK)) continue;
+            const struct sockaddr_in6 *ip6 = (const struct sockaddr_in6 *)a->ifa_addr;
+            if (IN6_IS_ADDR_LINKLOCAL(&ip6->sin6_addr)) continue;
+            if (connected && strcmp(a->ifa_name, iface)) continue;
+            if (inet_ntop(AF_INET6, &ip6->sin6_addr, ipv6, sizeof(ipv6))) {
+                has_ipv6 = 1;
+                if (!connected) snprintf(iface, sizeof(iface), "%.31s", a->ifa_name);
                 break;
             }
         }
@@ -186,7 +136,7 @@ int platform_network_status(char *destination, int capacity) {
         fclose(resolv);
     }
     snprintf(destination, (size_t)capacity,
-             "Network: %s\nDevice: %s\nIPv4: %s\nGateway: %s\nDNS: %s",
-             connected ? "connected" : "DHCP pending / no IPv4", iface, address, gateway, dns);
-    return connected;
+             "Network: %s\nDevice: %s\nIPv4: %s\nIPv6: %s\nIPv4 gateway: %s\nDNS: %s",
+             connected || has_ipv6 ? "IP assigned" : "waiting for address", iface, address, ipv6, gateway, dns);
+    return connected || has_ipv6;
 }

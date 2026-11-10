@@ -23,6 +23,8 @@ import sys
 import tarfile
 import urllib.error
 import urllib.request
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from modern_network import runtime as modern_network_runtime
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build/linux"
@@ -35,6 +37,8 @@ FASTFETCH_URL = f"https://github.com/fastfetch-cli/fastfetch/releases/download/{
 FASTFETCH_SHA256 = "e680dd3752472d9042cc297424e80198cea9b258aeecaf8af140b3e48e92689d"
 VERSION_RE = re.compile(r"[1-9][0-9]*\.[0-9]+(?:\.[0-9]+)?\Z")
 INPUT_FILES = {
+    "modern_network_builder_sha256": ROOT / "scripts/modern_network.py",
+    "modern_network_source_sha256": ROOT / "linux/fetch.c",
     "config_sha256": ROOT / "linux/kernel.config",
     "init_sha256": ROOT / "linux/init",
     "inittab_sha256": ROOT / "linux/inittab",
@@ -61,7 +65,7 @@ REQUIRED_CONFIG = (
     "DEVTMPFS", "PROC_FS", "SYSFS", "TMPFS", "TTY", "VT_CONSOLE",
     "SERIAL_8250_CONSOLE", "VGA_CONSOLE", "KEYBOARD_ATKBD", "ACPI",
     "EFI", "EFI_STUB", "FB", "FB_DEVICE", "FRAMEBUFFER_CONSOLE", "MOUSE_PS2",
-    "INPUT_EVDEV", "NET", "INET", "PACKET", "E1000", "VIRTIO_MENU", "VIRTIO",
+    "INPUT_EVDEV", "NET", "INET", "IPV6", "RTC_HCTOSYS", "PACKET", "E1000", "VIRTIO_MENU", "VIRTIO",
     "VIRTIO_PCI",
 )
 REQUIRED_APPLETS = {
@@ -378,6 +382,11 @@ def build_initramfs(busybox: Path, fastfetch: Path, version: str) -> dict:
     for name, major, minor in (("console", 5, 1), ("null", 1, 3), ("tty1", 4, 1), ("ttyS0", 4, 64)):
         entries.append(("dev/" + name, stat.S_IFCHR | 0o600, b"", major, minor))
     stream = io.BytesIO()
+    existing = {entry[0] for entry in entries}
+    for entry in modern_network_runtime(ROOT, OUT):
+        if entry[0] not in existing:
+            entries.append(entry)
+            existing.add(entry[0])
     for inode, (name, mode, data, major, minor) in enumerate(entries, 1):
         cpio_member(stream, inode, name, mode, data, major=major, minor=minor)
     cpio_member(stream, len(entries) + 1, "TRAILER!!!", 0)
