@@ -20,8 +20,12 @@ OBJECTS := build/boot.o build/core.o build/fs.o build/gui.o build/galgame.o
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
 # Set SUMMER_SITE=/absolute/path/to/galgame/site to include all 12 original assets.
 ifneq ($(strip $(SUMMER_SITE)),)
-CFLAGS += -DMAYGAME_WITH_ART
+CFLAGS += -DMAYGAME_WITH_ART -DMAYGAME_WITH_STORY
 OBJECTS += build/summer_art.o
+build/summer_story.h: scripts/pack_summer_story.js $(SUMMER_SITE)/story.js | build
+	node scripts/pack_summer_story.js "$(SUMMER_SITE)/story.js" build/summer_story.h
+build/font.h: build/summer_story.h
+build/galgame.o: build/summer_story.h
 build/summer_art.h: scripts/pack_summer_art.py $(wildcard $(SUMMER_SITE)/assets/retro/*.webp) | build
 	$(PYTHON) scripts/pack_summer_art.py --site "$(SUMMER_SITE)" --output build
 build/summer_art.o: build/summer_art.h
@@ -74,4 +78,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h build/summer_art.h build/summer_art.bin
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h build/summer_art.h build/summer_art.bin build/summer_story.h
