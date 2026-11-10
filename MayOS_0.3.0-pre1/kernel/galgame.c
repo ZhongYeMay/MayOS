@@ -236,6 +236,7 @@ void maygame_draw(MayGameFill fill,MayGameText text,MayGameBlit blit){
     fill(80,438,864,60,0x413d4a);
     text(98,458,draft[0]?draft:"Type your reply here...",0xf2edf5);
     text(80,520,status,0xffd5af);
+    if(last_reply[0])text(80,548,last_reply,0xcdc8d3);
     text(80,573,"Enter: 提交并推进剧情   Ctrl+S: 保存进度",0xcdc8d3);
     text(80,611,"↑ ↓: 切换角色  ESC: 返回桌面",0xcdc8d3);
     text(80,650,dirty_draft?"有未保存的进度":"独立自研引擎 / 无 SDL、Linux、WebView",0x99afa9);
