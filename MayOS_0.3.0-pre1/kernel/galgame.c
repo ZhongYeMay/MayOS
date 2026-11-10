@@ -161,6 +161,7 @@ void maygame_click(int x,int y){
             if(x>=80+i*275 && x<300+i*275){route_set(i);return;}
     }
 }
+#ifdef MAYGAME_WITH_STORY
 static void wrapped(MayGameText text,int x,int y,const char *s,u32 color) {
     /* Freestanding UTF-8 line wrap, respects character boundaries. */
     char line[192];
@@ -179,6 +180,7 @@ static void wrapped(MayGameText text,int x,int y,const char *s,u32 color) {
     }
     if(len&&rows<4){line[len]=0;text(x,y+rows*23,line,color);}
 }
+#endif
 void maygame_draw(MayGameFill fill,MayGameText text,MayGameBlit blit){
 #ifndef MAYGAME_WITH_ART
     (void)blit;
