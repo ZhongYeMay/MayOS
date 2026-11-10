@@ -1,3 +1,4 @@
+.DEFAULT_GOAL := all
 CC := gcc
 LD := ld
 PYTHON ?= python3
