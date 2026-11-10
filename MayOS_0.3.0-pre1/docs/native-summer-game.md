@@ -1,54 +1,45 @@
-# MayKernel《夏日未寄》独立原生开发
+# MayKernel《夏日未寄》原生离线版
 
-这个模块直接在自研 MayKernel x86 32 位、PS/2、framebuffer 和 MayFS 上实现，不移植 SDL、Linux、浏览器、运行时兼容补丁，也不使用 WebView。
+此版本只针对 **MayOS 自研 MayKernel x86 32 位**。游戏的窗口绘图、RGBA alpha 合成、键盘事件、剧情状态、路线选择与 MayFS 保存均由自研 freestanding C 编写；不运行 SDL、Linux ABI、WebView，也不移植其他平台的游戏引擎。
 
-代码：
-- `kernel/galgame.c`：自研游戏输入状态、场景占位显示、角色切换、存档草稿。
-- `kernel/galgame.h`：与 MayOS 原生像素/字体绘图接口连接。
-- `kernel/gui.c`：在桌面左侧增加游戏启动图标，分发鼠标和键盘。
-- `scripts/record_galgame.py`：使用 QEMU QMP 截取真实客体 framebuffer 并录制视频。
+**按当前产品要求，MayKernel 版不接入 DeepSeek，也不需要互联网。** Linux 版的 AI 自由对话由另一套原生程序负责，两边不混用运行时实现。
 
-## 当前可演示内容
+## 组件
 
-按左侧「夏日未寄」图标可进入全屏应用。三个女主可以切换，玩家自己输入回复，不出现任何固定的对话选项。Enter 在 HTTPS 后端不存在时明确拒绝发送。Ctrl+S 保存输入草稿，Esc 返回桌面。
+- `kernel/galgame.c`：原生剧情状态机、自由文本输入、原版剧情推进、三个角色路线、MayFS 进度读写。
+- `kernel/galgame.h`：MayKernel 绘图、文字与键鼠回调。
+- `kernel/gui.c`：桌面侧栏原生启动入口与 framebuffer 软件合成。
+- `scripts/pack_summer_art.py`：构建时从原始 WebP 解码三张背景、九张立绘的原始像素为 RGBA 数据。
+- `scripts/pack_summer_story.js`：构建时从受信任的原版 `site/story.js` 导出**所有原始剧情节点及六个结局**到编译期 C 数据结构。MayKernel 运行时不执行 JavaScript。
+- `scripts/record_galgame.py`：QMP 截取真实 QEMU framebuffer，生成 H.264 MP4 视频及 SHA-256 元数据。
 
-由于 MayKernel 尚未实现 TCP、TLS、HTTPS、JSON/API 客户端、中文输入法与音频驱动，该模块**还不能真正与 DeepSeek 对话**或播放音频。
+## 玩法现状
 
-图像素材现已加入一条完全自研的构建路径：`scripts/pack_summer_art.py` 将原版 3 张背景与 9 张人物 WebP 解码为 **逐像素一致的 RGBA**，再通过 GNU ELF32 链接作为数据嵌入 MayKernel；`kernel/gui.c` 内的原生 C framebuffer 绘制函数自行处理图片缩放与 alpha 混合。运行时完全不用 SDL、WebP 库、Linux 补丁或 WebView。未提供原始素材时保留明确的资源缺失提示，不伪装完整运行。
+在 MayKernel 桌面点击「夏日未寄」入口。上方点击女主名字或用 ↑/↓ 切换故事线，按键直接自由填写自己的回答（不是选择题），按 Enter 提交并继续下一段**原版离线剧情**，Ctrl+S 保存进度到 MayFS，Esc 返回桌面。再次启动会尝试恢复合法的游戏存档。
 
-在仓库根目录同时检出原版 Galgame 后，可这样构建带全部原始画面的 MayKernel ISO：
+由于离线模式没有语言模型，女主的台词来自原版故事，**不会以 AI 方式动态生成**。部分原版选择节点暂时通过玩家输入中表明“稍后 / 慢慢”的词语触发另一条路线；这只是开发中的可重复分支规则，不能当作自然语言理解。当前 PS/2 输入仅支持 ASCII，中文及日文输入法未实现。场景静态显示原始素材；完整音频、动画、全部故事按钮与可用性测试尚待实现。
 
-```bash
+## 原版素材构建
+
+需要在 MayOS 仓库的同级目录检出 `ZhongYeMay/galgame` 的 `mayos-game-package` 分支，确保完整的 `site/` 原版资源存在。
+
+```sh
+cd MayOS/MayOS_0.3.0-pre1
 make SUMMER_SITE=../source-galgame/site
-```
-
-`SUMMER_SITE` 应指向含有 `assets/retro/*.webp` 的完整原版 site 目录，缺任意一张画面都会使打包失败。此方案在视觉上保留原始 RGBA 像素，但不是对 WebP 文件的原样存储——资源编码改变以适应自研内核。不会把静态台词伪装成 AI。
-
-Linux 原生 SDL2 + DeepSeek 版本保存在 `ZhongYeMay/galgame` 的 `mayos-game-package` 分支，**不是** MayKernel 代码的移植来源。
-
-## 在支持 QEMU 的 Linux 主机实录
-
-```bash
-make
 python3 scripts/record_galgame.py \
   --iso build/mayos.iso \
   --output build/recordings/MayKernel-Summer-Native-QEMU.mp4 \
   --source-commit "$(git rev-parse HEAD)"
 ```
 
-此脚本从开机到返回桌面的每一帧都从真实 QEMU framebuffer 读取，记录源码/ISO/视频哈希。只有运行成功且生成 MP4 和 JSON 元数据后才算录制完成。
+请根据实际路径设置 `SUMMER_SITE`。生成器要求 12 张 WebP 图片和合法的原版剧情脚本；缺少文件会阻止完整资源打包。构建时解码为 RGBA **不会改动原版图像源文件或剧情文本**，但编码形式不再是 WebP，这属于针对自研内核的数据表示转换。
 
-录屏证明范围仅限 **MayKernel 原生 GUI、文本输入、存档快捷键、角色选择与返回桌面**；不证明 AI 网络、素材、音乐和完整剧情可用。自动化工作流位于 `.github/workflows/maykernel-game-qemu.yml`，构建完成后下载测试视频和日志。
+## QEMU 验证与边界
 
-## QEMU 视频说明
+`.github/workflows/maykernel-game-qemu.yml` 会从 GitHub 自动检出原版资源、生成 native x86 ISO，并运行 QEMU 录制真实画面。自动测试产物位于 GitHub Actions 的 `maykernel-native-galgame-qemu-evidence` artifact 中，包含 MP4、JSON、QEMU 串口及录制日志。
 
-`.github/workflows/maykernel-game-qemu.yml` 的自动化测试会同时检出 Galgame 的原始素材分支、以 `SUMMER_SITE` 构建嵌入原画的内核 ISO，随后通过真实 QEMU/QMP 帧采集录制 MP4。工作流源码提交不等于已成功录屏；必须看到成功的工作流执行、MP4 文件及 JSON 哈希记录后才能确认。
+2026-11-10，修复 Makefile 默认目标后，提交 `955a41a0` 的自动运行 `42838909692` 已通过 ISO 构建、QEMU 启动及视频录制，生成 19.3 秒的 H.264 1024×768 视频。真实截图已核实为原版电台、海边背景与相应人物立绘的 framebuffer 渲染，不是合成展示。**该次运行尚不包括随后新增的全量原版剧情推进功能**，后者必须单独验证。
 
-## 原生下一阶段
+此阶段仍缺少音乐/音效、自研音频驱动、中文/日文输入法、完整菜单、六结局完整自动回归，以及静态资源变更后的更多场景验证。**MayKernel 不计划接入 DeepSeek**。
 
-1. 为 MayKernel 实现独立可用的 TCP/IPv4 网卡驱动（需要 DHCP/DNS）、TLS、HTTP/1.1 和 JSON；保护运行时 API 凭据，避免写入 MayFS 或序列日志。
-2. 实现画面渐变、人物姿态动画、更多文本演出，以及持久化资产存储和内核专用资源管理（已实现的嵌入式 RGBA 静态资产仍需性能验收）。
-3. 自研文本输入（含中文/日文输入）、音频驱动与合成引擎，以及大容量文件储存和图像资源加载。
-4. 将模型主动生成的女主台词与自由填写的玩家回复连成真正回合，完成端到端 QEMU 验证。
-
-本页仅说明当前仓库中确实实现及未实现的能力，不代表完整移植已完成。
+测试流程应以对应提交的 GitHub Actions 运行与实际视频文件为准，不能只因源码存在就声称已运行成功。
