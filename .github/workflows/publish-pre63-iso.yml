@@ -2,6 +2,12 @@ name: Publish validated MayOS 0.4.0-pre63 ISO
 
 on:
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Immutable prerelease source commit"
+        required: true
+        default: "b5c70adf1ad43fbbe025af1d75894680cadbf2bf"
+        type: string
 
 permissions:
   contents: write
@@ -22,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.source_ref }}
           fetch-depth: 0
       - name: Verify release source revision
         run: |
