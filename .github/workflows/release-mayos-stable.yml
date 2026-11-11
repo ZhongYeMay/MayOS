@@ -1,10 +1,7 @@
 name: Verify and publish MayOS 0.3.0 stable ISO
 
+# Stable releases are explicitly approved, never published by ordinary pushes.
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/release-mayos-stable.yml'
   workflow_dispatch:
 
 permissions:
