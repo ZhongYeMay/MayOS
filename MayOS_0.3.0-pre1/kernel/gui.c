@@ -1023,18 +1023,23 @@ static void settings(Window *w) {
             text(px + 19, cy + 215, styles[i], ink);
             if (desktop_style == i) circle(px + 148, cy + 150, 5, accent);
         }
-        text(cx, cy + 287, "鼠标指针大小", ink);
+        text(cx, cy + 260, "鼠标指针大小", ink);
         const char *pointers[] = {"小", "标准", "大"};
         for (int i = 0; i < 3; i++)
-            button(cx + i * 154, cy + 327, 142, pointers[i], pointer_size == i);
-        text(cx, cy + 393, "桌面版本标识", ink);
-        button(cx, cy + 428, 130, "显示", show_brand);
-        button(cx + 144, cy + 428, 130, "隐藏", !show_brand);
-        button(cx, cy + 490, 145, "恢复默认设置", 0);
+            button(cx + i * 154, cy + 298, 142, pointers[i], pointer_size == i);
+        text(cx, cy + 343, "鼠标指针样式", ink);
+        const char *shapes[] = {"■ 黑色方块", "□ 白色方块", "自定义图片"};
+        for (int i = 0; i < 3; i++)
+            button(cx + i * 168, cy + 376, 158, shapes[i], cursor_style == i);
+        text(cx, cy + 412, "自定义：文档/Cursor.ppm（P3，最大16×16）", muted);
+        text(cx, cy + 440, "桌面版本标识", ink);
+        button(cx, cy + 455, 130, "显示", show_brand);
+        button(cx + 144, cy + 455, 130, "隐藏", !show_brand);
+        button(cx, cy + 495, 145, "恢复默认设置", 0);
 #ifdef MAYOS_LINUX
-        text(cx + 168, cy + 500, "Linux: 本次会话有效", muted);
+        text(cx + 168, cy + 505, "Linux: 本次会话有效", muted);
 #else
-        text(cx + 168, cy + 500, disk_ready ? "MayFS: 自动保存" : "RAM: 本次会话有效", muted);
+        text(cx + 168, cy + 505, disk_ready ? "MayFS: 自动保存" : "RAM: 本次会话有效", muted);
 #endif
     }
 }
@@ -1377,13 +1382,23 @@ static void easter_draw(void) {
     button(610, 646, 108, "返回桌面", 1);
 }
 static void cursor(void) {
-    int size = pointer_size + 1;
-    for (int y = 0; y < 20; y++)
-        for (int x = 0; x <= y / 2; x++)
-            rect(mx + x * size, my + y * size, size, size,
-                 x == 0 || x == y / 2 || y == 19 ? 0x223149 : 0xffffff);
-    rect(mx + 6 * size, my + 14 * size, 3 * size, 9 * size, 0x223149);
-    rect(mx + 7 * size, my + 15 * size, size, 6 * size, 0xffffff);
+    int side = 12 + pointer_size * 6;
+    if (cursor_style == 2 && custom_cursor_width && custom_cursor_height) {
+        /* Pixel-art nearest-neighbor scaling. Magenta means transparency. */
+        for (int y = 0; y < side; y++)
+            for (int x = 0; x < side; x++) {
+                int sx = x * custom_cursor_width / side;
+                int sy = y * custom_cursor_height / side;
+                u32 color = custom_cursor[sy * custom_cursor_width + sx];
+                if (color != 0xff00ff)
+                    rect(mx + x, my + y, 1, 1, color);
+            }
+        return;
+    }
+    u32 edge = cursor_style == 1 ? 0x161616 : 0xffffff;
+    u32 fill = cursor_style == 1 ? 0xffffff : 0x101010;
+    rect(mx, my, side, side, edge);
+    rect(mx + 2, my + 2, side - 4, side - 4, fill);
 }
 
 static void render(void) {
@@ -1723,13 +1738,20 @@ static void left_click(void) {
                 if (ry >= 206 && ry < 306 && rx >= 204 && rx < 732) {
                     int i = (rx - 204) / 176;
                     if (i < 3) { desktop_style = i; preferences_save(); }
-                } else if (ry >= 392 && ry < 426 && rx >= 204 && rx < 666) {
+                } else if (ry >= 363 && ry < 398 && rx >= 204 && rx < 666) {
                     int i = (rx - 204) / 154;
                     if (i < 3) { pointer_size = i; preferences_save(); }
-                } else if (ry >= 493 && ry < 527 && rx >= 204 && rx < 478) {
+                } else if (ry >= 441 && ry < 477 && rx >= 204 && rx < 718) {
+                    int i = (rx - 204) / 168;
+                    if (i == 2 && !cursor_image_load()) {
+                        notify("请检查文档/Cursor.ppm（P3，最大16×16）");
+                        return;
+                    }
+                    if (i >= 0 && i < 3) { cursor_style = i; preferences_save(); }
+                } else if (ry >= 520 && ry < 553 && rx >= 204 && rx < 478) {
                     show_brand = rx < 348;
                     preferences_save();
-                } else if (inside(rx, ry, 204, 555, 145, 32)) {
+                } else if (inside(rx, ry, 204, 560, 145, 34)) {
                     preferences_reset();
                     notify("个性化设置已恢复默认");
                 }
