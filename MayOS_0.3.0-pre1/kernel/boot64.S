@@ -1,6 +1,6 @@
 /* Multiboot1 x86 entry -> genuine x86_64 long mode.
  * GRUB hands off in 32-bit protected mode on BIOS and x64 UEFI.
- * Identity-map 0..4 GiB with 2 MiB huge pages before executing 64-bit C.
+ * Identity-map 0..64 GiB with 2 MiB huge pages before executing 64-bit C.
  * CPU must support PAE and long mode; no 32-bit kernel is linked. */
 .set MB_MAGIC, 0x1badb002
 .set MB_FLAGS, 0x00000007
@@ -30,21 +30,30 @@ _start:
     btl $29, %edx
     jnc .Lhalt32
 
-    /* PML4[0] -> PDPT; four PDPT entries map the first 4 GiB. */
+    /* PML4[0] -> PDPT; 64 consecutive 1-GiB PDs cover [0, 64 GiB).
+     * This includes firmware RGB BARs above 4 GiB without truncating pointers. */
     movl $(pdpt + 3), pml4
-    movl $(pd_tables + 3), pdpt
-    movl $(pd_tables + 4096 + 3), pdpt + 8
-    movl $(pd_tables + 8192 + 3), pdpt + 16
-    movl $(pd_tables + 12288 + 3), pdpt + 24
+    xorl %ebx, %ebx
+.Lpdpt:
+    movl %ebx, %eax
+    shll $12, %eax
+    addl $(pd_tables + 3), %eax
+    movl %eax, pdpt(,%ebx,8)
+    movl $0, pdpt + 4(,%ebx,8)
+    incl %ebx
+    cmpl $64, %ebx
+    jb .Lpdpt
     xorl %ebx, %ebx
 .Lidentity:
     movl %ebx, %eax
     shll $21, %eax
     orl $0x83, %eax              /* present | writable | 2 MiB page */
     movl %eax, pd_tables(,%ebx,8)
-    movl $0, pd_tables + 4(,%ebx,8)
+    movl %ebx, %eax
+    shrl $11, %eax
+    movl %eax, pd_tables + 4(,%ebx,8)
     incl %ebx
-    cmpl $2048, %ebx
+    cmpl $32768, %ebx
     jb .Lidentity
 
     movl $pml4, %eax
@@ -114,7 +123,7 @@ boot_info:  .skip 4
 .balign 4096
 pml4: .skip 4096
 pdpt: .skip 4096
-pd_tables: .skip 16384
+pd_tables: .skip 262144
 .balign 16
 stack_bottom: .skip 65536
 stack_top:
