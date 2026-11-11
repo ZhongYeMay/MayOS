@@ -1,0 +1,35 @@
+name: Verify MayOS GRUB recovery menu
+
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/boot/grub/**'
+      - 'MayOS_0.3.0-pre1/scripts/boot_compat_test.py'
+      - 'MayOS_0.3.0-pre1/scripts/boot_safe_graphics_test.py'
+      - 'MayOS_0.3.0-pre1/scripts/test_boot_menu.py'
+      - '.github/workflows/boot-menu-unit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'MayOS_0.3.0-pre1/boot/grub/**'
+      - 'MayOS_0.3.0-pre1/scripts/boot_compat_test.py'
+      - 'MayOS_0.3.0-pre1/scripts/boot_safe_graphics_test.py'
+      - 'MayOS_0.3.0-pre1/scripts/test_boot_menu.py'
+      - '.github/workflows/boot-menu-unit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  menu-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate GRUB menu recovery and mode-matrix restoration
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          python3 -m py_compile scripts/boot_compat_test.py scripts/boot_safe_graphics_test.py scripts/test_boot_menu.py
+          python3 -m unittest discover -s scripts -p 'test_boot_menu.py' -v
