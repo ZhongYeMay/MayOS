@@ -1,0 +1,64 @@
+name: Validate native MayKernel x86_64
+
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - 'MayOS_0.3.0-pre1/kernel/**'
+      - 'MayOS_0.3.0-pre1/boot/grub/**'
+      - 'MayOS_0.3.0-pre1/scripts/**'
+      - '.github/workflows/maykernel64-boot-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - 'MayOS_0.3.0-pre1/kernel/**'
+      - 'MayOS_0.3.0-pre1/boot/grub/**'
+      - 'MayOS_0.3.0-pre1/scripts/**'
+      - '.github/workflows/maykernel64-boot-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  bios-and-uefi:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install EFI, QEMU, compiler and font tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc binutils grub-common grub-pc-bin grub-efi-amd64-bin \
+            xorriso mtools qemu-system-x86 ovmf python3-pil \
+            fonts-noto-cjk fonts-dejavu-core
+      - name: Verify ELF64 and build native MayKernel ISO
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euxo pipefail
+          make all
+          readelf -h build/mayos.elf | tee build/elf64-header.txt
+          readelf -h build/mayos.elf | grep -Fq 'ELF64'
+          readelf -h build/mayos.elf | grep -Fq 'Advanced Micro Devices X86-64'
+          grub-file --is-x86-multiboot build/mayos.elf
+      - name: Run real BIOS QEMU desktop, keyboard and filesystem regression
+        working-directory: MayOS_0.3.0-pre1
+        run: make test
+      - name: Boot custom x86_64 kernel from OVMF EFI GRUB
+        working-directory: MayOS_0.3.0-pre1
+        run: python3 scripts/uefi_smoke.py --custom-only --iso build/mayos.iso
+      - name: Preserve genuine QEMU logs, screenshots and firmware evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel64-bios-uefi-evidence
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            MayOS_0.3.0-pre1/build/elf64-header.txt
+            MayOS_0.3.0-pre1/build/test-*.log
+            MayOS_0.3.0-pre1/build/test-*.png
+            MayOS_0.3.0-pre1/build/desktop.png
+            MayOS_0.3.0-pre1/build/*test-results.json
