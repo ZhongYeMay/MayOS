@@ -40,3 +40,14 @@ menuentry "Linux @LINUX_VERSION@ - compatibility rescue (x86_64)" --id linux-saf
     boot
 }
 fi
+
+# Fallback for BIOS VBE / x64 UEFI GOP machines without a usable default mode.
+# Keep this entry last: existing Linux menu selections remain unchanged.
+menuentry "MayOS - custom kernel (safe graphics)" --id mayos-safe {
+    set gfxmode=640x480x32,800x600x16,auto
+    set gfxpayload=$gfxmode
+    multiboot /boot/mayos.elf
+    # Multiboot resets payload settings; restore the safe mode after loading.
+    set gfxpayload=$gfxmode
+    boot
+}
