@@ -23,7 +23,8 @@ static int surface_valid(const MaySurface *s, u64 capacity) {
     }
     u64 row = ((u64)s->xoffset + s->width) * (s->bpp / 8);
     u64 span = ((u64)s->yoffset + s->height - 1) * s->pitch + row;
-    return row <= s->pitch && span <= capacity && span <= 0xffffffffULL;
+    return row <= s->pitch && span <= capacity &&
+           (sizeof(void *) == 8 || span <= 0xffffffffULL);
 }
 static u32 surface_channel(u32 value, u32 bits, u32 shift) {
     return ((value * ((1U << bits) - 1) + 127) / 255) << shift;
