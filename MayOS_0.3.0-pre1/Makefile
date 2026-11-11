@@ -4,7 +4,7 @@ LD := ld
 PYTHON ?= python3
 GRUB_MKRESCUE ?= grub-mkrescue
 GRUB_FILE ?= grub-file
-QEMU ?= qemu-system-i386
+QEMU ?= qemu-system-x86_64
 QEMU64 ?= qemu-system-x86_64
 LINUX_VERSION ?= latest
 LINUX_JOBS ?= 4
@@ -13,8 +13,8 @@ FASTFETCH ?=
 BOOT_FIRMWARE ?= hybrid
 OVMF_CODE ?= /usr/share/OVMF/OVMF_CODE_4M.fd
 OVMF_VARS ?= /usr/share/OVMF/OVMF_VARS_4M.fd
-CFLAGS := -m32 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie -fno-pic -fno-stack-protector -fno-builtin -fno-strict-aliasing -mno-sse -mno-mmx -Ibuild -Ikernel
-OBJECTS := build/boot.o build/core.o build/fs.o build/gui.o build/galgame.o
+CFLAGS := -m64 -DMAYOS_X86_64 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie -fno-pic -fno-stack-protector -fno-builtin -fno-strict-aliasing -fno-asynchronous-unwind-tables -mno-red-zone -mgeneral-regs-only -Ibuild -Ikernel
+OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
@@ -29,7 +29,7 @@ build/galgame.o: build/summer_story.h
 build/summer_art.h: scripts/pack_summer_art.py $(wildcard $(SUMMER_SITE)/assets/retro/*.webp) | build
 	$(PYTHON) scripts/pack_summer_art.py --site "$(SUMMER_SITE)" --output build
 build/summer_art.o: build/summer_art.h
-	$(LD) -m elf_i386 -r -b binary -o $@ build/summer_art.bin
+	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
 .PHONY: all clean run test linux linux-update dual run-dual test-dual run-uefi test-uefi
@@ -41,21 +41,21 @@ build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
 build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 	$(PYTHON) scripts/photo.py
 build/gui.o: build/cat_image.h kernel/explorer_history.h kernel/galgame.h
-build/core.o: kernel/framebuffer.h
+build/core.o: kernel/framebuffer.h kernel/boot64.S
 build/galgame.o: kernel/galgame.h
-build/boot.o: kernel/boot.S | build
-	$(CC) -m32 -c $< -o $@
+build/boot64.o: kernel/boot64.S | build
+	$(CC) -m64 -c $< -o $@
 build/%.o: kernel/%.c kernel/core.h kernel/io.h build/font.h
 	$(CC) $(CFLAGS) -c $< -o $@
-build/mayos.elf: $(OBJECTS) kernel/linker.ld
-	$(LD) -m elf_i386 -T kernel/linker.ld -o $@ $(OBJECTS)
+build/mayos.elf: $(OBJECTS) kernel/linker64.ld
+	$(LD) -m elf_x86_64 -T kernel/linker64.ld -o $@ $(OBJECTS)
 	$(GRUB_FILE) --is-x86-multiboot $@
 build/mayos.iso: build/mayos.elf boot/grub/grub.cfg scripts/dual_iso.py
 	$(PYTHON) scripts/dual_iso.py --custom-only --firmware "$(BOOT_FIRMWARE)" --grub-mkrescue '$(GRUB_MKRESCUE)'
 build/mayos-disk.img: | build
 	truncate -s 8M $@
 run: all
-	$(QEMU) $(if $(QEMU_DATA_DIR),-L $(QEMU_DATA_DIR)) -m 128 -vga std -cdrom build/mayos.iso -drive file=build/mayos-disk.img,format=raw,if=ide,index=0 -boot d -serial file:build/serial.log -no-reboot
+	$(QEMU) -cpu max $(if $(QEMU_DATA_DIR),-L $(QEMU_DATA_DIR)) -m 128 -vga std -cdrom build/mayos.iso -drive file=build/mayos-disk.img,format=raw,if=ide,index=0 -boot d -serial file:build/serial.log -no-reboot
 test: all
 	$(PYTHON) scripts/smoke.py
 	$(PYTHON) scripts/ui_smoke.py
