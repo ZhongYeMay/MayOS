@@ -44,7 +44,7 @@ try:
             assert image.size == (width, height), image.size
             assert len(image.convert("RGB").getcolors(width * height) or []) > 16
             vm.key("f1"); vm.keyboard_command("fastfetch")
-            vm.wait("Kernel: MayKernel x86 (custom)")
+            vm.wait("Kernel: MayKernel x86_64 (custom)")
             records.append({"case": tag, "cpu": cpu, "framebuffer": mode, "iso_sha256": digest,
                             "desktop": True, "keyboard_shell": True})
         finally: vm.stop()
@@ -58,7 +58,7 @@ if "--dual32" in sys.argv:
     try:
         vm.wait("MayOS: desktop ready")
         assert "Linux 7.3.1 - desktop" not in vm.text, "64-bit Linux offered on a 32-bit CPU"
-        vm.key("f1"); vm.keyboard_command("fastfetch"); vm.wait("Kernel: MayKernel x86 (custom)")
+        vm.key("f1"); vm.keyboard_command("fastfetch"); vm.wait("Kernel: MayKernel x86_64 (custom)")
         records.append({"case": "dual-iso-32bit-cpu", "linux_hidden": True, "desktop": True})
     finally: vm.stop()
 (BUILD / ("boot-dual32.json" if "--dual32" in sys.argv else "boot-compat.json")).write_text(json.dumps(records, indent=2) + "\n")
