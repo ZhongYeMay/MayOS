@@ -31,6 +31,16 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: Use signed Princeton Ubuntu mirror during Canonical DNS failure
+        run: |
+          set -eux
+          for source in /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list; do
+            if [ -f "$source" ]; then
+              sudo sed -i -E 's@https?://[^[:space:]]*(archive|security)\.ubuntu\.com/ubuntu/?@https://mirror.math.princeton.edu/pub/ubuntu/@g' "$source"
+            fi
+          done
+          # Keep Ubuntu's Signed-By keys: this only changes the download mirror.
+          grep -h '^URIs:' /etc/apt/sources.list.d/*.sources || true
       - name: Install build and firmware tools
         run: |
           sudo apt-get update
