@@ -42,6 +42,13 @@ jobs:
             --iso build/mayos.iso \
             --output build/recordings/MayKernel-Summer-Native-QEMU.mp4 \
             --source-commit "$GITHUB_SHA"
+      - name: Verify real QEMU video evidence
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          python3 scripts/verify_game_recording.py \
+            --video build/recordings/MayKernel-Summer-Native-QEMU.mp4 \
+            --metadata build/recordings/MayKernel-Summer-Native-QEMU.json \
+            --minimum-frames 20
       - name: Upload raw evidence (video, metadata, serial log)
         if: always()
         uses: actions/upload-artifact@v4
