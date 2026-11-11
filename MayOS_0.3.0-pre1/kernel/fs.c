@@ -5,6 +5,10 @@
 
 /* MayFS uses a checksummed fixed-size snapshot on primary IDE master. */
 #define FS_SECTORS 512
+#define PREFS_OFFSET (500U * 512U)
+#define PREFS_LENGTH 32U
+static u8 saved_prefs[PREFS_LENGTH];
+static int prefs_ready;
 File files[FS_MAX];
 int disk_ready;
 #ifndef MAYOS_LINUX
@@ -60,6 +64,12 @@ int fs_sync(void) {
     memcpy(fs_image, "MAYFS001", 8);
     memcpy(fs_image + 512, files, sizeof(files));
     *(u32 *)(fs_image + 8) = checksum(fs_image + 512, sizeof(files));
+    if (prefs_ready) {
+        memcpy(fs_image + PREFS_OFFSET, "MAYPREF1", 8);
+        memcpy(fs_image + PREFS_OFFSET + 12, saved_prefs, PREFS_LENGTH);
+        *(u32 *)(fs_image + PREFS_OFFSET + 8) =
+            checksum(saved_prefs, PREFS_LENGTH);
+    }
     /* Commit the header last; a torn snapshot is refused on the next boot. */
     u8 zero[512];
     memset(zero, 0, 512);
@@ -77,6 +87,19 @@ int fs_sync(void) {
 /* Linux desktop files are session RAM objects. Never open raw block devices. */
 int fs_sync(void) { return 0; }
 #endif
+int fs_prefs_read(u8 *destination, u32 bytes) {
+    if (!destination || bytes != PREFS_LENGTH || !prefs_ready)
+        return 0;
+    memcpy(destination, saved_prefs, PREFS_LENGTH);
+    return 1;
+}
+int fs_prefs_write(const u8 *source, u32 bytes) {
+    if (!source || bytes != PREFS_LENGTH)
+        return 0;
+    memcpy(saved_prefs, source, PREFS_LENGTH);
+    prefs_ready = 1;
+    return fs_sync();
+}
 int fs_find(int parent, const char *name) {
     for (int i = 1; i < FS_MAX; i++)
         if (files[i].used && files[i].parent == (u32)parent && !strcmp(files[i].name, name))
@@ -130,6 +153,8 @@ static void seed(int p, const char *n, const char *s) {
     }
 }
 void fs_init(void) {
+    prefs_ready = 0;
+    memset(saved_prefs, 0, sizeof(saved_prefs));
 #ifdef MAYOS_LINUX
     disk_ready = 0;
     int valid = 0;
@@ -195,6 +220,20 @@ void fs_init(void) {
     }
 #endif
 
+    if (valid) {
+#ifndef MAYOS_LINUX
+        const u8 *record = fs_image + PREFS_OFFSET;
+        int magic_ok = 1;
+        for (u32 i = 0; i < 8; i++)
+            if (record[i] != (u8)"MAYPREF1"[i]) magic_ok = 0;
+        if (magic_ok &&
+            *(const u32 *)(record + 8) == checksum(record + 12, PREFS_LENGTH)) {
+            memcpy(saved_prefs, record + 12, PREFS_LENGTH);
+            prefs_ready = 1;
+            serial("MayOS: settings restored from MayFS\n");
+        }
+#endif
+    }
     if (!valid) {
         memset(files, 0, sizeof(files));
         files[0].used = files[0].dir = 1;
