@@ -5,20 +5,12 @@ name: Test and record all MayOS desktop functions
 on:
   pull_request:
     paths:
-      - 'MayOS_0.3.0-pre1/kernel/gui.c'
-      - 'MayOS_0.3.0-pre1/kernel/fs.c'
-      - 'MayOS_0.3.0-pre1/kernel/core.h'
-      - 'MayOS_0.3.0-pre1/scripts/settings_smoke.py'
-      - 'MayOS_0.3.0-pre1/scripts/record_feature_tour.py'
+      - 'MayOS_0.3.0-pre1/**'
       - '.github/workflows/record-all-features.yml'
   push:
     branches: [main]
     paths:
-      - 'MayOS_0.3.0-pre1/kernel/gui.c'
-      - 'MayOS_0.3.0-pre1/kernel/fs.c'
-      - 'MayOS_0.3.0-pre1/kernel/core.h'
-      - 'MayOS_0.3.0-pre1/scripts/settings_smoke.py'
-      - 'MayOS_0.3.0-pre1/scripts/record_feature_tour.py'
+      - 'MayOS_0.3.0-pre1/**'
       - '.github/workflows/record-all-features.yml'
   workflow_dispatch:
 
