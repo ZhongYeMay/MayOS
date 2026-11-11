@@ -13,6 +13,8 @@ terminal_output console serial
 menuentry "MayOS - custom kernel (desktop)" --id mayos {
     set gfxpayload=$gfxmode
     multiboot /boot/mayos.elf
+    # Loading Multiboot resets gfxpayload, so override only after that command.
+    set gfxpayload=$gfxmode
     boot
 }
 
