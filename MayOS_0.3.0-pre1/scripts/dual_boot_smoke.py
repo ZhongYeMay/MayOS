@@ -283,6 +283,7 @@ def main():
         vm.menu_shot('test-dual-menu')
         # No keypress: exercise the configured default and its visible countdown.
         vm.wait('MayOS: desktop ready', timeout=30)
+        vm.wait('MayOS: CPU long mode active (64-bit)')
         vm.shot('test-dual-desktop')
         vm.key('f1')
         vm.keyboard_command('neofetch')
