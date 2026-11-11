@@ -8,7 +8,8 @@ import os
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
-CURRENT = "0.4.0-pre3"
+CURRENT = "0.4.1-pre1"
+DEMO_RELEASE = "0.4.0-pre3"
 PREFIX = "MayOS-0.4.0-pre3-all-features-"
 
 
@@ -54,9 +55,10 @@ for page in ROOT.glob("*.html"):
     docs[page.name] = (parsed, source)
 
 assert {"index.html", "demos.html", "download.html"} <= set(docs)
-for name in ("index.html", "download.html", "demos.html"):
+for name in ("index.html", "download.html"):
     assert CURRENT in docs[name][1], (name, "stale release")
-    assert "0.3.0-pre2" not in docs[name][1] or name == "demos.html", name
+    assert "0.3.0-pre2" not in docs[name][1], name
+assert DEMO_RELEASE in docs["demos.html"][1], "historical demo missing"
 
 pending = []
 for name, (doc, _) in docs.items():
@@ -77,8 +79,8 @@ for name, (doc, _) in docs.items():
             assert dest_doc and anchor in dest_doc[0].ids, ("broken anchor", name, url)
 
 assert docs["demos.html"][0].videos == 2
-assert "MayOS-0.4.0-pre3-dual-boot.iso" in docs["download.html"][1]
-assert "MayOS-0.4.0-pre3-MayKernel.iso" in docs["download.html"][1]
+assert "MayOS-0.4.1-pre1-dual-boot-x86_64.iso" in docs["download.html"][1]
+assert "MayOS-0.4.1-pre1-MayKernel-x86_64.iso" in docs["download.html"][1]
 assert "v0.4.0-pre1" in docs["download.html"][1], "historic pre1 download omitted"
 
 if not pending:
@@ -88,12 +90,12 @@ if not pending:
         metadata = ROOT / "media" / (stem + ".json")
         assert mp4.stat().st_size > 10_000
         record = json.loads(metadata.read_text(encoding="utf-8"))
-        assert record["mayos_release"] == CURRENT
+        assert record["mayos_release"] == DEMO_RELEASE
         assert record["video"] == mp4.name
         assert record["kernel"] == ("custom" if kernel == "MayKernel" else "linux")
         assert record["frames"] >= 180 and record["duration_seconds"] >= 18
         assert hashlib.sha256(mp4.read_bytes()).hexdigest() == record["video_sha256"]
-    print("PASS: MayOS 0.4.0-pre2 website navigation and real MP4 hashes")
+    print("PASS: MayOS 0.4.1-pre1 website and historical pre3 media hashes")
 elif os.environ.get("REQUIRE_PRE2_RECORDINGS") == "1":
     raise AssertionError(("Missing verified pre2 boot media", pending))
 else:
