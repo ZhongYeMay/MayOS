@@ -46,8 +46,29 @@ static int cursor_ppm_int(const u8 **at, const u8 *end) {
     }
     return n;
 }
-static int cursor_image_load(void) {
+static int cursor_image_load(int create_sample) {
     int i = fs_find(1, "Cursor.ppm");
+    if (i < 0 && create_sample) {
+        /* Create a sample only on explicit user selection, not at cold boot.
+         * Pre-seeding files changed the original file manager row positions. */
+        static const char sample[] =
+            "P3\n"
+            "8 8\n"
+            "255\n"
+            "255 0 255 255 0 255 20 184 166 20 184 166 20 184 166 20 184 166 255 0 255 255 0 255\n"
+            "255 0 255 20 184 166 16 16 16 16 16 16 16 16 16 16 16 16 20 184 166 255 0 255\n"
+            "20 184 166 16 16 16 255 255 255 255 255 255 255 255 255 255 255 255 16 16 16 20 184 166\n"
+            "20 184 166 16 16 16 255 255 255 20 184 166 20 184 166 255 255 255 16 16 16 20 184 166\n"
+            "20 184 166 16 16 16 255 255 255 20 184 166 20 184 166 255 255 255 16 16 16 20 184 166\n"
+            "20 184 166 16 16 16 255 255 255 255 255 255 255 255 255 255 255 255 16 16 16 20 184 166\n"
+            "255 0 255 20 184 166 16 16 16 16 16 16 16 16 16 16 16 16 20 184 166 255 0 255\n"
+            "255 0 255 255 0 255 20 184 166 20 184 166 20 184 166 20 184 166 255 0 255 255 0 255\n";
+        i = fs_create(1, "Cursor.ppm", 0);
+        if (i < 0 || sizeof(sample) > FILE_CAP) return 0;
+        copy((char *)files[i].data, sample, FILE_CAP);
+        files[i].size = (u32)(sizeof(sample) - 1);
+        fs_sync();
+    }
     if (i < 0 || files[i].dir || files[i].size < 12 ||
         files[i].size >= FILE_CAP) return 0;
     const u8 *at = files[i].data;
@@ -95,7 +116,7 @@ static void preferences_load(void) {
     show_brand = (int)raw[5];
     high_contrast = (int)(raw[6] & 1u);
     cursor_style = (int)((raw[6] >> 8) & 3u);
-    if (cursor_style == 2 && !cursor_image_load()) {
+    if (cursor_style == 2 && !cursor_image_load(0)) {
         cursor_style = 0;
         serial("MayOS: invalid custom pointer; using black square\n");
     }
@@ -1743,7 +1764,7 @@ static void left_click(void) {
                     if (i < 3) { pointer_size = i; preferences_save(); }
                 } else if (ry >= 441 && ry < 477 && rx >= 204 && rx < 718) {
                     int i = (rx - 204) / 168;
-                    if (i == 2 && !cursor_image_load()) {
+                    if (i == 2 && !cursor_image_load(1)) {
                         notify("请检查文档/Cursor.ppm（P3，最大16×16）");
                         return;
                     }
