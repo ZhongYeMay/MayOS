@@ -49,9 +49,6 @@ jobs:
       - name: Test real settings clicks, cold boot, and every previous GUI regression
         working-directory: MayOS_0.3.0-pre1
         run: make test
-      - name: Build dual-kernel ISO to record Linux GUI as well
-        working-directory: MayOS_0.3.0-pre1
-        run: make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
       - name: Real QEMU MayKernel64 complete desktop and persistence video
         working-directory: MayOS_0.3.0-pre1
         run: |
@@ -59,6 +56,9 @@ jobs:
           python3 scripts/record_feature_tour.py --kernel custom \
             --iso build/mayos.iso --source-commit "$GITHUB_SHA" \
             --output build/recordings/MayKernel64-All-Functions.mp4
+      - name: Build dual-kernel ISO to record Linux GUI as well
+        working-directory: MayOS_0.3.0-pre1
+        run: make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
       - name: Real QEMU Linux64 complete desktop and settings video
         working-directory: MayOS_0.3.0-pre1
         run: |
