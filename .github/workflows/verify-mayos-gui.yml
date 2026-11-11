@@ -22,20 +22,11 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Use signed Princeton Ubuntu mirror during Canonical DNS failure
-        run: |
-          set -eux
-          for source in /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list; do
-            if [ -f "$source" ]; then
-              sudo sed -i -E 's@https?://[^[:space:]]*(archive|security)\.ubuntu\.com/ubuntu/?@https://mirror.math.princeton.edu/pub/ubuntu/@g' "$source"
-            fi
-          done
-          # Keep Ubuntu's Signed-By keys: this only changes the download mirror.
-          grep -h '^URIs:' /etc/apt/sources.list.d/*.sources || true
+      - name: Use current signed Ubuntu mirror without mirror+file indirection
+        run: bash scripts/configure-ci-apt-mirror.sh
       - name: Install QEMU and build tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential gcc-multilib \
+                    sudo apt-get install -y -o Acquire::Retries=3 -o Acquire::ForceIPv4=true build-essential gcc-multilib \
             grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools \
             qemu-system-x86 python3-pil fonts-noto-cjk fonts-dejavu-core
       - name: Check required bitmap font sources
