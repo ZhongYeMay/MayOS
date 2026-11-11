@@ -52,6 +52,7 @@ INPUT_FILES = {
     "explorer_history_sha256": ROOT / "kernel/explorer_history.h",
     "desktop_fs_sha256": ROOT / "kernel/fs.c",
     "desktop_core_header_sha256": ROOT / "kernel/core.h",
+    "framebuffer_adapter_sha256": ROOT / "kernel/framebuffer.h",
     "font_core_source_sha256": ROOT / "kernel/core.c",
     "font_generator_sha256": ROOT / "scripts/font.py",
     "photo_generator_sha256": ROOT / "scripts/photo.py",

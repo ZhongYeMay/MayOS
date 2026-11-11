@@ -2,30 +2,39 @@
 set timeout_style=menu
 set timeout=5
 set default=mayos
-set gfxmode=1024x768x32
+set gfxmode=1024x768x32,1024x768,800x600x32,800x600,640x480x32,640x480,auto
 insmod all_video
+insmod cpuid
 
 serial --unit=0 --speed=115200
 terminal_input console serial
 terminal_output console serial
 
 menuentry "MayOS - custom kernel (desktop)" --id mayos {
-    set gfxpayload=1024x768x32
+    set gfxpayload=keep
     multiboot /boot/mayos.elf
     boot
 }
 
+if cpuid -l; then
 menuentry "Linux @LINUX_VERSION@ - desktop (x86_64)" --id linux {
-    set gfxpayload=1024x768x32
-    linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=1 video=efifb:1024x768-32 panic=10
+    set gfxpayload=keep
+    linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=1 panic=10
     initrd /boot/linux/initramfs.cpio.gz
     boot
 }
 
 menuentry "Linux @LINUX_VERSION@ - rescue shell (x86_64)" --id linux-rescue {
     # EFI has no legacy VGA text mode; Linux fbcon supplies the rescue console.
-    set gfxpayload=1024x768x32
-    linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=0 video=efifb:1024x768-32 panic=10
+    set gfxpayload=keep
+    linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=0 panic=10
     initrd /boot/linux/initramfs.cpio.gz
     boot
 }
+menuentry "Linux @LINUX_VERSION@ - compatibility rescue (x86_64)" --id linux-safe {
+    set gfxpayload=keep
+    linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=0 nomodeset noapic nolapic nosmp pci=nomsi panic=10
+    initrd /boot/linux/initramfs.cpio.gz
+    boot
+}
+fi

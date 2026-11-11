@@ -41,6 +41,7 @@ build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
 build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 	$(PYTHON) scripts/photo.py
 build/gui.o: build/cat_image.h kernel/explorer_history.h kernel/galgame.h
+build/core.o: kernel/framebuffer.h
 build/galgame.o: kernel/galgame.h
 build/boot.o: kernel/boot.S | build
 	$(CC) -m32 -c $< -o $@

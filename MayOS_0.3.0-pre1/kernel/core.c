@@ -1,5 +1,6 @@
 #include "core.h"
 #include "io.h"
+#include "framebuffer.h"
 void *memset(void *p, int v, u32 n) {
     u8 *d = p;
     while (n--)
@@ -51,8 +52,7 @@ void serial(const char *s) {
 volatile u32 ticks;
 u32 memory_mb, free_pages;
 char cpu_name[64];
-static volatile u32 *framebuffer;
-static u32 pitch, redpos, greenpos, bluepos;
+static MaySurface display;
 static u8 pages[32768];
 static u32 page_count;
 extern char kernel_end;
@@ -241,27 +241,32 @@ void hardware_init(u32 magic, u32 info) {
     }
     u8 *m = (u8 *)info;
     u32 flags = *(u32 *)m;
-    if (!(flags & (1 << 12)) || *(u32 *)(m + 100) != W || *(u32 *)(m + 104) != H || m[108] != 32 ||
+    if (!(flags & (1 << 12)) ||
         m[109] != 1) {
-        serial("Unsupported framebuffer: require 1024x768x32 RGB\n");
+        serial("Unsupported framebuffer: firmware RGB mode required\n");
         for (;;)
             __asm__("hlt");
     }
     u64 framebuffer_address = *(u64 *)(m + 88);
-    if (framebuffer_address > 0xffffffffULL || *(u32 *)(m + 96) < W * 4 ||
-        framebuffer_address + (u64)*(u32 *)(m + 96) * H > 0x100000000ULL) {
-        serial("Unsupported framebuffer: outside 32-bit addressable range\n");
+    display = (MaySurface){.width=*(u32 *)(m + 100), .height=*(u32 *)(m + 104),
+        .pitch=*(u32 *)(m + 96), .bpp=m[108], .red=m[112], .red_bits=m[113],
+        .green=m[114], .green_bits=m[115], .blue=m[116], .blue_bits=m[117]};
+    if (framebuffer_address > 0xffffffffULL ||
+        !surface_valid(&display, 0x100000000ULL - framebuffer_address)) {
+        serial("Unsupported framebuffer: layout, pitch, size or 32-bit address range\n");
         for (;;)
             __asm__("hlt");
     }
-    framebuffer = (u32 *)(u32)framebuffer_address;
-    pitch = *(u32 *)(m + 96) / 4;
-    redpos = m[112];
-    greenpos = m[114];
-    bluepos = m[116];
+    display.data = (u8 *)(u32)framebuffer_address;
+    char display_number[12];
+    serial("MayOS: firmware framebuffer "); number(display_number, display.width); serial(display_number); serial("x");
+    number(display_number, display.height); serial(display_number); serial("x"); number(display_number, display.bpp); serial(display_number); serial("\n");
     memory_init(m, flags);
     u32 a, b, c, d;
-    for (u32 i = 0; i < 3; i++) {
+    a = 0x80000000U;
+    __asm__ volatile("cpuid" : "+a"(a), "=b"(b), "=c"(c), "=d"(d));
+    if (a < 0x80000004U) copy(cpu_name, "Generic x86 (CPUID)", sizeof(cpu_name));
+    else for (u32 i = 0; i < 3; i++) {
         a = 0x80000002 + i;
         __asm__ volatile("cpuid" : "+a"(a), "=b"(b), "=c"(c), "=d"(d));
         memcpy(cpu_name + i * 16, &a, 4);
@@ -275,12 +280,7 @@ void hardware_init(u32 magic, u32 info) {
     serial("MayOS: framebuffer, memory, PIT and PS/2 ready\n");
 }
 void present(u32 *p) {
-    for (u32 y = 0; y < H; y++)
-        for (u32 x = 0; x < W; x++) {
-            u32 c = p[y * W + x];
-            framebuffer[y * pitch + x] =
-                ((c >> 16 & 255) << redpos) | ((c >> 8 & 255) << greenpos) | ((c & 255) << bluepos);
-        }
+    surface_present(&display, p);
 }
 void poweroff(void) {
     serial("MayOS: power off\n");

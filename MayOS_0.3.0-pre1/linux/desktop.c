@@ -22,6 +22,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "core.h"
+#include "framebuffer.h"
 #undef memset
 #undef memcpy
 #undef strlen
@@ -47,6 +48,7 @@ static u8 *framebuffer;
 static size_t framebuffer_size;
 static struct fb_fix_screeninfo fixed;
 static struct fb_var_screeninfo variable;
+static MaySurface display;
 static struct pollfd inputs[32];
 static int input_count;
 static struct timespec started;
@@ -281,12 +283,16 @@ void hardware_init(u32 magic, u32 info) {
         fail("open /dev/fb0; boot with a graphics framebuffer");
     if (ioctl(framebuffer_fd, FBIOGET_FSCREENINFO, &fixed) || ioctl(framebuffer_fd, FBIOGET_VSCREENINFO, &variable))
         fail("framebuffer information");
-    if (variable.xres < W || variable.yres < H || variable.bits_per_pixel != 32 ||
-        variable.red.length != 8 || variable.green.length != 8 || variable.blue.length != 8 ||
-        variable.red.offset > 24 || variable.green.offset > 24 || variable.blue.offset > 24 ||
-        fixed.line_length < variable.xres * 4 || !fixed.smem_len) {
+    display = (MaySurface){.width=variable.xres, .height=variable.yres,
+        .pitch=fixed.line_length, .bpp=variable.bits_per_pixel,
+        .xoffset=variable.xoffset, .yoffset=variable.yoffset,
+        .red=variable.red.offset, .red_bits=variable.red.length,
+        .green=variable.green.offset, .green_bits=variable.green.length,
+        .blue=variable.blue.offset, .blue_bits=variable.blue.length,
+        .alpha=variable.transp.offset, .alpha_bits=variable.transp.length};
+    if (!surface_valid(&display, fixed.smem_len)) {
         errno = ENOTSUP;
-        fail("requires at least 1024x768, RGB888, 32-bit framebuffer");
+        fail("requires firmware RGB framebuffer, at least 640x480, 16/24/32 bpp");
     }
     framebuffer_size = fixed.smem_len;
     uint64_t last_byte = (uint64_t)(variable.yoffset + variable.yres) * fixed.line_length;
@@ -297,6 +303,7 @@ void hardware_init(u32 magic, u32 info) {
     framebuffer = mmap(NULL, framebuffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, framebuffer_fd, 0);
     if (framebuffer == MAP_FAILED)
         fail("mmap framebuffer");
+    display.data = framebuffer;
     if (ioctl(terminal_fd, KDSETMODE, KD_GRAPHICS))
         fail("switch tty1 to graphics");
     memset(framebuffer, 0, framebuffer_size);
@@ -313,6 +320,12 @@ void hardware_init(u32 magic, u32 info) {
 }
 
 void present(u32 *pixels) {
+    if (display.width != W || display.height != H || display.bpp != 32 ||
+        display.red_bits != 8 || display.green_bits != 8 || display.blue_bits != 8 ||
+        (display.alpha_bits && display.alpha_bits != 8)) {
+        surface_present(&display, pixels);
+        return;
+    }
     u32 x_origin = variable.xoffset + (variable.xres - W) / 2;
     u32 y_origin = variable.yoffset + (variable.yres - H) / 2;
     /*

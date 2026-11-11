@@ -536,7 +536,7 @@ static void shell(void) {
         emit("Fastfetch requires the Linux boot environment.");
         emit("OS: MayOS " MAYOS_RELEASE);
         emit("Kernel: MayKernel x86 (custom)");
-        emit("Display: 1024 x 768 / 32 bpp");
+        emit("Desktop canvas: 1024 x 768 / scaled to firmware display");
         emitnum("Memory: ", memory_mb, " MiB");
         emitnum("Uptime: ", ticks / 100, " seconds");
         emit(disk_ready ? "Disk: ATA / MayFS" : "Disk: RAM fallback");

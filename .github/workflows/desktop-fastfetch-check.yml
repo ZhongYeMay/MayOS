@@ -26,6 +26,8 @@ jobs:
         run: |
           python3 -m py_compile scripts/linux.py scripts/dual_iso.py
           make build/mayos.elf
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined scripts/framebuffer_test.c -o build/framebuffer-test
+          build/framebuffer-test
       - name: Compile statically-linked Linux desktop
         working-directory: MayOS_0.3.0-pre1
         run: |

@@ -1,0 +1,50 @@
+name: Verify x86 and x64 boot compatibility
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/x86-boot-compat.yml'
+      - 'MayOS_0.3.0-pre1/kernel/framebuffer.h'
+      - 'MayOS_0.3.0-pre1/boot/grub/**'
+permissions:
+  contents: read
+jobs:
+  boot-matrix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build and firmware tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib grub-common grub-pc-bin \
+            grub-efi-amd64-bin xorriso mtools qemu-system-x86 ovmf python3-pil \
+            fonts-noto-cjk fonts-dejavu-core musl-tools flex bison bc libelf-dev \
+            libssl-dev xz-utils busybox-static rsync libcurl4-openssl-dev pkg-config ca-certificates
+      - name: Validate shared framebuffer formats and bounds
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          mkdir -p build
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined scripts/framebuffer_test.c -o build/framebuffer-test
+          build/framebuffer-test
+      - name: Boot MayKernel on x86 BIOS and x64 UEFI with different video modes
+        working-directory: MayOS_0.3.0-pre1
+        run: python3 scripts/boot_compat_test.py
+      - name: Boot both kernels from the normal dual ISO
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+          python3 scripts/boot_compat_test.py --dual32
+          make test-dual LINUX_VERSION=7.3.1
+          make test-uefi LINUX_VERSION=7.3.1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: x86-x64-boot-evidence
+          path: |
+            MayOS_0.3.0-pre1/build/boot-*.json
+            MayOS_0.3.0-pre1/build/boot-*.png
+            MayOS_0.3.0-pre1/build/boot-*.log
+            MayOS_0.3.0-pre1/build/test-*.log
+          if-no-files-found: warn

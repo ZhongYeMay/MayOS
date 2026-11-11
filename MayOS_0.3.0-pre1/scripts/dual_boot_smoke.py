@@ -24,7 +24,7 @@ from smoke import BUILD, entries
 class BootVM:
     def __init__(self, *, iso: Path, disk: Path, tag: str, qemu: str,
                  memory: int, timeout: float, ovmf_code: Path | None = None,
-                 ovmf_vars: Path | None = None):
+                 ovmf_vars: Path | None = None, cpu: str = 'max'):
         self.timeout = timeout
         self.serial_path = BUILD / f'{tag}-serial.sock'
         self.qmp_path = BUILD / f'{tag}-qmp.sock'
@@ -38,7 +38,7 @@ class BootVM:
         self.proc = None
         self._log_file = self.log.open('wb')
         self._stderr_file = self.stderr_path.open('w')
-        args = [qemu, '-machine', 'pc', '-accel', 'tcg', '-cpu', 'max',
+        args = [qemu, '-machine', 'pc', '-accel', 'tcg', '-cpu', cpu,
                 '-m', str(memory), '-vga', 'std', '-display', 'none',
                 '-cdrom', str(iso), '-boot', 'd',
                 '-drive', f'file={disk},format=raw,if=ide,index=0',
