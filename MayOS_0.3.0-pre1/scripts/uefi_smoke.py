@@ -84,6 +84,7 @@ def main():
             vm.shot('test-uefi-menu')
             vm.key('ret')
         vm.wait('MayOS: desktop ready')
+        vm.wait('MayOS: CPU long mode active (64-bit)')
         assert 'using Multiboot memory map' in vm.text, vm.text
         memory = re.search(r'available memory MiB=(\d+)', vm.text)
         assert memory and int(memory[1]) > 128, 'EFI RAM was truncated at the first memory-map hole'
@@ -97,7 +98,7 @@ def main():
         vm.shot('test-uefi-custom-desktop')
         tests += ['uefi_grub_custom', 'uefi_framebuffer', 'uefi_memory_map',
                   'uefi_custom_allocator', 'uefi_ps2_keyboard', 'uefi_mayfs_write']
-        print('PASS: OVMF -> EFI GRUB -> 32-bit custom desktop; memory map, allocation, input and MayFS', flush=True)
+        print('PASS: OVMF -> EFI GRUB -> native x86_64 custom desktop; memory map, allocation, input and MayFS', flush=True)
     finally:
         vm.stop()
 
