@@ -75,6 +75,9 @@ def record(args):
                 raise AssertionError(f"Video setting changes did not persist: {values!r}")
             before = len(vm.text())
             vm.q("system_reset")
+            # A QEMU machine reset also reinitializes the emulated PS/2
+            # pointer; the recorder's coordinate tracker must follow suit.
+            vm.mx, vm.my = 530, 390
             vm.wait("MayOS: desktop preferences applied", offset=before, timeout=60)
             vm.wait("MayOS: desktop ready", offset=before, timeout=60)
             vm.hold(1.5)
@@ -105,7 +108,7 @@ def record(args):
         vm.click(370, 212)                 # new text file / editor
         vm.command("recorded.txt")
         vm.hold(1)
-        actions.append("text_editor_open")
+        actions.append("new_text_file_dialog")
 
         vm.key("f1")                       # real MayShell
         vm.hold(.8)
