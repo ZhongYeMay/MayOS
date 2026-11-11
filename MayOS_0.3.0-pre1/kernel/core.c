@@ -116,15 +116,17 @@ static void memory_init(const u8 *m, u32 flags) {
                 u64 span = *(const u64 *)(entry + 12);
                 u32 type = *(const u32 *)(entry + 20);
                 offset += size + 4;
-                if ((pass == 0) != (type == 1) || base >= 0x100000000ULL)
+                if ((pass == 0) != (type == 1))
                     continue;
                 u64 end = base + span;
-                if (end < base || end > 0x100000000ULL)
-                    end = 0x100000000ULL;
+                if (end < base)
+                    end = ~0ULL;
+                /* Memory reporting counts all RAM, including above 4 GiB.
+                   The early physical allocator remains restricted to 128 MiB. */
                 if (type == 1)
                     available_bytes += end - base;
-                u64 first = type == 1 ? (base + 4095) / 4096 : base / 4096;
-                u64 last = type == 1 ? end / 4096 : (end + 4095) / 4096;
+                u64 first = base / 4096 + (type == 1 && (base & 4095) != 0);
+                u64 last = end / 4096 + (type != 1 && (end & 4095) != 0);
                 if (last > sizeof(pages))
                     last = sizeof(pages);
                 if (type == 1 && last > page_count)
