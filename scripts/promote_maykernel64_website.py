@@ -41,8 +41,8 @@ change(download, '<span class="chip">x86</span>', '<span class="chip">x86_64</sp
 
 check = WEB / "check_site.py"
 change(check, 'CURRENT = "0.4.0-pre3"', 'CURRENT = "0.4.1-pre1"\nDEMO_RELEASE = "0.4.0-pre3"')
-change(check, 'for name in ("index.html", "download.html", "demos.html"):\n    assert CURRENT in docs[name][1], (name, "stale release")',
-       'for name in ("index.html", "download.html"):\n    assert CURRENT in docs[name][1], (name, "stale release")\nassert DEMO_RELEASE in docs["demos.html"][1], "historical demo missing"')
+change(check, 'for name in ("index.html", "download.html", "demos.html"):\n    assert CURRENT in docs[name][1], (name, "stale release")\n    assert "0.3.0-pre2" not in docs[name][1] or name == "demos.html", name',
+       'for name in ("index.html", "download.html"):\n    assert CURRENT in docs[name][1], (name, "stale release")\n    assert "0.3.0-pre2" not in docs[name][1], name\nassert DEMO_RELEASE in docs["demos.html"][1], "historical demo missing"')
 change(check,
        'assert "MayOS-0.4.0-pre3-dual-boot.iso" in docs["download.html"][1]',
        'assert "MayOS-0.4.1-pre1-dual-boot-x86_64.iso" in docs["download.html"][1]')
