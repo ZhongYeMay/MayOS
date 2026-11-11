@@ -33,7 +33,7 @@ jobs:
         run: bash scripts/configure-ci-apt-mirror.sh
       - name: Install actual QEMU, FFmpeg, GRUB and Linux build dependencies
         run: |
-                    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
             build-essential gcc-multilib grub-common grub-pc-bin grub-efi-amd64-bin \
             xorriso mtools qemu-system-x86 ovmf ffmpeg python3-pil \
             fonts-noto-cjk fonts-dejavu-core musl-tools flex bison bc \
