@@ -19,7 +19,7 @@ jobs:
         run: bash scripts/configure-ci-apt-mirror.sh
       - name: Install build tools
         run: |
-                    sudo apt-get install -y -o Acquire::Retries=3 -o Acquire::ForceIPv4=true gcc-multilib musl-tools linux-libc-dev libcurl4-openssl-dev pkg-config ca-certificates python3-h2 \
+          sudo apt-get install -y -o Acquire::Retries=3 -o Acquire::ForceIPv4=true gcc-multilib musl-tools linux-libc-dev libcurl4-openssl-dev pkg-config ca-certificates python3-h2 \
             python3-pil fonts-noto-cjk fonts-dejavu-core grub-common \
             xorriso mtools grub-pc-bin grub-efi-amd64-bin qemu-system-x86
       - name: Validate scripts and compile freestanding MayKernel
