@@ -39,7 +39,6 @@ menuentry "Linux @LINUX_VERSION@ - compatibility rescue (x86_64)" --id linux-saf
     initrd /boot/linux/initramfs.cpio.gz
     boot
 }
-fi
 else
 menuentry "MayOS requires an x86_64 CPU" {
  echo "Both MayKernel and MayOS Linux require x86_64 long mode."
