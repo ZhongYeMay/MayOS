@@ -28,11 +28,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Preflight verified release website migration
-        run: |
-          python3 scripts/promote_maykernel64_website.py
-          python3 website/check_site.py
-          git restore website
+      - name: Verify current released website without rewriting it
+        run: python3 website/check_site.py
       - name: Install EFI, QEMU, compiler and font tools
         run: |
           sudo apt-get update
