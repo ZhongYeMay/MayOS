@@ -286,7 +286,7 @@ def main():
         vm.shot('test-dual-desktop')
         vm.key('f1')
         vm.keyboard_command('neofetch')
-        vm.wait('Kernel: MayKernel x86 (custom)')
+        vm.wait('Kernel: MayKernel x86_64 (custom)')
         vm.keyboard_command('memtest')
         vm.wait('memtest: PASS')
         vm.keyboard_command('write dual.txt dual-boot-preserved')
