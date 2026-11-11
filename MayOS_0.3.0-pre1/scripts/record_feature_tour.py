@@ -32,9 +32,12 @@ def record(args):
     disk = BUILD / (vm.tag + "-disk.img")
     try:
         vm.start_recording()
-        vm.wait("custom x86_64 kernel" if args.kernel == "linux" else "custom kernel", timeout=35)
+        # GRUB draws its menu on the VGA framebuffer; it may not echo entry
+        # titles to ttyS0. Never infer boot success from a serial menu label.
+        vm.hold(2.0)
+        vm.key("home")  # first item is native MayKernel64
         if args.kernel == "linux":
-            vm.key("down")
+            vm.key("down")  # second item is Linux x86_64 desktop in dual ISO
         vm.key("ret")
         vm.wait("MayOS: desktop ready", timeout=110)
         vm.hold(1.5)
