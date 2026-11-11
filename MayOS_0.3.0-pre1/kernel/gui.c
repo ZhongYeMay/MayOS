@@ -23,11 +23,61 @@ static u32 bg = 0x141218, panel = 0x211f26, ink = 0xe6e1e5, muted = 0xcac4d0, li
            accent = 0xd0bcff, surface_high = 0x2b2930, on_accent = 0x381e72, selected_fill = 0x4f378b;
 static int dark = 1, accent_choice = 0;
 static int desktop_style = 0, pointer_size = 0, show_brand = 1, high_contrast = 0;
+/* 0 = black square, 1 = white square, 2 = custom Documents/Cursor.ppm. */
+static int cursor_style = 0;
+static int custom_cursor_width = 0, custom_cursor_height = 0;
+static u32 custom_cursor[16 * 16];
+/* Parse bounded, plain-text P3 image tokens; "#..." comments are supported. */
+static int cursor_ppm_int(const u8 **at, const u8 *end) {
+    while (*at < end) {
+        u8 ch = **at;
+        if (ch == '#') {
+            while (*at < end && **at != '\n') (*at)++;
+        } else if (ch == ' ' || ch == '\n' || ch == '\t' || ch == '\r') {
+            (*at)++;
+        } else break;
+    }
+    if (*at >= end || **at < '0' || **at > '9') return -1;
+    int n = 0;
+    while (*at < end && **at >= '0' && **at <= '9') {
+        n = n * 10 + (**at - '0');
+        if (n > 65535) return -1;
+        (*at)++;
+    }
+    return n;
+}
+static int cursor_image_load(void) {
+    int i = fs_find(1, "Cursor.ppm");
+    if (i < 0 || files[i].dir || files[i].size < 12 ||
+        files[i].size >= FILE_CAP) return 0;
+    const u8 *at = files[i].data;
+    const u8 *end = at + files[i].size;
+    if (at[0] != 'P' || at[1] != '3') return 0;
+    at += 2;
+    int width = cursor_ppm_int(&at, end);
+    int height = cursor_ppm_int(&at, end);
+    int peak = cursor_ppm_int(&at, end);
+    if (width < 1 || width > 16 || height < 1 || height > 16 || peak != 255)
+        return 0;
+    u32 decoded[16 * 16];
+    for (int n = 0; n < width * height; n++) {
+        int red = cursor_ppm_int(&at, end);
+        int green = cursor_ppm_int(&at, end);
+        int blue = cursor_ppm_int(&at, end);
+        if (red < 0 || red > 255 || green < 0 || green > 255 ||
+            blue < 0 || blue > 255) return 0;
+        decoded[n] = ((u32)red << 16) | ((u32)green << 8) | (u32)blue;
+    }
+    memcpy(custom_cursor, decoded, (u32)(width * height) * sizeof(u32));
+    custom_cursor_width = width;
+    custom_cursor_height = height;
+    return 1;
+}
 #define MAYOS_PREFS_MAGIC 0x4d505246u
 static void preferences_save(void) {
     u32 raw[8] = {MAYOS_PREFS_MAGIC, (u32)dark, (u32)accent_choice,
                   (u32)desktop_style, (u32)pointer_size, (u32)show_brand,
-                  (u32)high_contrast, 1};
+                  (u32)high_contrast | ((u32)cursor_style << 8), 1};
     /* Linux and diskless MayKernel keep the new values for this session. */
     fs_prefs_write((const u8 *)raw, sizeof(raw));
 }
@@ -35,14 +85,20 @@ static void preferences_load(void) {
     u32 raw[8];
     if (!fs_prefs_read((u8 *)raw, sizeof(raw)) || raw[0] != MAYOS_PREFS_MAGIC ||
         raw[7] != 1 || raw[1] > 1 || raw[2] >= 6 || raw[3] >= 3 ||
-        raw[4] >= 3 || raw[5] > 1 || raw[6] > 1)
+        raw[4] >= 3 || raw[5] > 1 || (raw[6] & ~0x301u) != 0 ||
+        ((raw[6] >> 8) & 3u) >= 3)
         return;
     dark = (int)raw[1];
     accent_choice = (int)raw[2];
     desktop_style = (int)raw[3];
     pointer_size = (int)raw[4];
     show_brand = (int)raw[5];
-    high_contrast = (int)raw[6];
+    high_contrast = (int)(raw[6] & 1u);
+    cursor_style = (int)((raw[6] >> 8) & 3u);
+    if (cursor_style == 2 && !cursor_image_load()) {
+        cursor_style = 0;
+        serial("MayOS: invalid custom pointer; using black square\n");
+    }
     serial("MayOS: desktop preferences applied\n");
 }
 static void preferences_reset(void) {
@@ -50,6 +106,7 @@ static void preferences_reset(void) {
     accent_choice = 0;
     desktop_style = 0;
     pointer_size = 0;
+    cursor_style = 0;
     show_brand = 1;
     high_contrast = 0;
     preferences_save();
