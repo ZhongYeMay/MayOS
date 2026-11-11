@@ -1,0 +1,98 @@
+name: Test and record all MayOS desktop functions
+
+# Every meaningful desktop/settings update is tested and recorded. This does
+# NOT create a Release or bump preN; videos are downloadable CI artifacts.
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/kernel/gui.c'
+      - 'MayOS_0.3.0-pre1/kernel/fs.c'
+      - 'MayOS_0.3.0-pre1/kernel/core.h'
+      - 'MayOS_0.3.0-pre1/scripts/settings_smoke.py'
+      - 'MayOS_0.3.0-pre1/scripts/record_feature_tour.py'
+      - '.github/workflows/record-all-features.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'MayOS_0.3.0-pre1/kernel/gui.c'
+      - 'MayOS_0.3.0-pre1/kernel/fs.c'
+      - 'MayOS_0.3.0-pre1/kernel/core.h'
+      - 'MayOS_0.3.0-pre1/scripts/settings_smoke.py'
+      - 'MayOS_0.3.0-pre1/scripts/record_feature_tour.py'
+      - '.github/workflows/record-all-features.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mayos-feature-videos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install actual QEMU, FFmpeg, GRUB and Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential gcc-multilib grub-common grub-pc-bin grub-efi-amd64-bin \
+            xorriso mtools qemu-system-x86 ovmf ffmpeg python3-pil \
+            fonts-noto-cjk fonts-dejavu-core musl-tools flex bison bc \
+            libelf-dev libssl-dev xz-utils busybox-static rsync \
+            libcurl4-openssl-dev pkg-config ca-certificates
+      - name: Validate Python and compile 64-bit MayKernel
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile scripts/settings_smoke.py scripts/record_feature_tour.py
+          make all
+          readelf -h build/mayos.elf | grep -q ELF64
+      - name: Test real settings clicks, cold boot, and every previous GUI regression
+        working-directory: MayOS_0.3.0-pre1
+        run: make test
+      - name: Build dual-kernel ISO to record Linux GUI as well
+        working-directory: MayOS_0.3.0-pre1
+        run: make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+      - name: Real QEMU MayKernel64 complete desktop and persistence video
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          mkdir -p build/recordings
+          python3 scripts/record_feature_tour.py --kernel custom \
+            --iso build/mayos.iso --source-commit "$GITHUB_SHA" \
+            --output build/recordings/MayKernel64-All-Functions.mp4
+      - name: Real QEMU Linux64 complete desktop and settings video
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          python3 scripts/record_feature_tour.py --kernel linux \
+            --iso build/mayos-dual.iso --source-commit "$GITHUB_SHA" \
+            --output build/recordings/Linux64-All-Functions.mp4
+      - name: Check BOTH H.264 MP4 files and matching QEMU evidence
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          for kernel in MayKernel64 Linux64; do
+            file="build/recordings/${kernel}-All-Functions.mp4"
+            test -s "$file"
+            ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height \
+              -of default=noprint_wrappers=1 "$file"
+            test -s "${file%.mp4}.json"
+          done
+      - name: Upload the real feature videos and test proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-all-features-QEMU-${{ github.sha }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            MayOS_0.3.0-pre1/build/recordings/*.mp4
+            MayOS_0.3.0-pre1/build/recordings/*.json
+            MayOS_0.3.0-pre1/build/settings-*.png
+            MayOS_0.3.0-pre1/build/test-*.log
+            MayOS_0.3.0-pre1/build/record-*.log
