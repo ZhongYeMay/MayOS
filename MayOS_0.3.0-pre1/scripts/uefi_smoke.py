@@ -24,6 +24,26 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+
+def verify_linux_desktop(vm):
+    """Validate real desktop evidence without relying on lossy serial startup lines.
+
+    The GUI writes backend readiness to /run/mayos-desktop.log before it
+    announces "MayOS: desktop ready". In some OVMF boots the nonblocking
+    /dev/ttyS0 output loses the earlier line while the desktop stays active.
+    Query the guest log and process through the independent serial shell;
+    never accept the GUI marker alone as evidence of a working backend.
+    """
+    vm.wait('MayOS: desktop ready')
+    vm.wait('MayOS-Linux# ')
+    vm.shell_check(
+        'test -s /run/mayos-desktop.log '
+        '&& grep -Fq "MayOS Linux desktop: backend ready;" /run/mayos-desktop.log '
+        '&& test -s /run/mayos-desktop.pid '
+        '&& test "$(cat /proc/$(cat /run/mayos-desktop.pid)/comm)" = mayos-desktop',
+        'UEFI_BACKEND_READY')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--iso', type=Path, default=BUILD / 'mayos-dual.iso')
@@ -106,9 +126,7 @@ def main():
             vm.key('home')
             vm.key('down')
             vm.key('ret')
-            vm.wait('MayOS Linux desktop: backend ready;')
-            vm.wait('MayOS: desktop ready')
-            vm.wait('MayOS-Linux# ')
+            verify_linux_desktop(vm)
             vm.shell_check(f'test "$(uname -r)" = "{release}" && test -d /sys/firmware/efi', 'UEFI_KERNEL')
             vm.shell_check('test -c /dev/fb0 && test -s /run/mayos-desktop.pid '
                            '&& test "$(cat /proc/$(cat /run/mayos-desktop.pid)/comm)" = mayos-desktop', 'UEFI_GUI_PROCESS')

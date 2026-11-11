@@ -1,0 +1,33 @@
+name: Check UEFI desktop readiness regression
+
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/scripts/uefi_smoke.py'
+      - 'MayOS_0.3.0-pre1/scripts/test_uefi_backend.py'
+      - '.github/workflows/uefi-readiness-unit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'MayOS_0.3.0-pre1/scripts/uefi_smoke.py'
+      - 'MayOS_0.3.0-pre1/scripts/test_uefi_backend.py'
+      - '.github/workflows/uefi-readiness-unit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install minimal Python image dependency
+        run: sudo apt-get update && sudo apt-get install -y python3-pil
+      - name: Check Python syntax and exercise readiness behavior
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          python3 -m py_compile scripts/uefi_smoke.py scripts/dual_boot_smoke.py scripts/test_uefi_backend.py
+          python3 -m unittest discover -s scripts -p 'test_uefi_backend.py' -v
