@@ -29,20 +29,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Use signed Princeton Ubuntu mirror during Canonical DNS failure
-        run: |
-          set -eux
-          for source in /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list; do
-            if [ -f "$source" ]; then
-              sudo sed -i -E 's@https?://[^[:space:]]*(archive|security)\.ubuntu\.com/ubuntu/?@https://mirror.math.princeton.edu/pub/ubuntu/@g' "$source"
-            fi
-          done
-          # Keep Ubuntu's Signed-By keys: this only changes the download mirror.
-          grep -h '^URIs:' /etc/apt/sources.list.d/*.sources || true
+      - name: Use current signed Ubuntu mirror without mirror+file indirection
+        run: bash scripts/configure-ci-apt-mirror.sh
       - name: Install actual QEMU, FFmpeg, GRUB and Linux build dependencies
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
             build-essential gcc-multilib grub-common grub-pc-bin grub-efi-amd64-bin \
             xorriso mtools qemu-system-x86 ovmf ffmpeg python3-pil \
             fonts-noto-cjk fonts-dejavu-core musl-tools flex bison bc \
