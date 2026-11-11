@@ -278,7 +278,7 @@ def main():
 
     vm = BootVM(tag='test-dual-mayos', **options)
     try:
-        vm.wait('custom kernel', timeout=20)
+        vm.wait('custom x86_64 kernel', timeout=20)
         vm.wait(f'Linux {release} - desktop', timeout=5)
         vm.menu_shot('test-dual-menu')
         # No keypress: exercise the configured default and its visible countdown.
