@@ -10,7 +10,8 @@ serial --unit=0 --speed=115200
 terminal_input console serial
 terminal_output console serial
 
-menuentry "MayOS - custom kernel (desktop)" --id mayos {
+if cpuid -l; then
+menuentry "MayOS - custom x86_64 kernel (desktop)" --id mayos {
     set gfxpayload=$gfxmode
     multiboot /boot/mayos.elf
     # Loading Multiboot resets gfxpayload, so override only after that command.
@@ -18,7 +19,6 @@ menuentry "MayOS - custom kernel (desktop)" --id mayos {
     boot
 }
 
-if cpuid -l; then
 menuentry "Linux @LINUX_VERSION@ - desktop (x86_64)" --id linux {
     set gfxpayload=$gfxmode
     linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=1 panic=10
@@ -38,5 +38,10 @@ menuentry "Linux @LINUX_VERSION@ - compatibility rescue (x86_64)" --id linux-saf
     linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=0 nomodeset noapic nolapic nosmp pci=nomsi panic=10
     initrd /boot/linux/initramfs.cpio.gz
     boot
+}
+else
+menuentry "MayOS requires an x86_64 CPU" {
+ echo "Both MayKernel and MayOS Linux require x86_64 long mode."
+ sleep 10
 }
 fi

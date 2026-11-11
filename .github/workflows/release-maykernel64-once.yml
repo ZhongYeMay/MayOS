@@ -1,0 +1,162 @@
+name: Release verified MayKernel64 and update MayOS website
+
+# One-shot release requested for the completed x86_64 migration.
+# Later ordinary commits do not match the path trigger and never auto-publish.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-maykernel64-once.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: maykernel64-0-4-1-pre1-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  publish:
+    if: github.repository == 'ZhongYeMay/MayOS' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      VERSION: 0.4.1-pre1
+      LINUX_VERSION: 7.3.1
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Require correct source, version and unpublished tag
+        run: |
+          set -euo pipefail
+          test "$(cat MayOS_0.3.0-pre1/VERSION)" = "$VERSION"
+          grep -Fq "#define MAYOS_RELEASE \"$VERSION\"" MayOS_0.3.0-pre1/kernel/gui.c
+          test -s MayOS_0.3.0-pre1/kernel/boot64.S
+          test -s MayOS_0.3.0-pre1/kernel/linker64.ld
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists; refuse overwrite/re-publish" >&2
+            exit 1
+          fi
+      - name: Preflight future website update without publishing
+        run: |
+          set -euo pipefail
+          python3 scripts/promote_maykernel64_website.py
+          python3 website/check_site.py
+          git restore website
+      - name: Install official QEMU, GRUB, firmware, Linux and graphics dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential gcc-multilib binutils grub-common grub-pc-bin \
+            grub-efi-amd64-bin xorriso mtools qemu-system-x86 ovmf \
+            python3-pil fonts-noto-cjk fonts-dejavu-core musl-tools \
+            flex bison bc libelf-dev libssl-dev xz-utils busybox-static \
+            rsync libcurl4-openssl-dev pkg-config ca-certificates
+      - name: Build genuine ELF64 MayKernel and exercise real BIOS QEMU
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          make all
+          readelf -h build/mayos.elf | grep -Fq ELF64
+          readelf -h build/mayos.elf | grep -Fq 'Advanced Micro Devices X86-64'
+          grub-file --is-x86-multiboot build/mayos.elf
+          make test
+      - name: Test RGB framebuffer layouts and 32-bit CPU rejection
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined scripts/framebuffer_test.c -o build/framebuffer-test
+          build/framebuffer-test
+          python3 scripts/boot_compat_test.py
+      - name: Build one ISO with BOTH 64-bit kernels
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          make dual LINUX_VERSION="$LINUX_VERSION" LINUX_JOBS=4
+      - name: Test real BIOS, OVMF, independent Linux userspace and cold MayFS
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          python3 scripts/boot_compat_test.py --dual32
+          make test-dual LINUX_VERSION="$LINUX_VERSION"
+          make test-uefi LINUX_VERSION="$LINUX_VERSION"
+      - name: Stage reproducible binaries, source, logs and checksums
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp MayOS_0.3.0-pre1/build/mayos.iso "dist/MayOS-$VERSION-MayKernel-x86_64.iso"
+          cp MayOS_0.3.0-pre1/build/mayos-dual.iso "dist/MayOS-$VERSION-dual-boot-x86_64.iso"
+          cp MayOS_0.3.0-pre1/build/desktop.png "dist/MayOS-$VERSION-desktop.png"
+          cp MayOS_0.3.0-pre1/build/dual-boot-test-results.json "dist/MayOS-$VERSION-dual-test.json"
+          cp MayOS_0.3.0-pre1/build/uefi-test-results.json "dist/MayOS-$VERSION-uefi-test.json"
+          git archive --format=zip HEAD -o "dist/MayOS-$VERSION-source.zip"
+          (cd dist && sha256sum *.iso *.png *.json *.zip > SHA256SUMS.txt)
+          (cd dist && sha256sum -c SHA256SUMS.txt)
+          cat > dist/RELEASE_NOTES.md <<EOF
+          # MayOS $VERSION — MayKernel64
+
+          This preview contains a **genuine native x86_64 MayKernel ELF64**
+          built using a 32-bit Multiboot entry trampoline that switches the CPU
+          to x86_64 long mode before executing its C core and original GUI.
+
+          - **Dual-boot ISO:** MayKernel64 and independent Linux $LINUX_VERSION x86_64.
+          - **MayKernel ISO:** dedicated x86_64 native kernel with GUI and MayFS.
+          - Legacy BIOS x64 and x64 UEFI tested with actual QEMU/OVMF boots.
+          - PS/2 input, MayFS cold-boot data recovery and Linux isolation tested.
+          - Initial 64 GiB identity-mapped physical address window for firmware
+            framebuffers; early allocator still limited to the first 128 MiB.
+          - 32-bit-only CPUs no longer supported by MayKernel.
+
+          Check SHA-256 hashes before using either ISO. The matching source ZIP,
+          QEMU screenshot and machine-readable test reports are attached.
+
+          **Limits:** Secure Boot disabled; IA32 UEFI, ARM, physical PCs, general
+          GPU/USB/NVMe/Wi-Fi drivers and arbitrary firmware have NOT been verified.
+          This is a research preview, not a production OS.
+          EOF
+      - name: Retain test evidence even if a later publishing step fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-0.4.1-pre1-MayKernel64-QEMU-tested
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            dist/
+            MayOS_0.3.0-pre1/build/test-*.log
+            MayOS_0.3.0-pre1/build/boot-*.log
+            MayOS_0.3.0-pre1/build/boot-*.png
+      - name: Publish ONE GitHub prerelease after all real boot tests pass
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" \
+            "dist/MayOS-$VERSION-dual-boot-x86_64.iso" \
+            "dist/MayOS-$VERSION-MayKernel-x86_64.iso" \
+            "dist/MayOS-$VERSION-source.zip" \
+            "dist/MayOS-$VERSION-desktop.png" \
+            "dist/MayOS-$VERSION-dual-test.json" \
+            "dist/MayOS-$VERSION-uefi-test.json" \
+            dist/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "MayOS $VERSION — native MayKernel64 / Linux x86_64" \
+            --notes-file dist/RELEASE_NOTES.md
+      - name: Commit updated GitHub Pages only after the verified release exists
+        run: |
+          set -euo pipefail
+          gh release view "v$VERSION" >/dev/null
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --ff-only origin main
+          python3 scripts/promote_maykernel64_website.py
+          python3 website/check_site.py
+          git add website/index.html website/download.html website/check_site.py
+          git commit -m "web: announce verified MayKernel64 $VERSION release [skip ci]"
+          git push origin HEAD:main
+      - name: Request GitHub Pages deployment for updated official download page
+        run: |
+          gh workflow run website-pages.yml --ref main

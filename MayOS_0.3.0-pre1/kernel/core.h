@@ -5,6 +5,8 @@ typedef unsigned short u16;
 typedef unsigned int u32;
 typedef signed int i32;
 typedef unsigned long long u64;
+/* Host-size unsigned pointer type, including the freestanding x86_64 ABI. */
+typedef unsigned long uptr;
 #define W 1024
 #define H 768
 #define FS_MAX 48
@@ -25,7 +27,7 @@ int platform_network_status(char *destination, int capacity);
 int platform_fastfetch(char *destination, int capacity);
 void platform_idle(void);
 #else
-static inline const char *platform_kernel(void) { return "MayOS custom x86"; }
+static inline const char *platform_kernel(void) { return "MayKernel x86_64 (custom)"; }
 static inline void platform_idle(void) { __asm__ volatile("hlt"); }
 #endif
 void *memset(void *, int, u32);

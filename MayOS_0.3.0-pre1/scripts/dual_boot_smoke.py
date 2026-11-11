@@ -278,15 +278,16 @@ def main():
 
     vm = BootVM(tag='test-dual-mayos', **options)
     try:
-        vm.wait('custom kernel', timeout=20)
+        vm.wait('custom x86_64 kernel', timeout=20)
         vm.wait(f'Linux {release} - desktop', timeout=5)
         vm.menu_shot('test-dual-menu')
         # No keypress: exercise the configured default and its visible countdown.
         vm.wait('MayOS: desktop ready', timeout=30)
+        vm.wait('MayOS: CPU long mode active (64-bit)')
         vm.shot('test-dual-desktop')
         vm.key('f1')
         vm.keyboard_command('neofetch')
-        vm.wait('Kernel: MayKernel x86 (custom)')
+        vm.wait('Kernel: MayKernel x86_64 (custom)')
         vm.keyboard_command('memtest')
         vm.wait('memtest: PASS')
         vm.keyboard_command('write dual.txt dual-boot-preserved')

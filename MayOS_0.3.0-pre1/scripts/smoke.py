@@ -5,12 +5,12 @@ from pathlib import Path
 from PIL import Image
 ROOT=Path(__file__).resolve().parents[1]
 BUILD=ROOT/'build'
-QEMU=os.environ.get('QEMU','qemu-system-i386')
+QEMU=os.environ.get('QEMU','qemu-system-x86_64')
 class VM:
     def __init__(self,disk,tag):
         self.sock=BUILD/f'{tag}.sock';self.sock.unlink(missing_ok=True)
         self.log=BUILD/f'{tag}.log'
-        args=[QEMU,'-machine','pc','-accel','tcg','-m','128','-vga','std','-display','none','-cdrom',str(BUILD/'mayos.iso'),'-boot','d','-serial',f'file:{self.log}','-qmp',f'unix:{self.sock},server=on,wait=off','-no-reboot','-no-shutdown']
+        args=[QEMU,'-machine','pc','-accel','tcg','-cpu','max','-m','128','-vga','std','-display','none','-cdrom',str(BUILD/'mayos.iso'),'-boot','d','-serial',f'file:{self.log}','-qmp',f'unix:{self.sock},server=on,wait=off','-no-reboot','-no-shutdown']
         if disk is not None:args+=['-drive',f'file={disk},format=raw,if=ide,index=0']
         if os.environ.get('QEMU_DATA_DIR'):args+=['-L',os.environ['QEMU_DATA_DIR']]
         self.proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=(BUILD/f'{tag}-qemu.log').open('w'))
@@ -78,7 +78,7 @@ def main():
     vm=VM(disk,'test-first')
     try:
         vm.shot('desktop')
-        vm.key('f1');vm.cmd('neofetch');vm.wait('Kernel: MayKernel x86 (custom)');vm.shot('terminal')
+        vm.key('f1');vm.cmd('neofetch');vm.wait('Kernel: MayKernel x86_64 (custom)');vm.shot('terminal')
         vm.cmd('memtest');vm.wait('memtest: PASS')
         vm.cmd('mkdir Projects');vm.cmd('write Projects/persist.txt reboot-survives')
         vm.cmd('cat Projects/persist.txt');vm.wait('\nreboot-survives\n')
