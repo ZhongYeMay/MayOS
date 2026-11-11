@@ -1,9 +1,18 @@
 name: Increment MayOS prerelease version
 
+# Development pushes remain unversioned; release preparation is a deliberate action.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      summary:
+        description: "Summarize the batch of meaningful improvements being prepared"
+        required: true
+        type: string
+      confirm:
+        description: "Confirm the development batch is ready for the next preN version"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -14,7 +23,7 @@ concurrency:
 
 jobs:
   increment:
-    if: github.actor != 'github-actions[bot]'
+    if: github.repository == 'ZhongYeMay/MayOS' && github.ref == 'refs/heads/main' && inputs.confirm == true
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -22,29 +31,20 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: true
-      - name: Increment pre number once per pushed commit
+      - name: Prepare one prerelease version after accumulated improvements
         env:
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.event.after }}
-          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_SUMMARY: ${{ inputs.summary }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git pull --ff-only origin main
-          count=1
-          if [ "$EVENT_NAME" = "push" ] && [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
-            if git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
-              count="$(git rev-list --count "$BEFORE_SHA..$AFTER_SHA")"
-            fi
-          fi
-          if [ "$count" -lt 1 ]; then count=1; fi
-          if [ "$count" -gt 100 ]; then
-            echo "Refusing unusually large push ($count commits); review manually" >&2
+          if [ -z "${RELEASE_SUMMARY//[[:space:]]/}" ]; then
+            echo "A meaningful release summary is required" >&2
             exit 1
           fi
-          COUNT="$count" python3 - <<'PY'
-          import os, pathlib, re
+          python3 - <<'PY'
+          import pathlib, re
           version_file = pathlib.Path("MayOS_0.3.0-pre1/VERSION")
           gui_file = pathlib.Path("MayOS_0.3.0-pre1/kernel/gui.c")
           version = version_file.read_text().strip()
@@ -52,11 +52,11 @@ jobs:
           stable = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
           if prerelease:
               base = f"{prerelease.group(1)}.{prerelease.group(2)}.{prerelease.group(3)}"
-              next_number = int(prerelease.group(4)) + int(os.environ['COUNT'])
+              next_number = int(prerelease.group(4)) + 1
           elif stable:
               # Stable releases stay immutable; start the next patch prerelease.
               base = f"{stable.group(1)}.{stable.group(2)}.{int(stable.group(3)) + 1}"
-              next_number = int(os.environ['COUNT'])
+              next_number = 1
           else:
               raise SystemExit("Unexpected VERSION format: " + version)
           next_version = f"{base}-pre{next_number}"
