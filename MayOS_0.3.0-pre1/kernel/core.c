@@ -61,16 +61,18 @@ void *page_alloc(void) {
         if (!pages[i]) {
             pages[i] = 1;
             free_pages--;
-            void *p = (void *)(i * 4096);
+            void *p = (void *)(uptr)((u64)i * 4096);
             memset(p, 0, 4096);
             return p;
         }
     return 0;
 }
 void page_free(void *p) {
-    if (!p || ((u32)p & 4095))
+    if (!p || ((uptr)p & 4095))
         return;
-    u32 i = (u32)p / 4096;
+    uptr page = (uptr)p / 4096;
+    if (page >= page_count) return;
+    u32 i = (u32)page;
     if (i < page_count && pages[i] == 1) {
         pages[i] = 0;
         free_pages++;
@@ -88,7 +90,7 @@ static void memory_init(const u8 *m, u32 flags) {
     const u8 *map = 0;
     if (flags & (1 << 6)) {
         length = *(const u32 *)(m + 44);
-        map = (const u8 *)*(const u32 *)(m + 48);
+        map = (const u8 *)(uptr)*(const u32 *)(m + 48);
         valid_map = map && length >= 24;
         for (u32 offset = 0; valid_map && offset < length;) {
             if (length - offset < 4) {
@@ -140,7 +142,7 @@ static void memory_init(const u8 *m, u32 flags) {
         memset(pages, 0, page_count);
         serial("MayOS: using legacy contiguous memory range\n");
     }
-    u32 reserved = ((u32)&kernel_end + 4095) / 4096;
+    u32 reserved = (u32)(((uptr)&kernel_end + 4095) / 4096);
     free_pages = 0;
     for (u32 i = 0; i < page_count; i++) {
         if (i < reserved)
@@ -157,10 +159,12 @@ static void memory_init(const u8 *m, u32 flags) {
     serial(value);
     serial("\n");
 }
+/* Native 64-bit IDT gates: 16 bytes with a full 64-bit handler offset. */
 struct Gate {
     u16 low, cs;
-    u8 zero, attr;
-    u16 high;
+    u8 ist, attr;
+    u16 middle;
+    u32 high, zero;
 } __attribute__((packed));
 static struct Gate idt[256];
 extern void timer_stub(void);
@@ -169,12 +173,12 @@ void timer_interrupt(void) {
     outb(0x20, 0x20);
 }
 static void timer_init(void) {
-    u32 a = (u32)timer_stub;
-    idt[32] = (struct Gate){a & 65535, 8, 0, 0x8e, a >> 16};
+    uptr a = (uptr)timer_stub;
+    idt[32] = (struct Gate){(u16)a, 8, 0, 0x8e, (u16)(a >> 16), (u32)(a >> 32), 0};
     struct {
         u16 limit;
-        u32 base;
-    } __attribute__((packed)) p = {sizeof(idt) - 1, (u32)idt};
+        u64 base;
+    } __attribute__((packed)) p = {sizeof(idt) - 1, (uptr)idt};
     __asm__ volatile("lidt %0" ::"m"(p));
     outb(0x20, 0x11);
     outb(0xa0, 0x11);
@@ -233,13 +237,14 @@ void hardware_init(u32 magic, u32 info) {
     outb(0x3f9, 0);
     outb(0x3fb, 3);
     outb(0x3fa, 0xc7);
-    serial("MayOS: entering custom x86 kernel\n");
+    serial("MayOS: entering custom x86_64 kernel\n");
+    serial("MayOS: CPU long mode active (64-bit)\n");
     if (magic != 0x2badb002) {
         serial("Invalid multiboot magic\n");
         for (;;)
             __asm__("hlt");
     }
-    u8 *m = (u8 *)info;
+    u8 *m = (u8 *)(uptr)info;
     u32 flags = *(u32 *)m;
     if (!(flags & (1 << 12)) ||
         m[109] != 1) {
@@ -251,13 +256,13 @@ void hardware_init(u32 magic, u32 info) {
     display = (MaySurface){.width=*(u32 *)(m + 100), .height=*(u32 *)(m + 104),
         .pitch=*(u32 *)(m + 96), .bpp=m[108], .red=m[112], .red_bits=m[113],
         .green=m[114], .green_bits=m[115], .blue=m[116], .blue_bits=m[117]};
-    if (framebuffer_address > 0xffffffffULL ||
-        !surface_valid(&display, 0x100000000ULL - framebuffer_address)) {
+    if (framebuffer_address >= (64ULL << 30) ||
+        !surface_valid(&display, (64ULL << 30) - framebuffer_address)) {
         serial("Unsupported framebuffer: layout, pitch, size or 32-bit address range\n");
         for (;;)
             __asm__("hlt");
     }
-    display.data = (u8 *)(u32)framebuffer_address;
+    display.data = (u8 *)(uptr)framebuffer_address;
     char display_number[12];
     serial("MayOS: firmware framebuffer "); number(display_number, display.width); serial(display_number); serial("x");
     number(display_number, display.height); serial(display_number); serial("x"); number(display_number, display.bpp); serial(display_number); serial("\n");
