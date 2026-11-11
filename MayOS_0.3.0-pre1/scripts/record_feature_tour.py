@@ -53,20 +53,28 @@ def record(args):
         vm.hold(1.2)
         actions += ["light_theme", "sixth_accent_color", "high_contrast"]
 
-        # Three wallpaper modes, 3 cursor sizes, desktop branding.
+        # Existing desktop controls stay in the original Material workspace.
         vm.click(295, 380)
         vm.hold(1)
         vm.click(646, 335)                 # solid background
         vm.hold(.7)
         vm.click(822, 335)                 # grid background
         vm.hold(.9)
-        vm.click(614, 481)                 # medium pointer
+        vm.click(614, 449)                 # medium pointer
         vm.hold(.6)
-        vm.click(768, 481)                 # large pointer
-        vm.hold(.9)
-        vm.click(599, 582)                 # hide branding
+        vm.click(768, 449)                 # large pointer
+        vm.hold(.7)
+        vm.click(610, 530)                 # white square cursor
+        vm.hold(.7)
+        vm.click(445, 530)                 # black square cursor
+        vm.hold(.7)
+        vm.click(790, 530)                 # real P3 image from MayFS Documents
+        vm.hold(1.0)
+        vm.click(599, 605)                 # hide branding
         vm.hold(1.2)
-        actions += ["gradient_flat_grid_wallpapers", "pointer_sizes", "branding_toggle"]
+        actions += ["gradient_flat_grid_wallpapers", "pointer_sizes",
+                    "white_square_cursor", "black_square_cursor",
+                    "custom_ppm_image_cursor", "branding_toggle"]
 
         if args.kernel == "custom":
             from settings_smoke import saved_values, EXPECTED
