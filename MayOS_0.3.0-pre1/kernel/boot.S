@@ -4,7 +4,8 @@
 .align 4
 .long MAGIC, FLAGS, -(MAGIC + FLAGS)
 .long 0,0,0,0,0
-.long 0,1024,768,32
+# Firmware/GRUB selects a supported RGB mode; no fixed resolution or depth.
+.long 0,0,0,0
 .section .bss
 .align 16
 stack_bottom:
