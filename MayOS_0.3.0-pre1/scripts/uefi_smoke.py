@@ -78,7 +78,7 @@ def main():
     vm = start('test-uefi-custom')
     try:
         if not args.custom_only:
-            vm.wait('custom kernel')
+            vm.wait('custom x86_64 kernel')
             vm.key('home')  # stop the countdown and select the first entry
             time.sleep(.5)
             vm.shot('test-uefi-menu')
