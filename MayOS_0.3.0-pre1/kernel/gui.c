@@ -13,9 +13,9 @@
 #define PLATFORM_BADGE "LINUX SESSION"
 #define PLATFORM_ARCH "x86_64 / userspace"
 #else
-#define PLATFORM_SHORT "MayKernel / x86"
+#define PLATFORM_SHORT "MayKernel / x86_64"
 #define PLATFORM_BADGE "CUSTOM KERNEL"
-#define PLATFORM_ARCH "x86 / 32-bit"
+#define PLATFORM_ARCH "x86_64 / 64-bit"
 #endif
 static u32 pixels[W * H];
 /* Material Design 3 color roles, tuned for the 1024x768 framebuffer. */
@@ -535,7 +535,7 @@ static void shell(void) {
         emit("MayOS / native x86 kernel");
         emit("Fastfetch requires the Linux boot environment.");
         emit("OS: MayOS " MAYOS_RELEASE);
-        emit("Kernel: MayKernel x86 (custom)");
+        emit("Kernel: MayKernel x86_64 (custom)");
         emit("Desktop canvas: 1024 x 768 / scaled to firmware display");
         emitnum("Memory: ", memory_mb, " MiB");
         emitnum("Uptime: ", ticks / 100, " seconds");
