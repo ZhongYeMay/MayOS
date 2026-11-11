@@ -790,9 +790,9 @@ static void settings(Window *w) {
     rect(x + 1, y + 43, 176, w->h - 44, bg);
     rect(x + 176, y + 43, 1, w->h - 44, line);
     text(x + 24, y + 64, "WORKSTATION", muted);
-    const char *tabs[] = {"关于系统", "外观设置", "存储空间", "开源组件"};
-    const char *marks[] = {"01", "02", "03", "04"};
-    for (int i = 0; i < 4; i++) {
+    const char *tabs[] = {"关于系统", "外观设置", "存储空间", "开源组件", "桌面与指针"};
+    const char *marks[] = {"01", "02", "03", "04", "05"};
+    for (int i = 0; i < 5; i++) {
         int yy = y + 106 + i * 46;
         if (settings_tab == i) {
             roundrect(x + 12, yy, 152, 36, selected_fill);
@@ -877,13 +877,15 @@ static void settings(Window *w) {
             }
         }
         text(cx, cy + 353, "主题色 / Accent", ink);
-        u32 colors[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6};
-        for (int i = 0; i < 4; i++) {
+        u32 colors[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
+        for (int i = 0; i < 6; i++) {
             circle(cx + 19 + i * 64, cy + 410, 18, colors[i]);
             if (accent_choice == i)
                 circle(cx + 19 + i * 64, cy + 410, 6, 0xffffff);
         }
-        text(cx, cy + 471, "外观设置在本次会话内生效。", muted);
+        text(cx, cy + 474, "文本与边框对比度", ink);
+        button(cx, cy + 505, 118, "标准", !high_contrast);
+        button(cx + 132, cy + 505, 118, "高对比", high_contrast);
     } else if (settings_tab == 2) {
         text(cx, cy, "STORAGE / SESSION", accent);
         large_text(cx, cy + 26, "存储空间", ink);
@@ -922,7 +924,7 @@ static void settings(Window *w) {
         text(cx, cy + 377, "原型存储格式；请使用专用虚拟数据盘。", muted);
         button(cx, cy + 436, 126, "立即同步", 1);
 #endif
-    } else {
+    } else if (settings_tab == 3) {
         text(cx, cy, "OPEN SOURCE / CREDITS", accent);
         large_text(cx, cy + 26, "开源组件", ink);
         text(cx, cy + 77, "感谢以下项目。各组件保留各自许可证。", muted);
@@ -940,6 +942,40 @@ static void settings(Window *w) {
         text(cx, cy + 452, "QEMU: GPL-2.0 / OVMF: BSD-2-Clause-Patent", muted);
         text(cx, cy + 479, "完整许可与对应源码见发行包的 licenses 文档。", muted);
         text(cx, cy + 513, "MayOS Team 2023 - 2026.", ink);
+    } else {
+        text(cx, cy, "DESKTOP / POINTER", accent);
+        large_text(cx, cy + 26, "桌面与指针", ink);
+        text(cx, cy + 77, "可随时预览；无需重新启动桌面。", muted);
+        text(cx, cy + 112, "桌面背景", ink);
+        const char *styles[] = {"柔和渐变", "纯色背景", "网格背景"};
+        for (int i = 0; i < 3; i++) {
+            int px = cx + i * 176;
+            roundrect(px, cy + 141, 160, 100, i == desktop_style ? selected_fill : bg);
+            rect(px + 11, cy + 152, 138, 58, dark ? 0x24202b : 0xe8e1ec);
+            if (i == 0)
+                for (int j = 0; j < 58; j += 4)
+                    rect(px + 11, cy + 152 + j, 138, 4,
+                         blend(dark ? 0x25212d : 0xe8e1ec,
+                               dark ? 0x3c304a : 0xd4cae0, (u32)j * 255 / 58));
+            if (i == 2)
+                for (int j = 0; j < 138; j += 23)
+                    rect(px + 11 + j, cy + 152, 1, 58, accent);
+            text(px + 19, cy + 215, styles[i], ink);
+            if (desktop_style == i) circle(px + 148, cy + 150, 5, accent);
+        }
+        text(cx, cy + 287, "鼠标指针大小", ink);
+        const char *pointers[] = {"小", "标准", "大"};
+        for (int i = 0; i < 3; i++)
+            button(cx + i * 154, cy + 327, 142, pointers[i], pointer_size == i);
+        text(cx, cy + 393, "桌面版本标识", ink);
+        button(cx, cy + 428, 130, "显示", show_brand);
+        button(cx + 144, cy + 428, 130, "隐藏", !show_brand);
+        button(cx, cy + 490, 145, "恢复默认设置", 0);
+#ifdef MAYOS_LINUX
+        text(cx + 168, cy + 500, "Linux: 本次会话有效", muted);
+#else
+        text(cx + 168, cy + 500, disk_ready ? "MayFS: 自动保存" : "RAM: 本次会话有效", muted);
+#endif
     }
 }
 static int file_list[FS_MAX], file_count;
@@ -1596,7 +1632,7 @@ static void left_click(void) {
                 int tab = (ry - 106) / 46;
                 if (ry >= w->h - 110 && ry < w->h - 75)
                     begin_modal(6, -1);
-                else if (ry >= 106 && tab < 4 && (ry - 106) % 46 < 36)
+                else if (ry >= 106 && tab >= 0 && tab < 5 && (ry - 106) % 46 < 36)
                     settings_tab = tab;
             } else if (settings_tab == 0 && inside(rx, ry, 204, 514, 126, 30))
                 begin_modal(4, -1);
@@ -1604,15 +1640,38 @@ static void left_click(void) {
                 settings_tab = 3;
             else if (settings_tab == 1) {
                 if (ry >= 220 && ry <= 382) {
-                    if (rx >= 204 && rx < 420)
+                    if (rx >= 204 && rx < 420) {
                         dark = 0;
-                    else if (rx >= 440 && rx < 656)
+                        preferences_save();
+                    } else if (rx >= 440 && rx < 656) {
                         dark = 1;
+                        preferences_save();
+                    }
                 }
                 if (ry >= 457 && ry <= 493 && rx >= 204) {
                     int i = (rx - 204) / 64;
-                    if (i >= 0 && i < 4)
+                    if (i >= 0 && i < 6) {
                         accent_choice = i;
+                        preferences_save();
+                    }
+                }
+                if (ry >= 570 && ry < 602 && rx >= 204 && rx < 468) {
+                    high_contrast = rx >= 336;
+                    preferences_save();
+                }
+            } else if (settings_tab == 4) {
+                if (ry >= 206 && ry < 306 && rx >= 204 && rx < 732) {
+                    int i = (rx - 204) / 176;
+                    if (i < 3) { desktop_style = i; preferences_save(); }
+                } else if (ry >= 392 && ry < 426 && rx >= 204 && rx < 666) {
+                    int i = (rx - 204) / 154;
+                    if (i < 3) { pointer_size = i; preferences_save(); }
+                } else if (ry >= 493 && ry < 527 && rx >= 204 && rx < 478) {
+                    show_brand = rx < 348;
+                    preferences_save();
+                } else if (inside(rx, ry, 204, 555, 145, 32)) {
+                    preferences_reset();
+                    notify("个性化设置已恢复默认");
                 }
             } else if (settings_tab == 2 && inside(rx, ry, 204, 501, 126, 30))
                 notify(fs_sync() ? "已同步到磁盘" : "磁盘不可写");
