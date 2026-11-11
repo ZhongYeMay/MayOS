@@ -47,7 +47,7 @@ class Session:
             handle.truncate(8 * 1024 * 1024)
         command = [args.qemu, '-machine', 'pc', '-accel', 'tcg', '-cpu', 'max',
                    '-m', '512', '-vga', 'std', '-display', 'none', '-nic', 'none',
-                   '-cdrom', str(args.iso), '-boot', 'd', '-no-reboot', '-S',
+                   '-cdrom', str(args.iso), '-boot', 'd', '-S',
                    '-drive', f'file={disk},format=raw,if=ide,index=0',
                    '-serial', f'file:{self.log}',
                    '-qmp', f'unix:{self.sock},server=on,wait=off']
