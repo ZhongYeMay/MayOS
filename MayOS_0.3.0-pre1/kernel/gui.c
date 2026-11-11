@@ -738,9 +738,12 @@ static void desktop(void) {
         for (int y = 0; y < H; y++)
             rect(0, y, W, 1, blend(dark ? 0x15131b : 0xf6f1fa,
                                    dark ? 0x211e29 : 0xece6f3, (u32)y * 130 / H));
-        if (desktop_style == 2)
+        if (desktop_style == 2) {
             for (int i = 0; i <= W / 64; i++)
                 rect(i * 64, 46, 1, H - 92, dark ? 0x30303c : 0xdcd4e2);
+            for (int i = 0; i <= (H - 92) / 64; i++)
+                rect(0, 46 + i * 64, W, 1, dark ? 0x30303c : 0xdcd4e2);
+        }
     }
     rect(0, 0, W, 46, dark ? 0x211f26 : 0xf3edf7);
     rect(0, 45, W, 1, line);
