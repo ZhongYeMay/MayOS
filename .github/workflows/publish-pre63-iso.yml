@@ -2,12 +2,10 @@ name: Publish validated MayOS 0.4.0-pre63 ISO
 
 on:
   workflow_dispatch:
-    inputs:
-      source_ref:
-        description: "Immutable prerelease source commit"
-        required: true
-        default: "b5c70adf1ad43fbbe025af1d75894680cadbf2bf"
-        type: string
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-pre63-iso.yml'
 
 permissions:
   contents: write
@@ -28,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.source_ref }}
+          ref: b5c70adf1ad43fbbe025af1d75894680cadbf2bf
           fetch-depth: 0
       - name: Verify release source revision
         run: |
@@ -61,20 +59,23 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p dist
+          test -s MayOS_0.3.0-pre1/build/mayos-dual.iso
+          test -s MayOS_0.3.0-pre1/build/mayos.iso
           cp MayOS_0.3.0-pre1/build/mayos-dual.iso "dist/MayOS-$VERSION-dual-boot-x86_64.iso"
           cp MayOS_0.3.0-pre1/build/mayos.iso "dist/MayOS-$VERSION-MayKernel-x86.iso"
           (cd dist && sha256sum *.iso > "MayOS-$VERSION-ISO-SHA256SUMS.txt")
-          sha256sum -c "dist/MayOS-$VERSION-ISO-SHA256SUMS.txt"
+          (cd dist && sha256sum --check "MayOS-$VERSION-ISO-SHA256SUMS.txt")
           cat > dist/NOTES.md <<EOF
           ## MayOS $VERSION · validated ISO prerelease
 
           - Dual boot ISO: MayKernel x86 and MayOS Linux x86_64.
-          - MayKernel ISO: native 32-bit BIOS boot image.
+          - MayKernel ISO: native 32-bit x86 kernel, BIOS and x64 UEFI bootable.
           - This build passed automated QEMU GUI, BIOS, UEFI, x86 BIOS and x64 boot tests.
 
           Hardware scope for this prerelease: standard x86/x64 PC firmware graphics. Secure Boot must be disabled. IA32 UEFI and physical hardware drivers are not yet validated.
           EOF
       - name: Upload validation fallback artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: MayOS-0.4.0-pre63-validated-ISO
