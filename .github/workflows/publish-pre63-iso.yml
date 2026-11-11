@@ -1,0 +1,84 @@
+name: Publish validated MayOS 0.4.0-pre63 ISO
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-mayos-pre63-iso
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'ZhongYeMay/MayOS' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      VERSION: 0.4.0-pre63
+      LINUX_VERSION: 7.3.1
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify release source revision
+        run: |
+          set -eu
+          test "$(tr -d '\r\n' < MayOS_0.3.0-pre1/VERSION)" = "$VERSION"
+          grep -Fq "#define MAYOS_RELEASE \"$VERSION\"" MayOS_0.3.0-pre1/kernel/gui.c
+          gh release view "v$VERSION" >/dev/null
+      - name: Install build and firmware tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib grub-common grub-pc-bin \
+            grub-efi-amd64-bin xorriso mtools qemu-system-x86 ovmf python3-pil \
+            fonts-noto-cjk fonts-dejavu-core musl-tools flex bison bc libelf-dev \
+            libssl-dev xz-utils busybox-static rsync libcurl4-openssl-dev pkg-config ca-certificates
+      - name: Build both bootable ISO images
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euxo pipefail
+          make all
+          make dual LINUX_VERSION="$LINUX_VERSION" LINUX_JOBS=4
+      - name: Validate x86 and x64 firmware boot paths
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euxo pipefail
+          make test
+          python3 scripts/boot_compat_test.py --dual32
+          make test-dual LINUX_VERSION="$LINUX_VERSION"
+          make test-uefi LINUX_VERSION="$LINUX_VERSION"
+      - name: Stage ISO release assets
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+          cp MayOS_0.3.0-pre1/build/mayos-dual.iso "dist/MayOS-$VERSION-dual-boot-x86_64.iso"
+          cp MayOS_0.3.0-pre1/build/mayos.iso "dist/MayOS-$VERSION-MayKernel-x86.iso"
+          (cd dist && sha256sum *.iso > "MayOS-$VERSION-ISO-SHA256SUMS.txt")
+          sha256sum -c "dist/MayOS-$VERSION-ISO-SHA256SUMS.txt"
+          cat > dist/NOTES.md <<EOF
+          ## MayOS $VERSION · validated ISO prerelease
+
+          - Dual boot ISO: MayKernel x86 and MayOS Linux x86_64.
+          - MayKernel ISO: native 32-bit BIOS boot image.
+          - This build passed automated QEMU GUI, BIOS, UEFI, x86 BIOS and x64 boot tests.
+
+          Hardware scope for this prerelease: standard x86/x64 PC firmware graphics. Secure Boot must be disabled. IA32 UEFI and physical hardware drivers are not yet validated.
+          EOF
+      - name: Upload validation fallback artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-0.4.0-pre63-validated-ISO
+          path: dist/
+          retention-days: 30
+      - name: Attach verified ISO files to prerelease
+        run: |
+          set -euxo pipefail
+          gh release upload "v$VERSION" \
+            "dist/MayOS-$VERSION-dual-boot-x86_64.iso" \
+            "dist/MayOS-$VERSION-MayKernel-x86.iso" \
+            "dist/MayOS-$VERSION-ISO-SHA256SUMS.txt" \
+            --clobber
+          gh release edit "v$VERSION" --title "MayOS $VERSION · validated ISO prerelease" --notes-file dist/NOTES.md
