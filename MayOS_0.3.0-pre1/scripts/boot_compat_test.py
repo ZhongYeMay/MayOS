@@ -21,7 +21,11 @@ if "--dual32" in sys.argv:
 try:
     for tag, cpu, mode, width, height, bpp in cases:
         import re
-        current = re.sub(r"set gfxmode=.*", "set gfxmode=" + mode, original)
+        # Change only the default mode. Keep nested safe-graphics boot modes untouched.
+        current, changed = re.subn(r"^set gfxmode=.*$", "set gfxmode=" + mode,
+                                   original, count=1, flags=re.MULTILINE)
+        if changed != 1:
+            raise AssertionError("GRUB default gfxmode line not found")
         config.write_text(current)
         subprocess.run(["make", "build/mayos.iso"], cwd=ROOT, check=True)
         iso = BUILD / "mayos.iso"
@@ -50,6 +54,10 @@ try:
         finally: vm.stop()
 finally:
     config.write_text(original)
+    if cases:
+        # The mode matrix rebuilds mayos.iso repeatedly; leave the final ISO
+        # matching the restored repository menu, never the last temporary mode.
+        subprocess.run(["make", "build/mayos.iso"], cwd=ROOT, check=True)
 if "--dual32" in sys.argv:
     disk = BUILD / "boot-dual32.img"
     with disk.open("wb") as stream: stream.truncate(8 * 1024 * 1024)

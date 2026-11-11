@@ -1,6 +1,14 @@
 name: Verify x86 and x64 boot compatibility
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/x86-boot-compat.yml'
+      - 'MayOS_0.3.0-pre1/boot/grub/**'
+      - 'MayOS_0.3.0-pre1/scripts/boot_compat_test.py'
+      - 'MayOS_0.3.0-pre1/scripts/boot_safe_graphics_test.py'
+      - 'MayOS_0.3.0-pre1/scripts/boot_compat_test.py'
+      - 'MayOS_0.3.0-pre1/scripts/boot_safe_graphics_test.py'
   push:
     branches: [main]
     paths:
@@ -45,6 +53,7 @@ jobs:
           python3 scripts/boot_compat_test.py --dual32
           make test-dual LINUX_VERSION=7.3.1
           make test-uefi LINUX_VERSION=7.3.1
+          python3 scripts/boot_safe_graphics_test.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -53,5 +62,6 @@ jobs:
             MayOS_0.3.0-pre1/build/boot-*.json
             MayOS_0.3.0-pre1/build/boot-*.png
             MayOS_0.3.0-pre1/build/boot-*.log
+            MayOS_0.3.0-pre1/build/boot-*.ppm
             MayOS_0.3.0-pre1/build/test-*.log
           if-no-files-found: warn
