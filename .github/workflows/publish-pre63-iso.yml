@@ -1,11 +1,8 @@
 name: Publish validated MayOS 0.4.0-pre63 ISO
 
+# Historical pre63 ISO repair: never trigger release automatically on a push.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/publish-pre63-iso.yml'
 
 permissions:
   contents: write
