@@ -22,6 +22,38 @@ static u32 pixels[W * H];
 static u32 bg = 0x141218, panel = 0x211f26, ink = 0xe6e1e5, muted = 0xcac4d0, line = 0x49454f,
            accent = 0xd0bcff, surface_high = 0x2b2930, on_accent = 0x381e72, selected_fill = 0x4f378b;
 static int dark = 1, accent_choice = 0;
+static int desktop_style = 0, pointer_size = 0, show_brand = 1, high_contrast = 0;
+#define MAYOS_PREFS_MAGIC 0x4d505246u
+static void preferences_save(void) {
+    u32 raw[8] = {MAYOS_PREFS_MAGIC, (u32)dark, (u32)accent_choice,
+                  (u32)desktop_style, (u32)pointer_size, (u32)show_brand,
+                  (u32)high_contrast, 1};
+    /* Linux and diskless MayKernel keep the new values for this session. */
+    fs_prefs_write((const u8 *)raw, sizeof(raw));
+}
+static void preferences_load(void) {
+    u32 raw[8];
+    if (!fs_prefs_read((u8 *)raw, sizeof(raw)) || raw[0] != MAYOS_PREFS_MAGIC ||
+        raw[7] != 1 || raw[1] > 1 || raw[2] >= 6 || raw[3] >= 3 ||
+        raw[4] >= 3 || raw[5] > 1 || raw[6] > 1)
+        return;
+    dark = (int)raw[1];
+    accent_choice = (int)raw[2];
+    desktop_style = (int)raw[3];
+    pointer_size = (int)raw[4];
+    show_brand = (int)raw[5];
+    high_contrast = (int)raw[6];
+    serial("MayOS: desktop preferences applied\n");
+}
+static void preferences_reset(void) {
+    dark = 1;
+    accent_choice = 0;
+    desktop_style = 0;
+    pointer_size = 0;
+    show_brand = 1;
+    high_contrast = 0;
+    preferences_save();
+}
 static void rect(int x, int y, int w, int h, u32 c) {
     if (x < 0) {
         w += x;
@@ -571,7 +603,10 @@ static void shell(void) {
         emit("meow! You found a little resident of MayOS.");
         open_easter();
     } else if (!strcmp(c, "theme") && argc > 1) {
-        dark = !strcmp(argv[1], "dark");
+        if (!strcmp(argv[1], "light") || !strcmp(argv[1], "dark")) {
+            dark = !strcmp(argv[1], "dark");
+            preferences_save();
+        } else emit("Usage: theme light|dark");
     } else if (!strcmp(c, "reboot")) {
         fs_sync();
         reboot();
@@ -677,8 +712,8 @@ static void accept_modal(void) {
     modal = 0;
 }
 static void palette(void) {
-    const u32 dark_primary[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6};
-    const u32 light_primary[] = {0x6750a4, 0x006a64, 0x415f91, 0x904b40};
+    const u32 dark_primary[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
+    const u32 light_primary[] = {0x6750a4, 0x006a64, 0x415f91, 0x904b40, 0x805700, 0x72518c};
     bg = dark ? 0x141218 : 0xfffbfe;
     panel = dark ? 0x211f26 : 0xfff7ff;
     surface_high = dark ? 0x2b2930 : 0xf3edf7;
@@ -688,12 +723,25 @@ static void palette(void) {
     accent = dark ? dark_primary[accent_choice] : light_primary[accent_choice];
     on_accent = dark ? 0x381e72 : 0xffffff;
     selected_fill = dark ? 0x4f378b : 0xeaddff;
+    if (high_contrast) {
+        ink = dark ? 0xffffff : 0x090909;
+        muted = dark ? 0xe7e5eb : 0x222222;
+        line = dark ? 0xa29cad : 0x5d5a61;
+        selected_fill = dark ? 0x40345e : 0xe2dbed;
+    }
 }
 static void desktop(void) {
     /* Material 3: tonal canvas, navigation rail, compact status area. */
-    for (int y = 0; y < H; y++)
-        rect(0, y, W, 1, blend(dark ? 0x15131b : 0xf6f1fa,
-                               dark ? 0x211e29 : 0xece6f3, (u32)y * 130 / H));
+    if (desktop_style == 1) {
+        rect(0, 0, W, H, dark ? 0x19161f : 0xf3edf7);
+    } else {
+        for (int y = 0; y < H; y++)
+            rect(0, y, W, 1, blend(dark ? 0x15131b : 0xf6f1fa,
+                                   dark ? 0x211e29 : 0xece6f3, (u32)y * 130 / H));
+        if (desktop_style == 2)
+            for (int i = 0; i <= W / 64; i++)
+                rect(i * 64, 46, 1, H - 92, dark ? 0x30303c : 0xdcd4e2);
+    }
     rect(0, 0, W, 46, dark ? 0x211f26 : 0xf3edf7);
     rect(0, 45, W, 1, line);
     ring(30, 23, 10, 3, accent);
@@ -716,8 +764,10 @@ static void desktop(void) {
     border(30, 592, 45, 29, accent);
     text(17, 637, "夏日未寄", muted);
 #endif
-    large_text(728, 594, "MayOS", muted);
-    text(729, 640, "MATERIAL WORKSPACE / " MAYOS_RELEASE, muted);
+    if (show_brand) {
+        large_text(728, 594, "MayOS", muted);
+        text(729, 640, "MATERIAL WORKSPACE / " MAYOS_RELEASE, muted);
+    }
 }
 static void frame(int id) {
     Window *w = &windows[id];
@@ -1231,11 +1281,13 @@ static void easter_draw(void) {
     button(610, 646, 108, "返回桌面", 1);
 }
 static void cursor(void) {
+    int size = pointer_size + 1;
     for (int y = 0; y < 20; y++)
         for (int x = 0; x <= y / 2; x++)
-            rect(mx + x, my + y, 1, 1, x == 0 || x == y / 2 || y == 19 ? 0x223149 : 0xffffff);
-    rect(mx + 6, my + 14, 3, 9, 0x223149);
-    rect(mx + 7, my + 15, 1, 6, 0xffffff);
+            rect(mx + x * size, my + y * size, size, size,
+                 x == 0 || x == y / 2 || y == 19 ? 0x223149 : 0xffffff);
+    rect(mx + 6 * size, my + 14 * size, 3 * size, 9 * size, 0x223149);
+    rect(mx + 7 * size, my + 15 * size, size, 6 * size, 0xffffff);
 }
 
 static void render(void) {
@@ -1808,6 +1860,7 @@ static void key_event(int k) {
 void kernel_main(u32 magic, u32 info) {
     hardware_init(magic, info);
     fs_init();
+    preferences_load();
     terminal_init();
     serial("MayOS: desktop ready\n");
     u32 last = 0;
