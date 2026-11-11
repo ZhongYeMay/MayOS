@@ -34,7 +34,7 @@ jobs:
         run: bash scripts/configure-ci-apt-mirror.sh
       - name: Install EFI, QEMU, compiler and font tools
         run: |
-                    sudo apt-get install -y -o Acquire::Retries=3 -o Acquire::ForceIPv4=true gcc binutils grub-common grub-pc-bin grub-efi-amd64-bin \
+          sudo apt-get install -y -o Acquire::Retries=3 -o Acquire::ForceIPv4=true gcc binutils grub-common grub-pc-bin grub-efi-amd64-bin \
             xorriso mtools qemu-system-x86 ovmf python3-pil \
             fonts-noto-cjk fonts-dejavu-core
       - name: Verify ELF64 and build native MayKernel ISO
