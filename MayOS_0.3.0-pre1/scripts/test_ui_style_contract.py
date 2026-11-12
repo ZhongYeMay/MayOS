@@ -54,4 +54,15 @@ assert "surface_high = dark ? 0x2b2930 : 0xf3edf7;" in source
 assert "set gfxmode" not in source  # no graphics firmware tweaks via GUI
 assert "static void cursor(void)" in source
 assert 'const char *shapes[] = {"■ 黑色方块", "□ 白色方块", "自定义图片"};' in source
-print("PASS: original MayOS window geometry, renderer and Material defaults retained; only requested pointer controls added")
+assert "roundrect(14, 60, 76, 508, panel);" not in source
+assert "static void desktop(void)" in source
+assert "static void taskbar(void)" in source
+assert 'text(126, 10, "文件", ink);' in source
+assert 'text(200, 10, "窗口", ink);' in source
+assert 'text(275, 10, "应用", ink);' in source
+assert 'text(350, 10, "终端", ink);' in source
+assert "int x = 210, y = H - 84, w = 605, h = 78;" in source
+assert "rect(230 + i * 75, 155 + i * 38, 1, 337," in source
+assert 'fs_find(2, "Notes.txt")' in source
+assert '{186, 74, 800, 620, 0, 0, 0, 0, 0, 0, 0, "系统设置 / System Settings"}' in source
+print("PASS: user's macOS top menu / centered Dock / Notes icon, original MD3 widgets and default clean desktop")
