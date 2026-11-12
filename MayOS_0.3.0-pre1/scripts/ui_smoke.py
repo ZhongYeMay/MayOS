@@ -29,6 +29,7 @@ def main():
         assert image.getpixel((230,200))==(49,49,54),'reference descending wallpaper lines missing'
         assert image.getpixel((220,702))==(37,36,40),'centered dock background missing'
         assert image.getpixel((10,745))==(26,26,30),'obsolete full-width taskbar remains'
+        vm.click(169,117);vm.click(169,117);vm.shot('notes-desktop-editor')
         vm.click(444,716);vm.click(295,236);vm.click(710,350);vm.shot('dark-settings')
         assert Image.open(BUILD/'dark-settings.png').getpixel((900,500))==(33,31,38)
         vm.click(440,330);vm.shot('light-settings')
