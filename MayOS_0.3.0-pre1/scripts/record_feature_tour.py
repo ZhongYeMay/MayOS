@@ -112,6 +112,17 @@ def record(args):
         actions += ["storage_capacity", "open_source_credits", "about_kernel_info"]
         vm.click(948, 94)                  # close Settings
         vm.hold(.8)
+        # In the exact screenshot's top bar, every icon has a real native panel.
+        for x, label in ((728, "session_clock_panel"),
+                         (778, "network_status_panel"),
+                         (828, "theme_controls_panel"),
+                         (878, "notifications_panel"),
+                         (928, "power_menu")):
+            vm.click(x, 21)
+            vm.hold(.85)
+            vm.key("esc")
+            vm.hold(.2)
+            actions.append(label)
 
         vm.click(346, 716)                 # real file manager via dock
         vm.hold(1.3)
