@@ -369,7 +369,7 @@ typedef struct {
 } Window;
 #define WINDOW_COUNT 5
 static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "文件 / Files"},
-                            {186, 74, 800, 620, 1, 0, 0, 0, 0, 0, 0, "系统设置 / System Settings"},
+                            {186, 74, 800, 620, 0, 0, 0, 0, 0, 0, 0, "系统设置 / System Settings"},
                             {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
                             {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
                             {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
@@ -378,6 +378,7 @@ static int mx = 530, my = 390, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
            cut = 0, settings_tab = 0;
 static int file_scroll = 0;
+static int desktop_note_selected = 0;
 static int modal = 0, modal_target = -1;
 static int egg_open = 0, egg_clicks = 0;
 static u32 egg_last_click;
@@ -808,47 +809,71 @@ static void palette(void) {
         selected_fill = dark ? 0x40345e : 0xe2dbed;
     }
 }
+/* Reference desktop: macOS-like top menu and dock, with existing MD3 windows.
+ * No misleading system APIs are exposed: status icons are informative.
+ * Wallpaper lines and Notes.txt remain part of the default desktop. */
+static void document_symbol(int x, int y, int size, u32 color) {
+    int x0 = x + size / 4, y0 = y + size / 8;
+    int x1 = x + size * 3 / 4, y1 = y + size * 7 / 8;
+    stroke(x0, y0, x1 - size / 5, y0, 2, color);
+    stroke(x1 - size / 5, y0, x1, y0 + size / 5, 2, color);
+    stroke(x1, y0 + size / 5, x1, y1, 2, color);
+    stroke(x1, y1, x0, y1, 2, color);
+    stroke(x0, y1, x0, y0, 2, color);
+    stroke(x1 - size / 5, y0, x1 - size / 5, y0 + size / 5, 2, color);
+    stroke(x1 - size / 5, y0 + size / 5, x1, y0 + size / 5, 2, color);
+    stroke(x0 + 6, y0 + size / 2, x1 - 5, y0 + size / 2, 2, color);
+    stroke(x0 + 6, y0 + size / 2 + 7, x1 - 5, y0 + size / 2 + 7, 2, color);
+}
 static void desktop(void) {
-    /* Material 3: tonal canvas, navigation rail, compact status area. */
-    if (desktop_style == 1) {
-        rect(0, 0, W, H, dark ? 0x19161f : 0xf3edf7);
-    } else {
-        for (int y = 0; y < H; y++)
-            rect(0, y, W, 1, blend(dark ? 0x15131b : 0xf6f1fa,
-                                   dark ? 0x211e29 : 0xece6f3, (u32)y * 130 / H));
-        if (desktop_style == 2) {
-            for (int i = 0; i <= W / 64; i++)
-                rect(i * 64, 46, 1, H - 92, dark ? 0x30303c : 0xdcd4e2);
-            for (int i = 0; i <= (H - 92) / 64; i++)
-                rect(0, 46 + i * 64, W, 1, dark ? 0x30303c : 0xdcd4e2);
-        }
+    /* Follow the user's reference image rather than replacing the macOS dock
+       with a left-side rail and Windows-like full-width taskbar. */
+    u32 canvas = dark ? 0x1a1a1e : 0xf4f3f5;
+    if (desktop_style == 1) canvas = dark ? 0x17171a : 0xf4f4f5;
+    rect(0, 0, W, H, canvas);
+    if (desktop_style == 0) {
+        /* The five subtle descending lines shown in IMG_5904.png. */
+        for (int i = 0; i < 5; i++)
+            rect(230 + i * 75, 155 + i * 38, 1, 337,
+                 dark ? 0x313136 : 0xd7d7dd);
+    } else if (desktop_style == 2) {
+        for (int x = 0; x < W; x += 64)
+            rect(x, 42, 1, H - 42, dark ? 0x303035 : 0xdedee3);
+        for (int y = 42; y < H; y += 64)
+            rect(0, y, W, 1, dark ? 0x303035 : 0xdedee3);
     }
-    rect(0, 0, W, 46, dark ? 0x211f26 : 0xf3edf7);
-    rect(0, 45, W, 1, line);
-    ring(30, 23, 10, 3, accent);
-    text(50, 13, "MayOS", ink);
-    text(157, 13, "Workspace", muted);
-    text(786, 13, PLATFORM_BADGE, muted);
-    roundrect(14, 60, 76, 508, panel);
-    const char *names[] = {"文件", "设置", "终端", "回收站"};
-    for (int i = 0; i < 4; i++) {
-        int top = 77 + i * 100;
-        if (windows[i == 3 ? 0 : i].open && focus == (i == 3 ? 0 : i) && !windows[focus].min)
-            roundrect(22, top + 3, 60, 58, selected_fill);
-        icon(32, top + 8, i, 44);
-        text(i == 3 ? 30 : 38, top + 58, names[i], muted);
+    /* Desktop Notes.txt icon opens the real seeded MayFS text file. */
+    if (fs_find(2, "Notes.txt") >= 0) {
+        roundrect(146, 96, 50, 50, desktop_note_selected ?
+                  selected_fill : (dark ? 0x29282f : 0xeae8ef));
+        document_symbol(148, 98, 46, dark ? 0xe6e1e5 : 0x302b35);
+        text(124, 154, "Notes.txt", dark ? 0xe6e1e5 : 0x302b35);
     }
-    symbol(35, 489, 4, 28, ink);
-    text(17, 535, "Explorer", muted);
-#ifndef MAYOS_LINUX
-    roundrect(14, 577, 76, 86, surface_high);
-    border(30, 592, 45, 29, accent);
-    text(17, 637, "夏日未寄", muted);
-#endif
-    if (show_brand) {
-        large_text(728, 594, "MayOS", muted);
-        text(729, 640, "MATERIAL WORKSPACE / " MAYOS_RELEASE, muted);
-    }
+    /* Persistent top menu, aligned with the supplied 1024x768 reference. */
+    rect(0, 0, W, 42, dark ? 0x242227 : 0xece9ed);
+    rect(0, 41, W, 1, dark ? 0x48454c : 0xcac4cc);
+    text(24, 10, "MayOS", ink);
+    text(126, 10, "文件", ink);
+    text(200, 10, "窗口", ink);
+    text(275, 10, "应用", ink);
+    text(350, 10, "终端", ink);
+    /* Top-right: clock, network, system, notifications, power, settings. */
+    ring(728, 21, 8, 2, muted);
+    stroke(728, 21, 728, 15, 1, muted);
+    stroke(728, 21, 732, 24, 1, muted);
+    for (int step = 0; step < 3; step++)
+        stroke(768 + step * 3, 16 + step * 2, 784 - step * 3, 16 + step * 2, 1, muted);
+    circle(776, 26, 2, muted);
+    symbol(806, 7, 1, 27, muted);
+    /* Bell with rounded, manually rasterized outline, not an emoji. */
+    ring(878, 22, 7, 2, muted);
+    rect(868, 24, 19, 4, dark ? 0x242227 : 0xece9ed);
+    stroke(869, 27, 886, 27, 1, muted);
+    circle(878, 30, 2, muted);
+    ring(927, 21, 8, 2, muted);
+    rect(923, 9, 8, 12, dark ? 0x242227 : 0xece9ed);
+    stroke(927, 10, 927, 20, 2, muted);
+    symbol(964, 7, 1, 27, muted);
 }
 static void frame(int id) {
     Window *w = &windows[id];
@@ -1264,47 +1289,35 @@ static void explorer_draw(Window *w) {
     text(x + 100, y + 417, "请选择 Linux 启动项使用 HTTP 文本预览。", muted);
 #endif
 }
+/* Centered macOS-like dock from the user's reference screenshot.
+   Icons launch the same native MayOS windows and services. */
 static void taskbar(void) {
-    rect(0, H - 46, W, 46, dark ? 0x211f26 : 0xf3edf7);
-    rect(0, H - 46, W, 1, line);
-    roundrect(12, H - 38, 84, 31, start_open ? selected_fill : surface_high);
-    for (int y = 0; y < 2; y++)
-        for (int x = 0; x < 2; x++)
-            rect(24 + x * 7, H - 29 + y * 7, 4, 4, accent);
-    text(46, H - 34, "应用", ink);
-    for (int i = 0; i < WINDOW_COUNT; i++)
-        if (windows[i].open) {
-            int x = 110 + i * 126;
-            int active = focus == i && !windows[i].min;
-            rect(x, H - 38, 118, 31, active ? selected_fill : surface_high);
-            text(x + 14, H - 34,
-                 i == 0   ? "文件"
-                 : i == 1 ? "系统设置"
-                 : i == 2 ? ">_ 终端"
-                          : i == 3 ? "文本编辑器" : "Explorer",
-                 active ? ink : muted);
-            if (active)
-                rect(x + 12, H - 6, 94, 2, accent);
+    int x = 210, y = H - 84, w = 605, h = 78;
+    roundrect(x + 3, y + 4, w, h, dark ? 0x101013 : 0xd3d0d7);
+    roundrect(x, y, w, h - 4, dark ? 0x252428 : 0xf1eef4);
+    rect(x + 26, y, w - 52, 1, dark ? 0x4b484e : 0xd7d1dc);
+    const int centers[] = {248, 346, 444, 542, 640, 738};
+    for (int i = 0; i < 6; i++) {
+        int cx = centers[i];
+        int id = i == 0 ? -1 : (i == 1 ? 0 : i == 2 ? 1 :
+                               i == 3 ? 2 : i == 4 ? 3 : 4);
+        int active = i == 0 ? start_open :
+                     (windows[id].open && !windows[id].min && focus == id);
+        roundrect(cx - 22, y + 9, 44, 46, active ? selected_fill :
+                  (dark ? 0x302e34 : 0xe1dce6));
+        if (i == 0) {
+            for (int row = 0; row < 3; row++)
+                for (int col = 0; col < 3; col++)
+                    circle(cx - 10 + col * 10, y + 23 + row * 9, 3, ink);
+        } else if (i == 4) {
+            document_symbol(cx - 17, y + 14, 34, ink);
+        } else {
+            symbol(cx - 19, y + 12, i == 1 ? 0 : i == 2 ? 1 :
+                   i == 3 ? 2 : 4, 38, ink);
         }
-    circle(772, H - 23, 3, disk_ready ? accent : 0x86a5b2);
-    text(785, H - 33,
-#ifdef MAYOS_LINUX
-         "RAM SESSION",
-#else
-         disk_ready ? "MayFS / disk" : "RAM / session",
-#endif
-         0x87a0ae);
-    u32 sec = ticks / 100;
-    char clock[32], n[12];
-    number(n, sec / 3600);
-    copy(clock, n, 32);
-    copy(clock + strlen(clock), ":", 32 - strlen(clock));
-    u32 min = sec / 60 % 60;
-    number(n, min);
-    if (min < 10)
-        copy(clock + strlen(clock), "0", 32 - strlen(clock));
-    copy(clock + strlen(clock), n, 32 - strlen(clock));
-    text(923, H - 33, clock, 0xc8dce4);
+        if (active)
+            circle(cx, y + 63, 3, accent);
+    }
 }
 static int contains(const char *a, const char *b) {
     if (!*b)
