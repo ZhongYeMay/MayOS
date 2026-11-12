@@ -964,6 +964,9 @@ static void frame(int id) {
     for (int i = 0; i < 3; i++)
         stroke(w->x + w->w - 8 - i * 5, w->y + w->h - 4,
                w->x + w->w - 4, w->y + w->h - 8 - i * 5, 1, muted);
+    /* Accessibility-only focus outline; original default appearance stays exact. */
+    if (high_contrast)
+        border(w->x + 1, w->y + 1, w->w - 2, w->h - 2, line);
 }
 static void settings(Window *w) {
     int x = w->x, y = w->y, cx = x + 204, cy = y + 65, cw = w->w - 234;
