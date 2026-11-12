@@ -34,6 +34,11 @@ jobs:
         run: |
           python3 -m py_compile scripts/settings_smoke.py scripts/record_feature_tour.py
           python3 scripts/test_ui_style_contract.py
+      - name: Dry-run website release promotion before any publishing
+        run: |
+          python3 scripts/promote_strict_ui_release_website.py
+          python3 website/check_site.py
+          git restore website
       - name: Check x86_64 MayFS and GUI compilation against minimal generated headers
         working-directory: MayOS_0.3.0-pre1
         run: |
