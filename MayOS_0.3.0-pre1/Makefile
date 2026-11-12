@@ -40,7 +40,11 @@ build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
 	$(PYTHON) scripts/font.py
 build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 	$(PYTHON) scripts/photo.py
-build/gui.o: build/cat_image.h kernel/explorer_history.h kernel/galgame.h
+# Actual licensed Material Symbols Rounded glyphs are rasterized at build time.
+# No external font or browser runtime is required in the finished ISO.
+build/material_icons.h: assets/material_symbols.py | build
+	$(PYTHON) assets/material_symbols.py
+build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S
 build/galgame.o: kernel/galgame.h
 build/boot64.o: kernel/boot64.S | build
@@ -80,4 +84,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h build/summer_art.h build/summer_art.bin build/summer_story.h
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h

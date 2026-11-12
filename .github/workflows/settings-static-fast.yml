@@ -34,12 +34,18 @@ jobs:
         run: |
           python3 -m py_compile scripts/settings_smoke.py scripts/record_feature_tour.py
           python3 scripts/test_ui_style_contract.py
+      - name: Dry-run website release promotion before any publishing
+        run: |
+          python3 scripts/promote_strict_ui_release_website.py
+          python3 website/check_site.py
+          git restore website
       - name: Check x86_64 MayFS and GUI compilation against minimal generated headers
         working-directory: MayOS_0.3.0-pre1
         run: |
           mkdir -p build
           printf '#define FONT_COUNT 1\nstatic const unsigned short font_code[1]={65};\nstatic const unsigned char font_bits[1][320]={{0}};\n' > build/font.h
           printf '#define CAT_W 1\n#define CAT_H 1\nstatic const unsigned short cat_rgb565[1]={0};\n' > build/cat_image.h
+          printf '#define MAYOS_MATERIAL_ICONS 0\n' > build/material_icons.h
           gcc -m64 -DMAYOS_X86_64 -std=gnu11 -O2 -Wall -Wextra -Werror \
             -ffreestanding -fno-builtin -mno-red-zone -mgeneral-regs-only \
             -Ibuild -Ikernel -fsyntax-only kernel/fs.c kernel/gui.c

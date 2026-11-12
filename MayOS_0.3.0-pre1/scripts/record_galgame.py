@@ -31,7 +31,7 @@ def main():
     if not options.iso.is_file():parser.error("Build MayKernel ISO first")
     options.firmware="bios"
     options.kernel="custom"
-    options.release="0.4.0-pre37"
+    options.release=(Path(__file__).resolve().parents[1]/"VERSION").read_text().strip()
     options.ovmf_code=None
     options.ovmf_vars=None
     start=datetime.now(timezone.utc).isoformat()
@@ -41,8 +41,11 @@ def main():
         session.start_recording()
         session.wait("MayOS: desktop ready",timeout=120)
         session.hold(2)
-        # Click actual new MayKernel app icon on the left navigation rail.
-        session.click(52,610)
+        # The old left rail was removed in favor of the user-specified Dock.
+        # Open the real Applications menu and then the native game entry.
+        session.click(248,716)
+        session.hold(.5)
+        session.click(270,567)
         session.wait("native Summer game launched",timeout=20)
         session.hold(2)
         session.command("HELLO FROM MAYKERNEL")
@@ -65,9 +68,9 @@ def main():
       "frames":session.frames,
       "fps":options.fps,
       "duration_seconds":session.frames/options.fps,
-      "guest":"MayKernel native x86 freestanding game UI",
+      "guest":"MayKernel native x86_64 freestanding game UI",
       "capture":"QEMU framebuffer via QMP; no simulated or synthesized gameplay frames",
-      "proof":["GRUB boot","native MayKernel desktop","native game UI opened from dock",
+      "proof":["GRUB boot","native MayKernel desktop","native game UI opened through the real Dock Applications menu",
                "free text entry","draft save key","native heroine selection"],
       "limitations":["MayKernel TLS and DeepSeek runtime not implemented",
                      "original WebP artwork not decoded in MayKernel",
