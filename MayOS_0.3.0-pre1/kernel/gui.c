@@ -437,6 +437,7 @@ static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = 
            cut = 0, settings_tab = 0;
 static int file_scroll = 0;
 static int desktop_note_selected = 0;
+static int top_panel = 0;  /* 1=clock, 2=network, 3=display, 4=alerts, 5=power */
 static int modal = 0, modal_target = -1;
 static int egg_open = 0, egg_clicks = 0;
 static u32 egg_last_click;
@@ -1391,6 +1392,52 @@ static void taskbar(void) {
             roundrect(x + 16, top + 66, 13, 3, accent);
     }
 }
+/* Functional, keyboard-dismissable popovers are deliberately invisible
+   until the user clicks the corresponding screenshot-matched status glyph. */
+static void status_panel_draw(void) {
+    if (!top_panel) return;
+    int x = 690, y = 51, w = 318, h = 235;
+    roundrect(x + 4, y + 5, w, h, dark ? 0x111115 : 0xd4d2d7);
+    roundrect(x, y, w, h, panel);
+    rect(x + 18, y + 50, w - 36, 1, line);
+    const char *names[] = {"", "会话时钟", "网络状态", "显示与外观", "通知中心", "电源"};
+    text(x + 21, y + 16, names[top_panel], ink);
+    text(x + w - 36, y + 16, "×", muted);
+    if (top_panel == 1) {
+        text(x + 21, y + 76, "当前会话运行时间", muted);
+        numtext(x + 21, y + 115, ticks / 100, ink);
+        text(x + 105, y + 115, "秒（非真实日期时钟）", muted);
+        text(x + 21, y + 169, "系统信息可在设置中查看", muted);
+        button(x + 19, y + 193, 125, "打开设置", 0);
+    } else if (top_panel == 2) {
+        text(x + 21, y + 74, "网络连接信息", ink);
+#ifdef MAYOS_LINUX
+        char state[180] = {0};
+        int online = platform_network_status(state, sizeof(state));
+        text(x + 21, y + 113, online > 0 ? "Linux 网络后端已响应" :
+                                      "网络不可用或尚未就绪", muted);
+#else
+        text(x + 21, y + 113, "MayKernel: 网络能力有限", muted);
+#endif
+        text(x + 21, y + 151, "Explorer 可查看当前可用功能", muted);
+        button(x + 19, y + 193, 145, "打开 Explorer", 0);
+    } else if (top_panel == 3) {
+        text(x + 21, y + 74, "系统主题", ink);
+        button(x + 19, y + 108, 126, "深色", dark);
+        button(x + 161, y + 108, 126, "浅色", !dark);
+        text(x + 21, y + 160, "主题变化会按现有设置规则保存", muted);
+        button(x + 19, y + 193, 145, "更多外观设置", 0);
+    } else if (top_panel == 4) {
+        text(x + 21, y + 79, notice_until > ticks ? notice : "暂无新通知", ink);
+        text(x + 21, y + 132, "应用和系统提示会显示在此处", muted);
+        button(x + 19, y + 193, 125, "清除提示", 0);
+    } else {
+        text(x + 21, y + 76, "结束当前 MayOS 会话", muted);
+        button(x + 19, y + 117, 126, "重新启动", 0);
+        button(x + 161, y + 117, 126, "关闭系统", 0);
+        text(x + 21, y + 181, "操作前会同步可写入的 MayFS 数据", muted);
+    }
+}
 static int contains(const char *a, const char *b) {
     if (!*b)
         return 1;
@@ -1540,6 +1587,7 @@ static void render(void) {
             explorer_draw(w);
     }
     taskbar();
+    status_panel_draw();
     if (start_open)
         start_draw();
     if (context_open)
@@ -1703,31 +1751,61 @@ static void left_click(void) {
         }
         context_open = 0;
     }
-    /* Top macOS-style menu bar stays clickable while windows are open. */
+    /* A click in an open panel is handled before interacting with windows. */
+    if (top_panel && my >= 42) {
+        int id = top_panel;
+        top_panel = 0;
+        if (inside(mx, my, 690, 51, 318, 235)) {
+            if (id == 1 && inside(mx, my, 709, 244, 145, 34)) {
+                raise_window(1);
+            } else if (id == 2 && inside(mx, my, 709, 244, 164, 34)) {
+                raise_window(4);
+            } else if (id == 3) {
+                if (inside(mx, my, 709, 159, 126, 34)) {
+                    dark = 1; preferences_save();
+                } else if (inside(mx, my, 851, 159, 126, 34)) {
+                    dark = 0; preferences_save();
+                } else if (inside(mx, my, 709, 244, 164, 34)) {
+                    raise_window(1);
+                }
+            } else if (id == 4 && inside(mx, my, 709, 244, 145, 34)) {
+                notice_until = 0;
+                notice[0] = 0;
+            } else if (id == 5) {
+                if (inside(mx, my, 709, 168, 126, 34)) {
+                    fs_sync(); reboot();
+                } else if (inside(mx, my, 851, 168, 126, 34)) {
+                    fs_sync(); poweroff();
+                }
+            }
+        }
+        return;
+    }
+    /* The actual reference screenshot's status icons have real click targets. */
     if (my < 42) {
         if (mx < 110 || (mx >= 265 && mx < 340)) {
+            top_panel = 0;
             start_open = !start_open;
             search[0] = 0;
         } else if (mx < 191) {
+            top_panel = 0;
             raise_window(0);
         } else if (mx < 265) {
+            top_panel = 0;
             for (int i = 0; i < WINDOW_COUNT; i++)
                 if (windows[i].open) { raise_window(i); return; }
             raise_window(0);
         } else if (mx < 426) {
+            top_panel = 0;
             raise_window(2);
-        } else if (mx >= 954) {
+        } else if (mx >= 955) {
+            top_panel = 0;
             raise_window(1);
-        } else if (mx >= 915) {
-            start_open = !start_open; /* Power controls in application menu. */
-        } else if (mx >= 851) {
-            notify("暂无新的通知");
-        } else if (mx >= 798) {
-            raise_window(1);
-        } else if (mx >= 753) {
-            notify("网络状态请在 Explorer 中查看");
-        } else if (mx >= 706) {
-            raise_window(1); /* The clock reports session uptime in Settings. */
+        } else if (mx >= 705) {
+            int id = (mx - 705) / 50 + 1;
+            if (id > 5) id = 5;
+            top_panel = top_panel == id ? 0 : id;
+            start_open = 0;
         }
         return;
     }
@@ -2049,7 +2127,7 @@ static void key_event(int k) {
         return;
     }
     if (k == 27) {
-        start_open = context_open = 0;
+        start_open = context_open = top_panel = 0;
         return;
     }
     if (start_open) {
