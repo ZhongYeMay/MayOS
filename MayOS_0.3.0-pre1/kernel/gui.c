@@ -1333,29 +1333,41 @@ static int contains(const char *a, const char *b) {
 }
 static int search_match(int id) {
     const char *names[] = {"files 文件 文档", "settings 设置 关于", "terminal 终端 shell",
-                           "trash 回收站"};
-    return contains(names[id], search);
+                           "trash 回收站", "game 游戏 夏日未寄 explorer 浏览器"};
+    return id >= 0 && id < 5 && contains(names[id], search);
 }
 static void start_draw(void) {
-    int x = 12, y = H - 424;
-    roundrect(x + 3, y + 4, 326, 366, dark ? 0x141218 : 0xd8d1df);
-    roundrect(x, y, 326, 366, panel);
+    int x = 210, y = H - 500;
+    roundrect(x + 3, y + 4, 326, 410, dark ? 0x141218 : 0xd8d1df);
+    roundrect(x, y, 326, 410, panel);
     text(x + 22, y + 19, "应用程序 / Applications", ink);
     roundrect(x + 18, y + 57, 290, 34, bg);
     text(x + 30, y + 64, search[0] ? search : "搜索 / files, settings, terminal",
          search[0] ? ink : muted);
-    const char *names[] = {"文件管理器", "设置", "终端", "回收站"};
-    const char *desc[] = {"浏览文件与文件夹", "系统信息与外观", "命令与会话工具", "找回或删除文件"};
-    for (int i = 0; i < 4; i++)
+    const char *names[] = {"文件管理器", "设置", "终端", "回收站",
+#ifdef MAYOS_LINUX
+                           "Explorer 浏览器"
+#else
+                           "夏日未寄"
+#endif
+    };
+    const char *desc[] = {"浏览文件与文件夹", "系统信息与外观", "命令与会话工具", "找回或删除文件",
+#ifdef MAYOS_LINUX
+                          "Linux 网络文本预览"
+#else
+                          "MayKernel 原生游戏"
+#endif
+    };
+    for (int i = 0; i < 5; i++)
         if (search_match(i)) {
             icon(x + 24, y + 109 + i * 47, i, 31);
             text(x + 70, y + 105 + i * 47, names[i], ink);
             text(x + 70, y + 125 + i * 47, desc[i], muted);
         }
-    rect(x + 18, y + 306, 290, 1, line);
-    text(x + 25, y + 328, "may / 本地账户", muted);
-    text(x + 213, y + 328, "重启", ink);
-    text(x + 270, y + 328, "关机", ink);
+    rect(x + 18, y + 350, 290, 1, line);
+    text(x + 25, y + 369, "may / 本地账户", muted);
+    text(x + 213, y + 369, "重启", ink);
+    text(x + 270, y + 369, "关机", ink);
 }
 static void context_draw(void) {
     roundrect(ctxx + 3, ctxy + 3, 184, 320, dark ? 0x141218 : 0xd8d1df);
@@ -1619,38 +1631,87 @@ static void left_click(void) {
         }
         context_open = 0;
     }
-    if (my >= H - 46) {
-        if (mx < 100) {
+    /* Top macOS-style menu bar stays clickable while windows are open. */
+    if (my < 42) {
+        if (mx < 110 || (mx >= 265 && mx < 340)) {
             start_open = !start_open;
             search[0] = 0;
+        } else if (mx < 191) {
+            raise_window(0);
+        } else if (mx < 265) {
+            for (int i = 0; i < WINDOW_COUNT; i++)
+                if (windows[i].open) { raise_window(i); return; }
+            raise_window(0);
+        } else if (mx < 426) {
+            raise_window(2);
+        } else if (mx >= 954) {
+            raise_window(1);
+        } else if (mx >= 915) {
+            start_open = !start_open; /* Power controls in application menu. */
+        } else if (mx >= 851) {
+            notify("暂无新的通知");
+        } else if (mx >= 798) {
+            raise_window(1);
+        } else if (mx >= 753) {
+            notify("网络状态请在 Explorer 中查看");
+        } else if (mx >= 706) {
+            raise_window(1); /* The clock reports session uptime in Settings. */
+        }
+        return;
+    }
+    /* Dock: application grid, Files, Settings, Terminal, Notes editor, Explorer. */
+    if (my >= H - 84) {
+        const int centers[] = {248, 346, 444, 542, 640, 738};
+        for (int i = 0; i < 6; i++) {
+            if (!inside(mx, my, centers[i] - 34, H - 80, 68, 69))
+                continue;
+            if (i == 0) {
+                start_open = !start_open;
+                search[0] = 0;
+            } else if (i == 1) {
+                raise_window(0);
+            } else if (i == 2) {
+                raise_window(1);
+            } else if (i == 3) {
+                raise_window(2);
+            } else if (i == 4) {
+                int note = fs_find(2, "Notes.txt");
+                if (editor_file >= 0)
+                    raise_window(3);
+                else if (note >= 0)
+                    open_file(note);
+                else
+                    raise_window(0);
+            } else {
+                raise_window(4);
+            }
             return;
         }
-        for (int i = 0; i < WINDOW_COUNT; i++)
-            if (windows[i].open && inside(mx, my, 110 + i * 126, H - 38, 118, 31)) {
-                if (focus == i && !windows[i].min)
-                    windows[i].min = 1;
-                else
-                    raise_window(i);
-                return;
-            }
-        start_open = 0;
         return;
     }
     if (start_open) {
-        int x = 12, y = H - 424;
-        if (inside(mx, my, x, y, 326, 366)) {
-            for (int i = 0; i < 4; i++)
+        int x = 210, y = H - 500;
+        if (inside(mx, my, x, y, 326, 410)) {
+            for (int i = 0; i < 5; i++)
                 if (search_match(i) && inside(mx, my, x + 16, y + 100 + i * 47, 294, 46)) {
                     if (i == 3) {
                         folder = 3;
                         file_scroll = 0;
                         selected = -1;
                         raise_window(0);
-                    } else
+                    } else if (i == 4) {
+#ifdef MAYOS_LINUX
+                        raise_window(4);
+#else
+                        start_open = 0;
+                        maygame_open();
+#endif
+                    } else {
                         raise_window(i);
+                    }
                     return;
                 }
-            if (my >= y + 320) {
+            if (my >= y + 354) {
                 if (mx > x + 267) {
                     fs_sync();
                     poweroff();
@@ -1837,24 +1898,24 @@ static void left_click(void) {
         }
         return;
     }
- #ifndef MAYOS_LINUX
-    if (inside(mx, my, 14, 577, 76, 86)) { maygame_open(); return; }
- #endif
-    if (inside(mx, my, 12, 486, 76, 72)) {
-        raise_window(4);
+    /* A real Notes.txt desktop icon with normal select/double-click behavior. */
+    if (inside(mx, my, 120, 90, 100, 90)) {
+        int note = fs_find(2, "Notes.txt");
+        if (note >= 0) {
+            if (desktop_note_selected && last_clicked == note &&
+                ticks - last_click_tick < 45) {
+                open_file(note);
+                desktop_note_selected = 0;
+                last_clicked = -1;
+            } else {
+                desktop_note_selected = 1;
+                last_clicked = note;
+                last_click_tick = ticks;
+            }
+        }
         return;
     }
-    for (int i = 0; i < 4; i++)
-        if (inside(mx, my, 20, 76 + i * 100, 76, 88)) {
-            if (i == 3) {
-                folder = 3;
-                file_scroll = 0;
-                selected = -1;
-                raise_window(0);
-            } else
-                raise_window(i);
-            return;
-        }
+    desktop_note_selected = 0;
 }
 static void right_click(void) {
 #ifndef MAYOS_LINUX
@@ -1927,11 +1988,18 @@ static void key_event(int k) {
             search[n] = k;
             search[n + 1] = 0;
         } else if (k == '\n') {
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 5; i++)
                 if (search_match(i)) {
                     if (i == 3) {
                         folder = 3;
                         raise_window(0);
+                    } else if (i == 4) {
+#ifdef MAYOS_LINUX
+                        raise_window(4);
+#else
+                        start_open = 0;
+                        maygame_open();
+#endif
                     } else
                         raise_window(i);
                     break;
