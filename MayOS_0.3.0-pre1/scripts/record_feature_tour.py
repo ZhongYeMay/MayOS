@@ -20,7 +20,7 @@ def record(args):
     args.output = args.output.resolve()
     args.firmware = "bios"
     args.ovmf_code = args.ovmf_vars = None
-    args.release = "0.4.1-pre1"
+    args.release = (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
     if not re.fullmatch(r"[0-9a-f]{40}", args.source_commit):
         raise ValueError("Exact 40-character source commit required")
     if not args.iso.is_file():
