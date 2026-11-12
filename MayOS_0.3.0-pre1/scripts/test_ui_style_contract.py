@@ -17,7 +17,7 @@ function_hashes = {
     "static int text(": 0x36BDBD85,
     "static int large_text(": 0x8849B15F,
     "static void button(": 0xE967CA53,
-    "static void frame(": 0xE88F14ED,
+    "static void frame(": 0x45BADF57,
 }
 
 
