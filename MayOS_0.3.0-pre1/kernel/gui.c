@@ -22,6 +22,116 @@ static u32 pixels[W * H];
 static u32 bg = 0x141218, panel = 0x211f26, ink = 0xe6e1e5, muted = 0xcac4d0, line = 0x49454f,
            accent = 0xd0bcff, surface_high = 0x2b2930, on_accent = 0x381e72, selected_fill = 0x4f378b;
 static int dark = 1, accent_choice = 0;
+static int desktop_style = 0, pointer_size = 0, show_brand = 1, high_contrast = 0;
+/* 0 = black square, 1 = white square, 2 = custom Documents/Cursor.ppm. */
+static int cursor_style = 0;
+static int custom_cursor_width = 0, custom_cursor_height = 0;
+static u32 custom_cursor[16 * 16];
+/* Parse bounded, plain-text P3 image tokens; "#..." comments are supported. */
+static int cursor_ppm_int(const u8 **at, const u8 *end) {
+    while (*at < end) {
+        u8 ch = **at;
+        if (ch == '#') {
+            while (*at < end && **at != '\n') (*at)++;
+        } else if (ch == ' ' || ch == '\n' || ch == '\t' || ch == '\r') {
+            (*at)++;
+        } else break;
+    }
+    if (*at >= end || **at < '0' || **at > '9') return -1;
+    int n = 0;
+    while (*at < end && **at >= '0' && **at <= '9') {
+        n = n * 10 + (**at - '0');
+        if (n > 65535) return -1;
+        (*at)++;
+    }
+    return n;
+}
+static int cursor_image_load(int create_sample) {
+    int i = fs_find(1, "Cursor.ppm");
+    if (i < 0 && create_sample) {
+        /* Create a sample only on explicit user selection, not at cold boot.
+         * Pre-seeding files changed the original file manager row positions. */
+        static const char sample[] =
+            "P3\n"
+            "8 8\n"
+            "255\n"
+            "255 0 255 255 0 255 20 184 166 20 184 166 20 184 166 20 184 166 255 0 255 255 0 255\n"
+            "255 0 255 20 184 166 16 16 16 16 16 16 16 16 16 16 16 16 20 184 166 255 0 255\n"
+            "20 184 166 16 16 16 255 255 255 255 255 255 255 255 255 255 255 255 16 16 16 20 184 166\n"
+            "20 184 166 16 16 16 255 255 255 20 184 166 20 184 166 255 255 255 16 16 16 20 184 166\n"
+            "20 184 166 16 16 16 255 255 255 20 184 166 20 184 166 255 255 255 16 16 16 20 184 166\n"
+            "20 184 166 16 16 16 255 255 255 255 255 255 255 255 255 255 255 255 16 16 16 20 184 166\n"
+            "255 0 255 20 184 166 16 16 16 16 16 16 16 16 16 16 16 16 20 184 166 255 0 255\n"
+            "255 0 255 255 0 255 20 184 166 20 184 166 20 184 166 20 184 166 255 0 255 255 0 255\n";
+        i = fs_create(1, "Cursor.ppm", 0);
+        if (i < 0 || sizeof(sample) > FILE_CAP) return 0;
+        copy((char *)files[i].data, sample, FILE_CAP);
+        files[i].size = (u32)(sizeof(sample) - 1);
+        fs_sync();
+    }
+    if (i < 0 || files[i].dir || files[i].size < 12 ||
+        files[i].size >= FILE_CAP) return 0;
+    const u8 *at = files[i].data;
+    const u8 *end = at + files[i].size;
+    if (at[0] != 'P' || at[1] != '3') return 0;
+    at += 2;
+    int width = cursor_ppm_int(&at, end);
+    int height = cursor_ppm_int(&at, end);
+    int peak = cursor_ppm_int(&at, end);
+    if (width < 1 || width > 16 || height < 1 || height > 16 || peak != 255)
+        return 0;
+    u32 decoded[16 * 16];
+    for (int n = 0; n < width * height; n++) {
+        int red = cursor_ppm_int(&at, end);
+        int green = cursor_ppm_int(&at, end);
+        int blue = cursor_ppm_int(&at, end);
+        if (red < 0 || red > 255 || green < 0 || green > 255 ||
+            blue < 0 || blue > 255) return 0;
+        decoded[n] = ((u32)red << 16) | ((u32)green << 8) | (u32)blue;
+    }
+    memcpy(custom_cursor, decoded, (u32)(width * height) * sizeof(u32));
+    custom_cursor_width = width;
+    custom_cursor_height = height;
+    return 1;
+}
+#define MAYOS_PREFS_MAGIC 0x4d505246u
+static void preferences_save(void) {
+    u32 raw[8] = {MAYOS_PREFS_MAGIC, (u32)dark, (u32)accent_choice,
+                  (u32)desktop_style, (u32)pointer_size, (u32)show_brand,
+                  (u32)high_contrast | ((u32)cursor_style << 8), 1};
+    /* Linux and diskless MayKernel keep the new values for this session. */
+    fs_prefs_write((const u8 *)raw, sizeof(raw));
+}
+static void preferences_load(void) {
+    u32 raw[8];
+    if (!fs_prefs_read((u8 *)raw, sizeof(raw)) || raw[0] != MAYOS_PREFS_MAGIC ||
+        raw[7] != 1 || raw[1] > 1 || raw[2] >= 6 || raw[3] >= 3 ||
+        raw[4] >= 3 || raw[5] > 1 || (raw[6] & ~0x301u) != 0 ||
+        ((raw[6] >> 8) & 3u) >= 3)
+        return;
+    dark = (int)raw[1];
+    accent_choice = (int)raw[2];
+    desktop_style = (int)raw[3];
+    pointer_size = (int)raw[4];
+    show_brand = (int)raw[5];
+    high_contrast = (int)(raw[6] & 1u);
+    cursor_style = (int)((raw[6] >> 8) & 3u);
+    if (cursor_style == 2 && !cursor_image_load(0)) {
+        cursor_style = 0;
+        serial("MayOS: invalid custom pointer; using black square\n");
+    }
+    serial("MayOS: desktop preferences applied\n");
+}
+static void preferences_reset(void) {
+    dark = 1;
+    accent_choice = 0;
+    desktop_style = 0;
+    pointer_size = 0;
+    cursor_style = 0;
+    show_brand = 1;
+    high_contrast = 0;
+    preferences_save();
+}
 static void rect(int x, int y, int w, int h, u32 c) {
     if (x < 0) {
         w += x;
@@ -571,7 +681,10 @@ static void shell(void) {
         emit("meow! You found a little resident of MayOS.");
         open_easter();
     } else if (!strcmp(c, "theme") && argc > 1) {
-        dark = !strcmp(argv[1], "dark");
+        if (!strcmp(argv[1], "light") || !strcmp(argv[1], "dark")) {
+            dark = !strcmp(argv[1], "dark");
+            preferences_save();
+        } else emit("Usage: theme light|dark");
     } else if (!strcmp(c, "reboot")) {
         fs_sync();
         reboot();
@@ -677,8 +790,8 @@ static void accept_modal(void) {
     modal = 0;
 }
 static void palette(void) {
-    const u32 dark_primary[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6};
-    const u32 light_primary[] = {0x6750a4, 0x006a64, 0x415f91, 0x904b40};
+    const u32 dark_primary[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
+    const u32 light_primary[] = {0x6750a4, 0x006a64, 0x415f91, 0x904b40, 0x805700, 0x72518c};
     bg = dark ? 0x141218 : 0xfffbfe;
     panel = dark ? 0x211f26 : 0xfff7ff;
     surface_high = dark ? 0x2b2930 : 0xf3edf7;
@@ -688,12 +801,28 @@ static void palette(void) {
     accent = dark ? dark_primary[accent_choice] : light_primary[accent_choice];
     on_accent = dark ? 0x381e72 : 0xffffff;
     selected_fill = dark ? 0x4f378b : 0xeaddff;
+    if (high_contrast) {
+        ink = dark ? 0xffffff : 0x090909;
+        muted = dark ? 0xe7e5eb : 0x222222;
+        line = dark ? 0xa29cad : 0x5d5a61;
+        selected_fill = dark ? 0x40345e : 0xe2dbed;
+    }
 }
 static void desktop(void) {
     /* Material 3: tonal canvas, navigation rail, compact status area. */
-    for (int y = 0; y < H; y++)
-        rect(0, y, W, 1, blend(dark ? 0x15131b : 0xf6f1fa,
-                               dark ? 0x211e29 : 0xece6f3, (u32)y * 130 / H));
+    if (desktop_style == 1) {
+        rect(0, 0, W, H, dark ? 0x19161f : 0xf3edf7);
+    } else {
+        for (int y = 0; y < H; y++)
+            rect(0, y, W, 1, blend(dark ? 0x15131b : 0xf6f1fa,
+                                   dark ? 0x211e29 : 0xece6f3, (u32)y * 130 / H));
+        if (desktop_style == 2) {
+            for (int i = 0; i <= W / 64; i++)
+                rect(i * 64, 46, 1, H - 92, dark ? 0x30303c : 0xdcd4e2);
+            for (int i = 0; i <= (H - 92) / 64; i++)
+                rect(0, 46 + i * 64, W, 1, dark ? 0x30303c : 0xdcd4e2);
+        }
+    }
     rect(0, 0, W, 46, dark ? 0x211f26 : 0xf3edf7);
     rect(0, 45, W, 1, line);
     ring(30, 23, 10, 3, accent);
@@ -716,8 +845,10 @@ static void desktop(void) {
     border(30, 592, 45, 29, accent);
     text(17, 637, "夏日未寄", muted);
 #endif
-    large_text(728, 594, "MayOS", muted);
-    text(729, 640, "MATERIAL WORKSPACE / " MAYOS_RELEASE, muted);
+    if (show_brand) {
+        large_text(728, 594, "MayOS", muted);
+        text(729, 640, "MATERIAL WORKSPACE / " MAYOS_RELEASE, muted);
+    }
 }
 static void frame(int id) {
     Window *w = &windows[id];
@@ -740,9 +871,9 @@ static void settings(Window *w) {
     rect(x + 1, y + 43, 176, w->h - 44, bg);
     rect(x + 176, y + 43, 1, w->h - 44, line);
     text(x + 24, y + 64, "WORKSTATION", muted);
-    const char *tabs[] = {"关于系统", "外观设置", "存储空间", "开源组件"};
-    const char *marks[] = {"01", "02", "03", "04"};
-    for (int i = 0; i < 4; i++) {
+    const char *tabs[] = {"关于系统", "外观设置", "存储空间", "开源组件", "桌面与指针"};
+    const char *marks[] = {"01", "02", "03", "04", "05"};
+    for (int i = 0; i < 5; i++) {
         int yy = y + 106 + i * 46;
         if (settings_tab == i) {
             roundrect(x + 12, yy, 152, 36, selected_fill);
@@ -827,13 +958,15 @@ static void settings(Window *w) {
             }
         }
         text(cx, cy + 353, "主题色 / Accent", ink);
-        u32 colors[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6};
-        for (int i = 0; i < 4; i++) {
+        u32 colors[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
+        for (int i = 0; i < 6; i++) {
             circle(cx + 19 + i * 64, cy + 410, 18, colors[i]);
             if (accent_choice == i)
                 circle(cx + 19 + i * 64, cy + 410, 6, 0xffffff);
         }
-        text(cx, cy + 471, "外观设置在本次会话内生效。", muted);
+        text(cx, cy + 474, "文本与边框对比度", ink);
+        button(cx, cy + 505, 118, "标准", !high_contrast);
+        button(cx + 132, cy + 505, 118, "高对比", high_contrast);
     } else if (settings_tab == 2) {
         text(cx, cy, "STORAGE / SESSION", accent);
         large_text(cx, cy + 26, "存储空间", ink);
@@ -872,7 +1005,7 @@ static void settings(Window *w) {
         text(cx, cy + 377, "原型存储格式；请使用专用虚拟数据盘。", muted);
         button(cx, cy + 436, 126, "立即同步", 1);
 #endif
-    } else {
+    } else if (settings_tab == 3) {
         text(cx, cy, "OPEN SOURCE / CREDITS", accent);
         large_text(cx, cy + 26, "开源组件", ink);
         text(cx, cy + 77, "感谢以下项目。各组件保留各自许可证。", muted);
@@ -890,6 +1023,45 @@ static void settings(Window *w) {
         text(cx, cy + 452, "QEMU: GPL-2.0 / OVMF: BSD-2-Clause-Patent", muted);
         text(cx, cy + 479, "完整许可与对应源码见发行包的 licenses 文档。", muted);
         text(cx, cy + 513, "MayOS Team 2023 - 2026.", ink);
+    } else {
+        text(cx, cy, "DESKTOP / POINTER", accent);
+        large_text(cx, cy + 26, "桌面与指针", ink);
+        text(cx, cy + 77, "可随时预览；无需重新启动桌面。", muted);
+        text(cx, cy + 112, "桌面背景", ink);
+        const char *styles[] = {"柔和渐变", "纯色背景", "网格背景"};
+        for (int i = 0; i < 3; i++) {
+            int px = cx + i * 176;
+            roundrect(px, cy + 141, 160, 100, i == desktop_style ? selected_fill : bg);
+            rect(px + 11, cy + 152, 138, 58, dark ? 0x24202b : 0xe8e1ec);
+            if (i == 0)
+                for (int j = 0; j < 58; j += 4)
+                    rect(px + 11, cy + 152 + j, 138, 4,
+                         blend(dark ? 0x25212d : 0xe8e1ec,
+                               dark ? 0x3c304a : 0xd4cae0, (u32)j * 255 / 58));
+            if (i == 2)
+                for (int j = 0; j < 138; j += 23)
+                    rect(px + 11 + j, cy + 152, 1, 58, accent);
+            text(px + 19, cy + 215, styles[i], ink);
+            if (desktop_style == i) circle(px + 148, cy + 150, 5, accent);
+        }
+        text(cx, cy + 260, "鼠标指针大小", ink);
+        const char *pointers[] = {"小", "标准", "大"};
+        for (int i = 0; i < 3; i++)
+            button(cx + i * 154, cy + 298, 142, pointers[i], pointer_size == i);
+        text(cx, cy + 343, "鼠标指针样式", ink);
+        const char *shapes[] = {"■ 黑色方块", "□ 白色方块", "自定义图片"};
+        for (int i = 0; i < 3; i++)
+            button(cx + i * 168, cy + 376, 158, shapes[i], cursor_style == i);
+        text(cx, cy + 412, "自定义：文档/Cursor.ppm（P3，最大16×16）", muted);
+        text(cx, cy + 440, "桌面版本标识", ink);
+        button(cx, cy + 455, 130, "显示", show_brand);
+        button(cx + 144, cy + 455, 130, "隐藏", !show_brand);
+        button(cx, cy + 495, 145, "恢复默认设置", 0);
+#ifdef MAYOS_LINUX
+        text(cx + 168, cy + 505, "Linux: 本次会话有效", muted);
+#else
+        text(cx + 168, cy + 505, disk_ready ? "MayFS: 自动保存" : "RAM: 本次会话有效", muted);
+#endif
     }
 }
 static int file_list[FS_MAX], file_count;
@@ -1231,11 +1403,23 @@ static void easter_draw(void) {
     button(610, 646, 108, "返回桌面", 1);
 }
 static void cursor(void) {
-    for (int y = 0; y < 20; y++)
-        for (int x = 0; x <= y / 2; x++)
-            rect(mx + x, my + y, 1, 1, x == 0 || x == y / 2 || y == 19 ? 0x223149 : 0xffffff);
-    rect(mx + 6, my + 14, 3, 9, 0x223149);
-    rect(mx + 7, my + 15, 1, 6, 0xffffff);
+    int side = 12 + pointer_size * 6;
+    if (cursor_style == 2 && custom_cursor_width && custom_cursor_height) {
+        /* Pixel-art nearest-neighbor scaling. Magenta means transparency. */
+        for (int y = 0; y < side; y++)
+            for (int x = 0; x < side; x++) {
+                int sx = x * custom_cursor_width / side;
+                int sy = y * custom_cursor_height / side;
+                u32 color = custom_cursor[sy * custom_cursor_width + sx];
+                if (color != 0xff00ff)
+                    rect(mx + x, my + y, 1, 1, color);
+            }
+        return;
+    }
+    u32 edge = cursor_style == 1 ? 0x161616 : 0xffffff;
+    u32 fill = cursor_style == 1 ? 0xffffff : 0x101010;
+    rect(mx, my, side, side, edge);
+    rect(mx + 2, my + 2, side - 4, side - 4, fill);
 }
 
 static void render(void) {
@@ -1544,7 +1728,7 @@ static void left_click(void) {
                 int tab = (ry - 106) / 46;
                 if (ry >= w->h - 110 && ry < w->h - 75)
                     begin_modal(6, -1);
-                else if (ry >= 106 && tab < 4 && (ry - 106) % 46 < 36)
+                else if (ry >= 106 && tab >= 0 && tab < 5 && (ry - 106) % 46 < 36)
                     settings_tab = tab;
             } else if (settings_tab == 0 && inside(rx, ry, 204, 514, 126, 30))
                 begin_modal(4, -1);
@@ -1552,15 +1736,45 @@ static void left_click(void) {
                 settings_tab = 3;
             else if (settings_tab == 1) {
                 if (ry >= 220 && ry <= 382) {
-                    if (rx >= 204 && rx < 420)
+                    if (rx >= 204 && rx < 420) {
                         dark = 0;
-                    else if (rx >= 440 && rx < 656)
+                        preferences_save();
+                    } else if (rx >= 440 && rx < 656) {
                         dark = 1;
+                        preferences_save();
+                    }
                 }
                 if (ry >= 457 && ry <= 493 && rx >= 204) {
                     int i = (rx - 204) / 64;
-                    if (i >= 0 && i < 4)
+                    if (i >= 0 && i < 6) {
                         accent_choice = i;
+                        preferences_save();
+                    }
+                }
+                if (ry >= 570 && ry < 602 && rx >= 204 && rx < 468) {
+                    high_contrast = rx >= 336;
+                    preferences_save();
+                }
+            } else if (settings_tab == 4) {
+                if (ry >= 206 && ry < 306 && rx >= 204 && rx < 732) {
+                    int i = (rx - 204) / 176;
+                    if (i < 3) { desktop_style = i; preferences_save(); }
+                } else if (ry >= 363 && ry < 398 && rx >= 204 && rx < 666) {
+                    int i = (rx - 204) / 154;
+                    if (i < 3) { pointer_size = i; preferences_save(); }
+                } else if (ry >= 441 && ry < 477 && rx >= 204 && rx < 718) {
+                    int i = (rx - 204) / 168;
+                    if (i == 2 && !cursor_image_load(1)) {
+                        notify("请检查文档/Cursor.ppm（P3，最大16×16）");
+                        return;
+                    }
+                    if (i >= 0 && i < 3) { cursor_style = i; preferences_save(); }
+                } else if (ry >= 520 && ry < 553 && rx >= 204 && rx < 478) {
+                    show_brand = rx < 348;
+                    preferences_save();
+                } else if (inside(rx, ry, 204, 560, 145, 34)) {
+                    preferences_reset();
+                    notify("个性化设置已恢复默认");
                 }
             } else if (settings_tab == 2 && inside(rx, ry, 204, 501, 126, 30))
                 notify(fs_sync() ? "已同步到磁盘" : "磁盘不可写");
@@ -1808,6 +2022,7 @@ static void key_event(int k) {
 void kernel_main(u32 magic, u32 info) {
     hardware_init(magic, info);
     fs_init();
+    preferences_load();
     terminal_init();
     serial("MayOS: desktop ready\n");
     u32 last = 0;

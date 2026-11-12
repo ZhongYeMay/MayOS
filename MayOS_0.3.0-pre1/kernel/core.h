@@ -55,6 +55,9 @@ typedef struct {
 extern File files[FS_MAX];
 extern int disk_ready;
 void fs_init(void);
+/* Separate checksummed record in the unused tail of a MayFS snapshot. */
+int fs_prefs_read(u8 *destination, u32 bytes);
+int fs_prefs_write(const u8 *source, u32 bytes);
 int fs_sync(void);
 int fs_find(int, const char *);
 int fs_create(int, const char *, int);

@@ -31,10 +31,11 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: Use current signed Ubuntu mirror without mirror+file indirection
+        run: bash scripts/configure-ci-apt-mirror.sh
       - name: Install build and firmware tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential gcc-multilib grub-common grub-pc-bin \
+          sudo apt-get install -y -o Acquire::Retries=3 -o Acquire::ForceIPv4=true build-essential gcc-multilib grub-common grub-pc-bin \
             grub-efi-amd64-bin xorriso mtools qemu-system-x86 ovmf python3-pil \
             fonts-noto-cjk fonts-dejavu-core musl-tools flex bison bc libelf-dev \
             libssl-dev xz-utils busybox-static rsync libcurl4-openssl-dev pkg-config ca-certificates
