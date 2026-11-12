@@ -86,6 +86,8 @@ jobs:
           path: |
             MayOS_0.3.0-pre1/build/recordings/*.mp4
             MayOS_0.3.0-pre1/build/recordings/*.json
+            MayOS_0.3.0-pre1/build/desktop-macos-md3-reference.png
+            MayOS_0.3.0-pre1/build/notes-desktop-editor.png
             MayOS_0.3.0-pre1/build/settings-*.png
             MayOS_0.3.0-pre1/build/test-*.log
             MayOS_0.3.0-pre1/build/record-*.log
