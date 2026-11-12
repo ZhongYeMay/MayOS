@@ -2,8 +2,8 @@
 """Prevent unapproved visual redesigns of the original MayOS Material workspace.
 
 The eight drawing/widget functions below are approved as they appeared on
-main before PR #9. No external dependencies or network are needed.
-This is a guard for the default UI style, not a screenshot/QEMU acceptance test.
+the original accepted user screenshot and historical 0.4.0-pre3 design. No external dependencies or network are needed.
+This is a static style guard only; actual screenshot/QEMU acceptance also runs.
 """
 from pathlib import Path
 
@@ -17,7 +17,7 @@ function_hashes = {
     "static int text(": 0x36BDBD85,
     "static int large_text(": 0x8849B15F,
     "static void button(": 0xE967CA53,
-    "static void frame(": 0x3C421ED8,
+    "static void frame(": 0xE88F14ED,
 }
 
 
@@ -53,6 +53,11 @@ assert "panel = dark ? 0x211f26 : 0xfff7ff;" in source
 assert "surface_high = dark ? 0x2b2930 : 0xf3edf7;" in source
 assert "set gfxmode" not in source  # no graphics firmware tweaks via GUI
 assert "static void cursor(void)" in source
+assert "#include \"material_icons.h\"" in source
+assert "#if MAYOS_MATERIAL_ICONS" in source
+assert "accent = dark ? dark_primary[accent_choice] : light_primary[accent_choice];" in source
+assert "0xe2e2e7" in source
+assert "#define MAYOS_RELEASE \"0.4.1-pre2\"" in source
 assert 'const char *shapes[] = {"■ 黑色方块", "□ 白色方块", "自定义图片"};' in source
 assert "roundrect(14, 60, 76, 508, panel);" not in source
 assert "static void desktop(void)" in source
