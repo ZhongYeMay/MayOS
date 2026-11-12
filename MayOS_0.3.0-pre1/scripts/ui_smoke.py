@@ -29,6 +29,12 @@ def main():
         assert image.getpixel((230,200))==(51,52,58),'reference descending wallpaper lines missing'
         assert image.getpixel((220,702))==(36,37,40),'centered dock background missing'
         assert image.getpixel((10,745))==(32,33,37),'obsolete full-width taskbar remains'
+        # The reference-style status bar now exposes working native panels.
+        vm.click(728,21);vm.shot('status-clock');vm.key('esc')
+        vm.click(778,21);vm.shot('status-network');vm.key('esc')
+        vm.click(828,21);vm.shot('status-appearance');vm.key('esc')
+        vm.click(878,21);vm.shot('status-notifications');vm.key('esc')
+        vm.click(928,21);vm.shot('status-power');vm.key('esc')
         vm.click(169,117);vm.click(169,117);vm.shot('notes-desktop-editor')
         vm.click(444,716);vm.click(295,236);vm.click(710,350);vm.shot('dark-settings')
         assert Image.open(BUILD/'dark-settings.png').getpixel((900,500))==(33,31,38)
