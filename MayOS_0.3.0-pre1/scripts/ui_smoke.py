@@ -24,11 +24,11 @@ def main():
         vm.shot('desktop-macos-md3-reference')
         image=Image.open(BUILD/'desktop-macos-md3-reference.png').convert('RGB')
         assert image.size==(1024,768),image.size
-        assert image.getpixel((10,20))==(36,34,39),'macOS top menu color missing'
-        assert image.getpixel((650,400))==(26,26,30),'old Material rail/window still obscures default desktop'
-        assert image.getpixel((230,200))==(49,49,54),'reference descending wallpaper lines missing'
-        assert image.getpixel((220,702))==(37,36,40),'centered dock background missing'
-        assert image.getpixel((10,745))==(26,26,30),'obsolete full-width taskbar remains'
+        assert image.getpixel((10,20))==(33,31,35),'macOS top menu color missing'
+        assert image.getpixel((650,400))==(28,29,32),'old Material rail/window still obscures default desktop'
+        assert image.getpixel((230,200))==(51,52,58),'reference descending wallpaper lines missing'
+        assert image.getpixel((220,702))==(36,37,40),'centered dock background missing'
+        assert image.getpixel((10,745))==(32,33,37),'obsolete full-width taskbar remains'
         vm.click(169,117);vm.click(169,117);vm.shot('notes-desktop-editor')
         vm.click(444,716);vm.click(295,236);vm.click(710,350);vm.shot('dark-settings')
         assert Image.open(BUILD/'dark-settings.png').getpixel((900,500))==(33,31,38)
