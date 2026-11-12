@@ -1,6 +1,7 @@
 #include "cat_image.h"
 #include "core.h"
 #include "font.h"
+#include "material_icons.h"
 #ifndef MAYOS_LINUX
 #include "galgame.h"
 #endif
@@ -18,9 +19,9 @@
 #define PLATFORM_ARCH "x86_64 / 64-bit"
 #endif
 static u32 pixels[W * H];
-/* Material Design 3 color roles, tuned for the 1024x768 framebuffer. */
+/* Exact grayscale-first UI contract from the user's 1024x768 reference image. */
 static u32 bg = 0x141218, panel = 0x211f26, ink = 0xe6e1e5, muted = 0xcac4d0, line = 0x49454f,
-           accent = 0xd0bcff, surface_high = 0x2b2930, on_accent = 0x381e72, selected_fill = 0x4f378b;
+           accent = 0xe2e2e7, surface_high = 0x2b2930, on_accent = 0x202124, selected_fill = 0x46474d;
 static int dark = 1, accent_choice = 0;
 static int desktop_style = 0, pointer_size = 0, show_brand = 1, high_contrast = 0;
 /* 0 = black square, 1 = white square, 2 = custom Documents/Cursor.ppm. */
@@ -315,6 +316,20 @@ static void ring(int cx, int cy, int r, int thickness, u32 c) {
 }
 static void document_symbol(int x, int y, int size, u32 color);
 static void symbol(int x, int y, int kind, int size, u32 c) {
+#if MAYOS_MATERIAL_ICONS
+    if (kind >= 0 && kind < 23 && size > 0) {
+        for (int j = 0; j < size; j++)
+            for (int i = 0; i < size; i++) {
+                int px = x + i, py = y + j;
+                if (px >= 0 && px < W && py >= 0 && py < H) {
+                    u8 opacity = material_icons[kind][(j * 48 / size) * 48 + i * 48 / size];
+                    if (opacity)
+                        pixels[py * W + px] = blend(pixels[py * W + px], c, opacity);
+                }
+            }
+        return;
+    }
+#endif
     int cx = x + size / 2, cy = y + size / 2;
     int m = size / 5, thick = size >= 30 ? 3 : 2;
     if (kind == 0) {
@@ -834,8 +849,9 @@ static void accept_modal(void) {
     modal = 0;
 }
 static void palette(void) {
-    const u32 dark_primary[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
-    const u32 light_primary[] = {0x6750a4, 0x006a64, 0x415f91, 0x904b40, 0x805700, 0x72518c};
+    /* Neutral visual identity is the default. Other accent choices are opt-in. */
+    const u32 dark_primary[]  = {0xe2e2e7, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
+    const u32 light_primary[] = {0x414249, 0x006a64, 0x415f91, 0x904b40, 0x805700, 0x72518c};
     bg = dark ? 0x141218 : 0xfffbfe;
     panel = dark ? 0x211f26 : 0xfff7ff;
     surface_high = dark ? 0x2b2930 : 0xf3edf7;
@@ -843,13 +859,13 @@ static void palette(void) {
     muted = dark ? 0xcac4d0 : 0x49454f;
     line = dark ? 0x49454f : 0xcac4d0;
     accent = dark ? dark_primary[accent_choice] : light_primary[accent_choice];
-    on_accent = dark ? 0x381e72 : 0xffffff;
-    selected_fill = dark ? 0x4f378b : 0xeaddff;
+    on_accent = dark ? 0x202124 : 0xffffff;
+    selected_fill = dark ? 0x46474d : 0xe0e1e5;
     if (high_contrast) {
         ink = dark ? 0xffffff : 0x090909;
         muted = dark ? 0xe7e5eb : 0x222222;
         line = dark ? 0xa29cad : 0x5d5a61;
-        selected_fill = dark ? 0x40345e : 0xe2dbed;
+        selected_fill = dark ? 0x505159 : 0xd0d1d5;
     }
 }
 /* Reference desktop: macOS-like top menu and dock, with existing MD3 windows.
@@ -915,25 +931,39 @@ static void desktop(void) {
     }
     /* Historical status order: clock, Wi-Fi, brightness, bell, power, gear.
        Status indicators remain meaningful: MayKernel has no fake Wi-Fi switch. */
-    const int status_icons[] = {10, 13, 9, 7, 12, 1};
+    const int status_icons[] = {10, 8, 9, 7, 12, 1};
     for (int i = 0; i < 6; i++)
         symbol(715 + i * 50, 9, status_icons[i], 24, muted);
 }
 static void frame(int id) {
     Window *w = &windows[id];
-    rect(w->x + 5, w->y + 7, w->w, w->h, dark ? 0x141218 : 0xd8d1df);
+    /* Restore the actual historical 0.4.0-pre3 MD3 frame: layered tonal
+       elevation, rounded title bar and proper icon-backed window controls. */
+    roundrect(w->x + 6, w->y + 9, w->w, w->h,
+              dark ? 0x0d0e10 : 0xc4c6cc);
+    roundrect(w->x + 2, w->y + 3, w->w, w->h,
+              dark ? 0x17181d : 0xd5d7db);
     roundrect(w->x, w->y, w->w, w->h, panel);
-    rect(w->x + 1, w->y + 1, w->w - 2, 40, surface_high);
-    rect(w->x + 1, w->y + 41, w->w - 2, 1, line);
-    symbol(w->x + 13, w->y + 10, id == 0 ? 0 : id == 1 ? 1 : id == 4 ? 4 : 2, 22, ink);
-    text(w->x + 45, w->y + 10, w->title, focus == id ? ink : muted);
+    roundrect(w->x + 1, w->y + 1, w->w - 2, 44, surface_high);
+    rect(w->x + 1, w->y + 34, w->w - 2, 10, surface_high);
+    rect(w->x + 1, w->y + 43, w->w - 2, 1, line);
+    symbol(w->x + 16, w->y + 11,
+           id == 0 ? 0 : id == 1 ? 1 : id == 4 ? 4 : id == 3 ? 5 : 2,
+           22, ink);
+    text(w->x + 48, w->y + 11, w->title, focus == id ? ink : muted);
     int controls = w->x + w->w - 119;
+    const int kinds[] = {15, 16, 14};
+    for (int i = 0; i < 3; i++) {
+        int xx = controls + i * 36 + 1;
+        int hover = inside(mx, my, xx, w->y + 5, 33, 33);
+        roundrect(xx, w->y + 5, 33, 33,
+                  hover ? selected_fill : surface_high);
+        symbol(xx + 6, w->y + 11, kinds[i], 20,
+               hover ? ink : muted);
+    }
     for (int i = 0; i < 3; i++)
-        circle(controls + i * 36 + 17, w->y + 21, 12,
-               surface_high);
-    rect(controls + 11, w->y + 21, 11, 1, muted);
-    border(controls + 48, w->y + 16, 10, 10, muted);
-    text(w->x + w->w - 35, w->y + 10, "×", muted);
+        stroke(w->x + w->w - 8 - i * 5, w->y + w->h - 4,
+               w->x + w->w - 4, w->y + w->h - 8 - i * 5, 1, muted);
 }
 static void settings(Window *w) {
     int x = w->x, y = w->y, cx = x + 204, cy = y + 65, cw = w->w - 234;
@@ -1027,7 +1057,7 @@ static void settings(Window *w) {
             }
         }
         text(cx, cy + 353, "主题色 / Accent", ink);
-        u32 colors[] = {0xd0bcff, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
+        u32 colors[] = {0xe2e2e7, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
         for (int i = 0; i < 6; i++) {
             circle(cx + 19 + i * 64, cy + 410, 18, colors[i]);
             if (accent_choice == i)
