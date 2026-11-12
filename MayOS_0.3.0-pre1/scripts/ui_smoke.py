@@ -20,6 +20,15 @@ def main():
     with disk.open('wb') as f:f.truncate(8*1024*1024)
     vm=VM(disk,'test-ui')
     try:
+        # Screenshot contract: boot clean into user's macOS-like dark desktop.
+        vm.shot('desktop-macos-md3-reference')
+        image=Image.open(BUILD/'desktop-macos-md3-reference.png').convert('RGB')
+        assert image.size==(1024,768),image.size
+        assert image.getpixel((10,20))==(36,34,39),'macOS top menu color missing'
+        assert image.getpixel((650,400))==(26,26,30),'old Material rail/window still obscures default desktop'
+        assert image.getpixel((230,200))==(49,49,54),'reference descending wallpaper lines missing'
+        assert image.getpixel((220,702))==(37,36,40),'centered dock background missing'
+        assert image.getpixel((10,745))==(26,26,30),'obsolete full-width taskbar remains'
         vm.click(444,716);vm.click(295,236);vm.click(710,350);vm.shot('dark-settings')
         assert Image.open(BUILD/'dark-settings.png').getpixel((900,500))==(33,31,38)
         vm.click(440,330);vm.shot('light-settings')
@@ -48,6 +57,6 @@ def main():
         vm.click(941,76);vm.click(916,180)
         vm.click(248,716);vm.type('terminal');vm.shot('start-menu');vm.key('ret')
         vm.cmd('help');vm.wait('F1 opens Terminal.')
-        print('PASS: light/dark, file copy/rename/trash/restore, new folder, window controls, app search',flush=True)
+        print('PASS: reference macOS top menu, centered Dock, Notes desktop, MD3 light/dark, file operations, windows, app search',flush=True)
     finally:vm.stop()
 if __name__=='__main__':main()
