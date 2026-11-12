@@ -1,0 +1,180 @@
+name: Release tested MayOS strict-reference desktop ISO and update website
+
+# Only a main-branch merge which introduces/changes this one-shot workflow
+# can publish. Ordinary UI commits do not create prereleases.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-strict-reference-ui-once.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mayos-strict-desktop-v0-4-1-pre2
+  cancel-in-progress: false
+
+jobs:
+  verify-build-record-release:
+    if: github.repository == 'ZhongYeMay/MayOS' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      VERSION: 0.4.1-pre2
+      LINUX_VERSION: 7.3.1
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Fetch the exact commit to be released
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Reject old versions, duplicate tags and unapproved redesigns
+        run: |
+          set -euo pipefail
+          test "$(cat MayOS_0.3.0-pre1/VERSION)" = "$VERSION"
+          grep -Fq "#define MAYOS_RELEASE \"$VERSION\"" MayOS_0.3.0-pre1/kernel/gui.c
+          grep -Fq "VERSION=\"$VERSION\"" MayOS_0.3.0-pre1/scripts/linux.py
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "v$VERSION exists; refuse to replace previously published ISO."
+            exit 1
+          fi
+          python3 MayOS_0.3.0-pre1/scripts/test_ui_style_contract.py
+      - name: Use up-to-date signed Ubuntu mirror (preserve apt GPG validation)
+        run: bash scripts/configure-ci-apt-mirror.sh
+      - name: Install real x86_64 QEMU, UEFI, FFmpeg, Material glyph tooling
+        run: |
+          set -euo pipefail
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
+            build-essential gcc-multilib binutils grub-common grub-pc-bin \
+            grub-efi-amd64-bin xorriso mtools qemu-system-x86 ovmf \
+            ffmpeg python3-pil fonts-noto-cjk fonts-dejavu-core \
+            musl-tools flex bison bc libelf-dev libssl-dev xz-utils \
+            busybox-static rsync libcurl4-openssl-dev pkg-config ca-certificates
+      - name: Build genuine ELF64 and require the REAL licensed Material glyphs
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euxo pipefail
+          make all
+          readelf -h build/mayos.elf | grep -Fq ELF64
+          readelf -h build/mayos.elf | grep -Fq 'Advanced Micro Devices X86-64'
+          grep -Fq '#define MAYOS_MATERIAL_ICONS 1' build/material_icons.h
+          grub-file --is-x86-multiboot build/mayos.elf
+      - name: Validate screenshot pixels, actual mouse clicks, MayFS and desktop actions
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euxo pipefail
+          make test
+          test -s build/desktop-macos-md3-reference.png
+          test -s build/notes-desktop-editor.png
+          test -s build/settings-appearance-extended.png
+      - name: Create native MayKernel64 and Linux 7.3.1 dual ISO
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euxo pipefail
+          make dual LINUX_VERSION="$LINUX_VERSION" LINUX_JOBS=4
+          test -s build/mayos.iso
+          test -s build/mayos-dual.iso
+      - name: Exercise actual QEMU BIOS dual boot, UEFI, Linux, FS isolation
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euxo pipefail
+          make test-dual LINUX_VERSION="$LINUX_VERSION"
+          make test-uefi LINUX_VERSION="$LINUX_VERSION"
+      - name: Record BOTH real QEMU desktop tours, no reconstructed screenshots
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euxo pipefail
+          mkdir -p build/recordings
+          python3 scripts/record_feature_tour.py --kernel custom \
+            --iso build/mayos.iso --source-commit "$GITHUB_SHA" \
+            --output build/recordings/MayKernel64-All-Functions.mp4
+          python3 scripts/record_feature_tour.py --kernel linux \
+            --iso build/mayos-dual.iso --source-commit "$GITHUB_SHA" \
+            --output build/recordings/Linux64-All-Functions.mp4
+          for file in build/recordings/*.mp4; do
+            test -s "$file"
+            ffprobe -v error -select_streams v:0 \
+              -show_entries stream=codec_name,width,height \
+              -of default=noprint_wrappers=1 "$file" |
+              grep -Fq codec_name=h264
+          done
+      - name: Package exact tested ISO, native screenshots, videos and SHA-256
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+          cp MayOS_0.3.0-pre1/build/mayos.iso "dist/MayOS-$VERSION-MayKernel-x86_64.iso"
+          cp MayOS_0.3.0-pre1/build/mayos-dual.iso "dist/MayOS-$VERSION-dual-boot-x86_64.iso"
+          cp MayOS_0.3.0-pre1/build/desktop-macos-md3-reference.png "dist/MayOS-$VERSION-desktop.png"
+          cp MayOS_0.3.0-pre1/build/settings-appearance-extended.png "dist/MayOS-$VERSION-settings.png"
+          cp MayOS_0.3.0-pre1/build/recordings/MayKernel64-All-Functions.mp4 "dist/MayOS-$VERSION-MayKernel64-All-Functions.mp4"
+          cp MayOS_0.3.0-pre1/build/recordings/Linux64-All-Functions.mp4 "dist/MayOS-$VERSION-Linux64-All-Functions.mp4"
+          cp MayOS_0.3.0-pre1/build/recordings/MayKernel64-All-Functions.json "dist/MayOS-$VERSION-MayKernel64-All-Functions.json"
+          cp MayOS_0.3.0-pre1/build/recordings/Linux64-All-Functions.json "dist/MayOS-$VERSION-Linux64-All-Functions.json"
+          cp MayOS_0.3.0-pre1/build/dual-boot-test-results.json "dist/MayOS-$VERSION-dual-test.json"
+          cp MayOS_0.3.0-pre1/build/uefi-test-results.json "dist/MayOS-$VERSION-uefi-test.json"
+          git archive --format=zip HEAD -o "dist/MayOS-$VERSION-source.zip"
+          (cd dist && sha256sum *.iso *.png *.mp4 *.json *.zip > SHA256SUMS.txt)
+          (cd dist && sha256sum -c SHA256SUMS.txt)
+          cat > dist/RELEASE_NOTES.md <<EOF
+          # MayOS $VERSION — user's strict-reference desktop UI
+
+          The actual 1024×768 user-supplied screenshot, not a generic macOS
+          theme, is the visual specification. The previous native desktop layout
+          was restored and the original Google Material Symbols Rounded glyph
+          rasterizer and layered MD3 window controls returned. Defaults are
+          restrained black/gray rather than purple. The 64-bit OS keeps its
+          settings, six optional accent choices, MayFS persistence, pointer
+          sizes, square black/white and custom P3-image cursors.
+
+          Both ISOs are tested QEMU BIOS/UEFI builds of this exact commit:
+          - MayKernel ELF64 x86_64 ISO.
+          - MayKernel ELF64 + independent Linux $LINUX_VERSION x86_64 dual ISO.
+
+          Release assets include exact QEMU framebuffer screenshots, two
+          unedited real QEMU MP4 walkthroughs, machine-readable run metadata,
+          source code and SHA-256 checksums.
+
+          **Limitations**: QEMU is verified, not arbitrary physical PCs.
+          Secure Boot, IA32 UEFI, broad GPU/USB/NVMe drivers, modern HTTPS
+          browser and general Wi-Fi hardware support are not guaranteed.
+          Do not rely on this research OS for important data.
+          EOF
+      - name: Retain identical release evidence even on upload failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-v0.4.1-pre2-verified-ISO-videos-screenshots
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            dist/
+            MayOS_0.3.0-pre1/build/test-*.log
+            MayOS_0.3.0-pre1/build/desktop-macos-md3-reference.png
+      - name: Publish the one approved Release only after all validations pass
+        run: |
+          set -euxo pipefail
+          ! gh release view "v$VERSION" >/dev/null 2>&1
+          gh release create "v$VERSION" \
+            dist/*.iso dist/*.png dist/*.mp4 dist/*.json dist/*.zip \
+            dist/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" \
+            --prerelease --latest=false \
+            --title "MayOS $VERSION — verified strict-reference UI, MayKernel64 / Linux64" \
+            --notes-file dist/RELEASE_NOTES.md
+          gh release view "v$VERSION" --json assets --jq '.assets[].name' |
+            grep -Fq "MayOS-$VERSION-dual-boot-x86_64.iso"
+      - name: Promote the real matching screenshot, video and ISO on website
+        run: |
+          set -euxo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --ff-only origin main
+          python3 scripts/promote_strict_ui_release_website.py
+          python3 website/check_site.py
+          git add website/index.html website/download.html website/demos.html website/check_site.py
+          git commit -m "web: publish real tested MayOS $VERSION ISO and strict UI media [skip ci]"
+          git push origin HEAD:main
+      # website-pages.yml deploys automatically on website/** push.
