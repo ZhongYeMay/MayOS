@@ -20,12 +20,22 @@ def main():
     with disk.open('wb') as f:f.truncate(8*1024*1024)
     vm=VM(disk,'test-ui')
     try:
-        vm.click(295,236);vm.click(710,350);vm.shot('dark-settings')
+        # Screenshot contract: boot clean into user's macOS-like dark desktop.
+        vm.shot('desktop-macos-md3-reference')
+        image=Image.open(BUILD/'desktop-macos-md3-reference.png').convert('RGB')
+        assert image.size==(1024,768),image.size
+        assert image.getpixel((10,20))==(33,31,35),'macOS top menu color missing'
+        assert image.getpixel((650,400))==(28,29,32),'old Material rail/window still obscures default desktop'
+        assert image.getpixel((230,200))==(51,52,58),'reference descending wallpaper lines missing'
+        assert image.getpixel((220,702))==(36,37,40),'centered dock background missing'
+        assert image.getpixel((10,745))==(32,33,37),'obsolete full-width taskbar remains'
+        vm.click(169,117);vm.click(169,117);vm.shot('notes-desktop-editor')
+        vm.click(444,716);vm.click(295,236);vm.click(710,350);vm.shot('dark-settings')
         assert Image.open(BUILD/'dark-settings.png').getpixel((900,500))==(33,31,38)
         vm.click(440,330);vm.shot('light-settings')
         assert Image.open(BUILD/'light-settings.png').getpixel((900,500))==(255,247,255)
         vm.click(270,600);vm.shot('offline-help');vm.key('esc')
-        vm.click(55,105);vm.shot('files')
+        vm.click(346,716);vm.shot('files')
         vm.click(450,300,'right');vm.shot('context-menu');vm.click(480,455)
         vm.click(700,500,'right');vm.click(730,577)
         data=wait_for(disk,lambda d:d['Welcome.txt-copy'][3]==d['Welcome.txt'][3])
@@ -45,9 +55,9 @@ def main():
         vm.q('input-send-event',{'events':[{'type':'btn','data':{'button':'left','down':False}}]})
         time.sleep(.1);vm.shot('dragged-window')
         vm.click(949,180);vm.shot('maximized-files')
-        vm.click(941,76);vm.click(916,180);vm.click(140,740)
-        vm.click(40,740);vm.type('terminal');vm.shot('start-menu');vm.key('ret')
+        vm.click(941,76);vm.click(916,180)
+        vm.click(248,716);vm.type('terminal');vm.shot('start-menu');vm.key('ret')
         vm.cmd('help');vm.wait('F1 opens Terminal.')
-        print('PASS: light/dark, file copy/rename/trash/restore, new folder, window controls, app search',flush=True)
+        print('PASS: reference macOS top menu, centered Dock, Notes desktop, MD3 light/dark, file operations, windows, app search',flush=True)
     finally:vm.stop()
 if __name__=='__main__':main()

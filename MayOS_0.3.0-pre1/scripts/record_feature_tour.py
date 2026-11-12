@@ -46,6 +46,8 @@ def record(args):
         actions.append("native_x86_64_kernel" if args.kernel == "custom" else "real_Linux_userspace")
 
         # Personalization settings: two themes, sixth accent, high contrast.
+        vm.click(444, 716)   # Settings from reference-style dock
+        vm.hold(1.0)
         vm.click(295, 236)
         vm.hold(.8)
         vm.click(440, 330)
@@ -92,6 +94,7 @@ def record(args):
             vm.wait("MayOS: desktop preferences applied", offset=before, timeout=60)
             vm.wait("MayOS: desktop ready", offset=before, timeout=60)
             vm.hold(1.5)
+            vm.click(444, 716)   # cold boot starts with clean desktop
             vm.click(295, 380)
             vm.hold(1.2)
             actions.append("real_cold_boot_MayFS_settings_restoration")
@@ -110,7 +113,7 @@ def record(args):
         vm.click(948, 94)                  # close Settings
         vm.hold(.8)
 
-        vm.click(55, 105)                  # real file manager
+        vm.click(346, 716)                 # real file manager via dock
         vm.hold(1.3)
         vm.click(490, 212)                 # new folder modal
         vm.command("RecordedTour")
@@ -138,11 +141,12 @@ def record(args):
         actions.append("cat_easter_egg")
 
         if args.kernel == "custom":
-            vm.click(55, 605)             # own native game launcher
+            vm.click(248, 716)             # Applications from dock
+            vm.click(270, 567)             # native game in Applications menu
             vm.hold(2.0)
             actions.append("MayKernel_native_game")
         else:
-            vm.click(55, 525)             # Explorer and its limitations
+            vm.click(738, 716)             # Explorer from dock
             vm.hold(1.7)
             actions.append("Linux_Explorer")
         vm.finish_recording()

@@ -36,6 +36,7 @@ def main():
         f.truncate(8 * 1024 * 1024)
     vm = VM(disk, 'settings-configure')
     try:
+        vm.click(444, 716)             # open original Settings from the dock
         vm.click(295, 236)             # appearance page
         vm.click(440, 330)             # light theme
         vm.click(729, 549)             # 6th accent
@@ -67,6 +68,7 @@ def main():
     vm = VM(disk, 'settings-cold-boot')
     try:
         vm.wait('MayOS: desktop preferences applied')
+        vm.click(444, 716)             # reopen Settings after cold boot
         vm.click(295, 236)
         vm.shot('settings-persisted-light')
         assert Image.open(BUILD / 'settings-persisted-light.png').getpixel((900, 500)) == (255, 247, 255)
