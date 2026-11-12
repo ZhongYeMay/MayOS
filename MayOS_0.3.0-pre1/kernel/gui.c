@@ -357,10 +357,45 @@ static void symbol(int x, int y, int kind, int size, u32 c) {
     } else if (kind == 5) {
         document_symbol(x, y, size, c);
     } else if (kind == 6) {
+        /* Material Symbols apps: nine individually separated circular dots. */
         for (int row = 0; row < 3; row++)
             for (int col = 0; col < 3; col++)
                 circle(x + m + 2 + col * (size / 5),
-                       y + m + 2 + row * (size / 5), size / 13 + 1, c);
+                       y + m + 2 + row * (size / 5), size / 16 + 1, c);
+    } else if (kind == 7) {
+        /* Notifications bell, outline with clapper. */
+        ring(cx, cy + 1, size / 4, thick, c);
+        rect(cx - size / 4, cy + size / 12, size / 2 + 1, thick + 2,
+             dark ? 0x211f23 : 0xf6f6f8);
+        stroke(cx - size / 3, cy + size / 4, cx + size / 3, cy + size / 4, thick, c);
+        circle(cx, cy + size / 3, thick, c);
+    } else if (kind == 8 || kind == 13) {
+        /* Connected and disconnected Wi-Fi states. */
+        stroke(x + m, y + m + 3, cx, y + m - 2, thick - 1, c);
+        stroke(cx, y + m - 2, x + size - m, y + m + 3, thick - 1, c);
+        stroke(x + m + 4, cy + 1, cx, cy - 3, thick - 1, c);
+        stroke(cx, cy - 3, x + size - m - 4, cy + 1, thick - 1, c);
+        circle(cx, y + size - m - 2, 2, c);
+        if (kind == 13)
+            stroke(x + 3, y + 3, x + size - 3, y + size - 3, 2, c);
+    } else if (kind == 9) {
+        /* Brightness control icon. */
+        ring(cx, cy, size / 5, thick, c);
+        for (int i = -1; i <= 1; i += 2) {
+            stroke(cx + i * size / 3, cy, cx + i * size / 4, cy, thick, c);
+            stroke(cx, cy + i * size / 3, cx, cy + i * size / 4, thick, c);
+        }
+        stroke(cx - size / 4, cy - size / 4, cx - size / 3, cy - size / 3, 1, c);
+        stroke(cx + size / 4, cy + size / 4, cx + size / 3, cy + size / 3, 1, c);
+    } else if (kind == 10) {
+        ring(cx, cy, size / 3, thick, c);
+        stroke(cx, cy, cx, cy - size / 5, 2, c);
+        stroke(cx, cy, cx + size / 5, cy + size / 6, 2, c);
+    } else if (kind == 12) {
+        ring(cx, cy, size / 3, thick, c);
+        rect(cx - 3, cy - size / 3 - 1, 6, size / 4,
+             dark ? 0x211f23 : 0xf6f6f8);
+        stroke(cx, cy - size / 3 - 2, cx, cy, 2, c);
     }
 }
 static void icon(int x, int y, int kind, int size) {
@@ -878,23 +913,11 @@ static void desktop(void) {
         text(x, y + 58, files[i].name, dark ? 0xf3f2f4 : 0x27282b);
         count++;
     }
-    /* Top-right: clock, network, system, notifications, power, settings. */
-    ring(728, 21, 8, 2, muted);
-    stroke(728, 21, 728, 15, 1, muted);
-    stroke(728, 21, 732, 24, 1, muted);
-    for (int step = 0; step < 3; step++)
-        stroke(768 + step * 3, 16 + step * 2, 784 - step * 3, 16 + step * 2, 1, muted);
-    circle(776, 26, 2, muted);
-    symbol(806, 7, 1, 27, muted);
-    /* Bell with rounded, manually rasterized outline, not an emoji. */
-    ring(878, 22, 7, 2, muted);
-    rect(868, 24, 19, 4, dark ? 0x242227 : 0xece9ed);
-    stroke(869, 27, 886, 27, 1, muted);
-    circle(878, 30, 2, muted);
-    ring(927, 21, 8, 2, muted);
-    rect(923, 9, 8, 12, dark ? 0x242227 : 0xece9ed);
-    stroke(927, 10, 927, 20, 2, muted);
-    symbol(964, 7, 1, 27, muted);
+    /* Historical status order: clock, Wi-Fi, brightness, bell, power, gear.
+       Status indicators remain meaningful: MayKernel has no fake Wi-Fi switch. */
+    const int status_icons[] = {10, 13, 9, 7, 12, 1};
+    for (int i = 0; i < 6; i++)
+        symbol(715 + i * 50, 9, status_icons[i], 24, muted);
 }
 static void frame(int id) {
     Window *w = &windows[id];
