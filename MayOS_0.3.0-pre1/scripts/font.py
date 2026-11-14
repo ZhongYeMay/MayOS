@@ -36,12 +36,14 @@ with out.open('w') as f:
     premium_font = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
     title_font = ImageFont.truetype(premium_font, 26)
     info_font = ImageFont.truetype(premium_font, 19)
+    menu_font = ImageFont.truetype(premium_font, 15)
     f.write(f'#define PREMIUM_FONT_COUNT {len(premium_chars)}\n')
     f.write('static const unsigned short premium_font_code[]={'+
             ','.join(str(ord(x)) for x in premium_chars)+'};\n')
     for stem,face,cellw,cellh,baseline in (
         ('title',title_font,36,40,29),
-        ('body',info_font,28,30,22)):
+        ('body',info_font,28,30,22),
+        ('menu',menu_font,24,26,19)):
         advances=[]
         data=[]
         for char in premium_chars:
