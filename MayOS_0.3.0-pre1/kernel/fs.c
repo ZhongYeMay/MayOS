@@ -18,6 +18,17 @@ static u32 disk_sectors;
 static int backup_enabled;
 static int active_slot;
 static u32 fs_generation;
+#ifdef MAYOS_FS_POWERLOSS_SELFTEST
+/* Diagnostic-only compile flag. Never present in the distributable kernel. */
+static int fs_powercut_mode;
+static void fs_powercut_halt(const char *checkpoint) {
+    serial("MayOS: FS POWERLOSS DIAGNOSTIC checkpoint=");
+    serial(checkpoint);
+    serial("\n");
+    for (;;)
+        __asm__ volatile("cli; hlt");
+}
+#endif
 static u8 backup_image[FS_SECTORS * 512];
 
 static int ata_wait(int data) {
@@ -141,9 +152,15 @@ static int write_snapshot(u32 slot) {
     memset(zero, 0, sizeof(zero));
     if (!sector(base, zero, 1))
         return 0;
-    for (u32 i = 1; i < FS_SECTORS; i++)
+    for (u32 i = 1; i < FS_SECTORS; i++) {
         if (!sector(base + i, fs_image + i * 512, 1))
             return 0;
+#ifdef MAYOS_FS_POWERLOSS_SELFTEST
+        /* Check the on-disk torn state AFTER a real ATA data-sector write. */
+        if (slot == 1 && i == 32 && fs_powercut_mode == 1)
+            fs_powercut_halt("partial-backup");
+#endif
+    }
     if (!sector(base, fs_image, 1))
         return 0;
     outb(0x1f7, 0xe7); /* ATA FLUSH CACHE */
@@ -152,6 +169,12 @@ static int write_snapshot(u32 slot) {
 int fs_sync(void) {
     if (!disk_ready)
         return 0;
+#ifdef MAYOS_FS_POWERLOSS_SELFTEST
+    /* Runtime marker only on an otherwise fully valid private test disk.
+     * A test build must not be used for normal users or releases. */
+    fs_powercut_mode = fs_find(1, "cut-before.txt") >= 0 ? 1 :
+                       fs_find(1, "cut-after.txt") >= 0 ? 2 : 0;
+#endif
     memset(fs_image, 0, sizeof(fs_image));
     memcpy(fs_image, "MAYFS001", 8);
     memcpy(fs_image + 512, files, sizeof(files));
@@ -177,6 +200,12 @@ int fs_sync(void) {
      * other slot so legacy readers continue to see updated LBA 0 data. */
     u32 first = active_slot ? 0 : 1;
     if (!write_snapshot(first)) return 0;
+#ifdef MAYOS_FS_POWERLOSS_SELFTEST
+    /* The alternate slot is now valid and ATA FLUSH CACHE completed.
+     * Kill QEMU instead of allowing the primary mirror to be updated. */
+    if (fs_powercut_mode == 2)
+        fs_powercut_halt("backup-committed");
+#endif
     fs_generation = generation;
     active_slot = (int)first;
     if (!write_snapshot(1 - first)) return 0;
