@@ -318,36 +318,6 @@ static int large_text(int x, int y, const char *s, u32 color) {
     }
     return x;
 }
-/* Smooth 3:2 text scaling for the monochrome UI's primary headings.
- * Bilinear alpha interpolation, drawn into the native framebuffer. */
-static int heading_text(int x, int y, const char *s, u32 color) {
-    while (*s) {
-        int cp = utf(&s), g = glyph(cp);
-        int src_width = cp < 128 ? 8 : 16;
-        int out_width = src_width * 3 / 2;
-        for (int py = 0; py < 30; py++) {
-            int sy = py * 2 / 3, fy = (py * 2) % 3;
-            int sy1 = sy + 1 < 20 ? sy + 1 : sy;
-            for (int px = 0; px < out_width; px++) {
-                int sx = px * 2 / 3, fx = (px * 2) % 3;
-                int sx1 = sx + 1 < src_width ? sx + 1 : sx;
-                int a00 = font_bits[g][sy * 16 + sx];
-                int a10 = font_bits[g][sy * 16 + sx1];
-                int a01 = font_bits[g][sy1 * 16 + sx];
-                int a11 = font_bits[g][sy1 * 16 + sx1];
-                u32 a = (u32)(a00 * (3 - fx) * (3 - fy) +
-                              a10 * fx * (3 - fy) +
-                              a01 * (3 - fx) * fy +
-                              a11 * fx * fy) / 9;
-                int dx = x + px, dy = y + py;
-                if (a && dx >= 0 && dy >= 0 && dx < W && dy < H)
-                    pixels[dy * W + dx] = blend(pixels[dy * W + dx], color, a);
-            }
-        }
-        x += out_width;
-    }
-    return x;
-}
 /* Separate proportional Sans alpha atlas; generated from installed
  * DejaVu Sans at BUILD TIME. No font engine or browser in MayKernel runtime.
  * One fixed baseline for every glyph avoids uneven letter heights. */
