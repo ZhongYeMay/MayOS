@@ -555,7 +555,7 @@ typedef struct {
 } Window;
 #define WINDOW_COUNT 5
 static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "Files"},
-                            {177, 133, 640, 450, 0, 0, 0, 0, 0, 0, 0, "Settings"},
+                            {100, 120, 824, 480, 0, 0, 0, 0, 0, 0, 0, "Settings"},
                             {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
                             {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
                             {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
@@ -578,6 +578,8 @@ static void open_easter(void) {
     serial("MayOS: meow easter egg opened\n");
 }
 static char modal_text[64], notice[120], search[48], device[48] = "MayOS Workstation";
+static char settings_filter[42];
+static int settings_search_focused;
 static u32 notice_until = 0, last_click_tick;
 static int last_clicked = -1;
 static int editor_file = -1, editor_changed = 0;
@@ -1156,56 +1158,80 @@ static void frame(int id) {
     if (high_contrast)
         border(w->x + 2, w->y + 2, w->w - 4, w->h - 4, line);
 }
+static int settings_filter_match(const char *label) {
+    if (!settings_filter[0]) return 1;
+    for (; *label; label++) {
+        int i = 0;
+        while (settings_filter[i] && label[i]) {
+            char a = label[i], b = settings_filter[i];
+            if (a >= 'A' && a <= 'Z') a += 32;
+            if (b >= 'A' && b <= 'Z') b += 32;
+            if (a != b) break;
+            i++;
+        }
+        if (!settings_filter[i]) return 1;
+    }
+    return 0;
+}
+static void settings_fit_window(Window *w) {
+    /* Compact, screenshot-matched About; full-height advanced settings.
+       Both use identical mouse offsets derived from the same window rect. */
+    w->max = 0;
+    if (settings_tab == 6) {
+        w->x = 100; w->y = 120; w->w = 824; w->h = 480;
+    } else {
+        w->x = 100; w->y = 58; w->w = 824; w->h = 630;
+    }
+}
 static void settings(Window *w) {
-    int x = w->x, y = w->y, cx = x + 205, cy = y + 53, cw = w->w - 238;
-    rect(x + 1, y + 36, 187, w->h - 38, dark ? 0x080809 : 0xf7f7f9);
-    rect(x + 187, y + 36, 1, w->h - 38, line);
-    heading_text(x + 20, y + 49, "Settings", ink);
-    ui_card(x + 18, y + 82, 158, 34, 17, dark ? 0x111113 : surface_high);
-    symbol(x + 28, y + 90, 4, 15, muted);
-    text(x + 51, y + 91, "Search Settings", muted);
+    int x = w->x, y = w->y, cx = x + 252, cy = y + 55, cw = w->w - 282;
+    u32 search_bg = dark ? 0x0c0c0e : 0xf3f3f5;
+    /* Native sidebar, divider and search input match the screenshot
+       proportions rather than reusing generic 0.4.x settings chrome. */
+    rect(x + 226, y + 41, 1, w->h - 62, line);
+    reference_text(x + 24, y + 49, "Settings", ink, 1);
+    ui_card(x + 22, y + 95, 202, 38, 19, search_bg);
+    reference_search_icon(x + 32, y + 103, muted);
+    reference_text(x + 60, y + 100,
+                   settings_filter[0] ? settings_filter : "Search Settings",
+                   settings_filter[0] ? ink : muted, 2);
+    if (settings_search_focused) {
+        int width = reference_font_width(settings_filter[0] ?
+                                         settings_filter : "Search Settings", 2);
+        if (settings_filter[0] && width < 159)
+            rect(x + 62 + width, y + 105, 1, 17, ink);
+    }
     const char *tabs[] = {"General", "Display", "Sound", "Network",
                           "Privacy & Security", "Updates", "About MayOS"};
-    const int tab_icons[] = {1, 11, 7, 8, 12, 10, 10};
     for (int i = 0; i < 7; i++) {
-        int yy = y + 132 + i * 36;
+        if (!settings_filter_match(tabs[i])) continue;
+        int yy = y + settings_nav_y(w, i);
         if (settings_tab == i)
-            soft_roundrect(x + 18, yy, 158, 34, 10, selected_fill);
-        symbol(x + 29, yy + 8, tab_icons[i], 18,
-               settings_tab == i ? ink : muted);
-        text(x + 61, yy + 7, tabs[i], settings_tab == i ? ink : muted);
+            soft_roundrect(x + 18, yy, 205, 38, 12, selected_fill);
+        reference_nav_icon(x + 30, yy + 9, i, settings_tab == i ? ink : muted);
+        reference_text(x + 67, yy + 7, tabs[i],
+                       settings_tab == i ? ink : muted, 2);
     }
+    rect(x + 22, y + w->h - 86, 202, 1, line);
     if (settings_tab == 6) {
-        heading_text(cx, cy - 8, "About MayOS", ink);
-        /*
-         * Supplied reference: 1320x580 card with black #000 interior,
-         * #292929 rounded outline, white monitor+name and muted gray version.
-         * Native 1024x768 settings area fits a 566x289 rendition, preserving
-         * the original side navigation and all input hotspot coordinates.
-         */
-        const int card_top = cy + 48, card_height = 230;
+        reference_text(cx, cy - 12, "About MayOS", ink, 1);
+        const int card_top = cy + 76, card_height = 248;
         u32 card_bg = dark ? 0x000000 : 0xffffff;
-        ui_card(cx, card_top, cw, card_height, 24, card_bg);
-        /* Draw the monitor directly (no generic gear tile).
-         * Original Easter-egg click region at (220,190) is unchanged. */
-        reference_monitor_icon(cx + 18, card_top + 31, ink, card_bg);
-        reference_text(cx + 57, card_top + 18, "MayOS", ink, 1);
-        reference_text(cx + 57, card_top + 48, "Version " MAYOS_RELEASE, muted, 0);
-        rect(cx + 18, card_top + 96, cw - 36, 1, line);
-        /* The three rows intentionally have no icons, chips or secondary
-           descriptions: exact hierarchy of the approved reference. */
-        reference_text(cx + 18, card_top + 126, "Kernel", muted, 0);
+        ui_card(cx, card_top, cw, card_height, 23, card_bg);
+        reference_monitor_icon(cx + 23, card_top + 31, ink, card_bg);
+        reference_text(cx + 68, card_top + 13, "MayOS", ink, 1);
+        reference_text(cx + 68, card_top + 51, "Version " MAYOS_RELEASE, muted, 0);
+        rect(cx + 23, card_top + 103, cw - 46, 1, line);
+        reference_text(cx + 23, card_top + 122, "Kernel", muted, 0);
 #ifdef MAYOS_LINUX
-        reference_right_label(cx + cw - 18, card_top + 126, "Linux x86_64", ink);
+        reference_right_label(cx + cw - 23, card_top + 122, "Linux x86_64", ink);
 #else
-        reference_right_label(cx + cw - 18, card_top + 126, "MayKernel x86_64", ink);
+        reference_right_label(cx + cw - 23, card_top + 122, "MayKernel x86_64", ink);
 #endif
-        reference_text(cx + 18, card_top + 158, "Build", muted, 0);
-        reference_right_label(cx + cw - 18, card_top + 158, "Development Preview", ink);
-        reference_text(cx + 18, card_top + 190, "Architecture", muted, 0);
-        reference_right_label(cx + cw - 18, card_top + 190, "64-bit", ink);
-        /* Device rename/Credits remain available beneath the card,
-           outside the screenshot-specific component. */
+        reference_text(cx + 23, card_top + 157, "Build", muted, 0);
+        reference_right_label(cx + cw - 23, card_top + 157, "Development Preview", ink);
+        reference_text(cx + 23, card_top + 192, "Architecture", muted, 0);
+        reference_right_label(cx + cw - 23, card_top + 192, "64-bit", ink);
     } else if (settings_tab == 1) {
         text(cx, cy, "PERSONALIZATION", accent);
         large_text(cx, cy + 26, "外观设置", ink);
