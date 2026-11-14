@@ -1,4 +1,5 @@
 #include "core.h"
+#include "version.h"
 #ifndef MAYOS_LINUX
 #include "io.h"
 #endif
@@ -372,7 +373,7 @@ void fs_init(void) {
              "Desktop files live in this process RAM and disappear when the session ends.\n"
              "The serial console provides the separate Linux BusyBox shell.\n");
         seed(1, "Roadmap.txt",
-             "MayOS 0.4.1-pre1 / Linux desktop preview\n\n"
+             "MayOS " MAYOS_VERSION " / Linux desktop preview\n\n"
              "Linux framebuffer display, evdev input and userspace desktop.\n"
              "Future: persistent Linux file storage, networking UI and stronger isolation.\n");
 #else
@@ -381,7 +382,7 @@ void fs_init(void) {
              "neofetch, ls, cd Documents, cat Welcome.txt\nUse write note.txt hello to save a "
              "file.\nFiles persist on the attached MayFS disk.\n");
         seed(1, "Roadmap.txt",
-             "MayOS 0.4.1-pre1 / prototype\n\nImplemented: framebuffer desktop, PS/2 input, PIT "
+             "MayOS " MAYOS_VERSION " / prototype\n\nImplemented: framebuffer desktop, PS/2 input, PIT "
              "timer,\npage allocator, ATA PIO, MayFS, terminal and text editor.\n\nFuture: user "
              "mode, virtual memory, network, USB, SMP.\n");
 #endif
