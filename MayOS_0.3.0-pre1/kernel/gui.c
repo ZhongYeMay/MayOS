@@ -361,22 +361,30 @@ static int reference_font_glyph(int codepoint) {
     }
     return -1;
 }
-static int reference_font_width(const char *s, int title) {
+/* Reference typography: 26px titles, 19px body, 15px menu/sidebars.
+ * Glyphs are rasterized by scripts/font.py at build time. */
+static int reference_font_width(const char *s, int style) {
     int total = 0;
     while (*s) {
         int codepoint = utf(&s), g = reference_font_glyph(codepoint);
-        total += g >= 0 ? (title ? premium_title_advance[g] :
-                                     premium_body_advance[g]) : 12;
+        total += g >= 0 ? (style == 1 ? premium_title_advance[g] :
+                           style == 2 ? premium_menu_advance[g] :
+                                        premium_body_advance[g]) : 12;
     }
     return total;
 }
-static void reference_text(int x, int y, const char *s, u32 color, int title) {
-    int stride = title ? 36 : 28, height = title ? 40 : 30;
+static void reference_text(int x, int y, const char *s, u32 color, int style) {
+    int stride = style == 1 ? 36 : style == 2 ? 24 : 28;
+    int height = style == 1 ? 40 : style == 2 ? 26 : 30;
     while (*s) {
         int codepoint = utf(&s), g = reference_font_glyph(codepoint);
         if (g < 0) { x += 12; continue; }
-        const u8 *bitmap = title ? premium_title_bitmap[g] : premium_body_bitmap[g];
-        int advance = title ? premium_title_advance[g] : premium_body_advance[g];
+        const u8 *bitmap = style == 1 ? premium_title_bitmap[g] :
+                            style == 2 ? premium_menu_bitmap[g] :
+                                         premium_body_bitmap[g];
+        int advance = style == 1 ? premium_title_advance[g] :
+                      style == 2 ? premium_menu_advance[g] :
+                                   premium_body_advance[g];
         for (int yy = 0; yy < height; yy++) {
             int py = y + yy;
             if (py < 0 || py >= H) continue;
