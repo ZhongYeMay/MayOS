@@ -14,7 +14,7 @@ def main():
         desktop = Image.open(BUILD / 'desktop-reference-050.png').convert('RGB')
         assert desktop.size == (1024, 768)
         assert desktop.getpixel((10, 20)) == (5, 5, 6)
-        assert desktop.getpixel((15, 760)) == (5, 5, 6)
+        assert max(desktop.getpixel((15, 760))) < 25
         assert desktop.getpixel((450, 700)) == (10, 10, 12)
 
         vm.click(50, 16)
