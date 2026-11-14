@@ -67,7 +67,7 @@ def run():
         for i in range(args.writes):
             name = f'stress{i:02d}.txt'
             value = f'mayfs-phase1-round-{i:02d}-persisted'
-            command_checked(vm, f'write Documents/{name} {value}', '\\nOK\\n')
+            command_checked(vm, f'write Documents/{name} {value}', '\nOK\n')
             expected[name] = value
             actual = entries(disk)
             assert actual[name][3] == value, f'Incorrect MayFS contents after write {i}'
@@ -79,7 +79,7 @@ def run():
             assert vm.q('query-status')['status'] == 'running', 'Guest not running'
             time.sleep(1)
         command_checked(vm, 'cat Documents/stress00.txt',
-                        '\\n' + expected['stress00.txt'] + '\\n')
+                        '\n' + expected['stress00.txt'] + '\n')
         vm.shot('phase1-stress-desktop')
     finally:
         vm.stop()
@@ -99,7 +99,7 @@ def run():
         vm.key('f1')
         command_checked(vm, 'memstress', 'memstress: PASS')
         for k in ('stress00.txt', f'stress{args.writes - 1:02d}.txt'):
-            command_checked(vm, f'cat Documents/{k}', '\\n' + expected[k] + '\\n')
+            command_checked(vm, f'cat Documents/{k}', '\n' + expected[k] + '\n')
     finally:
         vm.stop()
     assert digest(disk) == disk_after_bios, 'UEFI memory and file reads modified MayFS disk'
