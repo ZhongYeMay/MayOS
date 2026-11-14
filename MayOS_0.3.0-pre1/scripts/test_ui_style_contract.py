@@ -57,7 +57,13 @@ assert "#include \"material_icons.h\"" in source
 assert "#if MAYOS_MATERIAL_ICONS" in source
 assert "accent = dark ? dark_primary[accent_choice] : light_primary[accent_choice];" in source
 assert "0xe2e2e7" in source
-assert "#define MAYOS_RELEASE \"0.4.1-pre2\"" in source
+# Version is centralized; updating it must not count as a redesign.
+version_header = (GUI.parent / "version.h").read_text(encoding="utf-8")
+assert '#define MAYOS_VERSION "0.5.0-pre1-dev"' in version_header
+assert '#include "version.h"' in source
+assert '#define MAYOS_RELEASE MAYOS_VERSION' in source
+assert 'text(cx + 124, cy + 35, MAYOS_RELEASE, accent);' in source
+assert 'emit("OS: MayOS " MAYOS_RELEASE);' in source
 assert 'const char *shapes[] = {"■ 黑色方块", "□ 白色方块", "自定义图片"};' in source
 assert "roundrect(14, 60, 76, 508, panel);" not in source
 assert "static void desktop(void)" in source
