@@ -1,17 +1,50 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f7f7f8"><meta name="description" content="MayOS 0.4.1-pre2 原生64位双内核桌面系统，下载 BIOS/UEFI ISO 并观看真实 QEMU 启动视频。"><title>首页 · MayOS</title><link rel="stylesheet" href="style.css"><script src="site.js" defer></script></head><body><a href="#main" class="skip">跳到主要内容</a><header class="site-header"><div class="container nav-inner"><a class="brand" href="index.html" aria-label="MayOS 首页"><span class="brand-mark">M</span>MayOS</a><nav id="nav" class="nav-links" aria-label="主导航"><a href="index.html" aria-current="page">概览</a><a href="index.html#project">项目</a><a href="demos.html" >运行演示</a><a href="download.html" >下载</a><a href="https://github.com/ZhongYeMay/MayOS" target="_blank" rel="noopener">GitHub <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a></nav><div class="nav-actions"><button type="button" id="theme" class="icon-btn" aria-label="切换深浅主题" title="切换主题"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></button><button type="button" id="menu" class="icon-btn menu-toggle" aria-controls="nav" aria-expanded="false" aria-label="展开导航"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div></div></header><main id="main">
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#050506"><meta name="description" content="预览 MayOS 0.5.0-pre1-dev 全新黑灰极简原生桌面设计；已发布的 0.4.1-pre2 ISO 下载和 QEMU 实录仍可访问。"><title>首页 · MayOS</title><link rel="stylesheet" href="style.css"><script src="site.js" defer></script></head><body><a href="#main" class="skip">跳到主要内容</a><header class="site-header"><div class="container nav-inner"><a class="brand" href="index.html" aria-label="MayOS 首页"><span class="brand-mark">M</span>MayOS</a><nav id="nav" class="nav-links" aria-label="主导航"><a href="index.html" aria-current="page">概览</a><a href="index.html#project">项目</a><a href="demos.html" >运行演示</a><a href="download.html" >下载</a><a href="https://github.com/ZhongYeMay/MayOS" target="_blank" rel="noopener">GitHub <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a></nav><div class="nav-actions"><button type="button" id="theme" class="icon-btn" aria-label="切换深浅主题" title="切换主题"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></button><button type="button" id="menu" class="icon-btn menu-toggle" aria-controls="nav" aria-expanded="false" aria-label="展开导航"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div></div></header><main id="main">
 <section class="hero container">
-  <p class="eyebrow">MayOS 0.4.1-pre2 / x86_64 QEMU-verified</p>
-  <h1>真正属于你的<br><span class="gradient-text">双内核桌面。</span></h1>
-  <p class="lead">严格遵照指定桌面截图还原的黑灰阶界面；沿用原生窗口与真正的 Material Symbols 图标。自研 MayKernel 与 Linux 7.3.1，两套内核共享熟悉的窗口、Dock 与系统界面。</p>
+  <p class="eyebrow">MayOS 0.5.0-pre1-dev · New UI design preview</p>
+  <h1>保持纯粹，<br><span class="gradient-text">精致到每一处。</span></h1>
+  <p class="lead">MayOS 0.5.0 正在开发统一的极简黑灰界面：细描边圆角窗口、低调渐变壁纸、悬浮 Dock 和清晰的信息卡片。保留 MayKernel64 的原生 framebuffer 绘图与原有交互逻辑。下方为设计预览，不是已发布版本截图。</p>
   <div class="actions">
-    <a class="btn blue" href="download.html">下载双内核 ISO <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13m-5-5 5 5 5-5M4 19h16"/></svg></a>
-    <a class="btn secondary" href="demos.html">观看真实启动录像 <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg></a>
+    <a class="btn blue" href="#design-preview">查看新版 UI 设计</a>
+    <a class="btn secondary" href="download.html">下载已发布的 0.4.1-pre2</a>
   </div>
+
+  <figure class="premium-preview" id="design-preview" aria-label="MayOS 0.5.0 开发中界面的静态视觉预览">
+    <div class="preview-badge">DESIGN PREVIEW · 0.5.0-pre1-dev · NOT RELEASED</div>
+    <div class="premium-screen">
+      <div class="premium-menubar"><strong>MayOS</strong><span>文件</span><span>窗口</span><span>应用</span><span>终端</span><span class="menutime">MayKernel x86_64</span></div>
+      <div class="premium-window">
+        <div class="premium-sidebar">
+          <h3>Settings</h3>
+          <div class="preview-item active"><span class="mark">◉</span>关于系统</div>
+          <div class="preview-item"><span class="mark">◐</span>外观设置</div>
+          <div class="preview-item"><span class="mark">▤</span>存储空间</div>
+          <div class="preview-item"><span class="mark">◇</span>开源组件</div>
+          <div class="preview-item"><span class="mark">⌁</span>桌面与指针</div>
+        </div>
+        <div class="premium-content">
+          <h3 class="preview-heading">About MayOS</h3>
+          <div class="premium-card">
+            <div class="premium-identity">
+              <div class="premium-device-icon"><svg viewBox="0 0 32 32" role="img" aria-label="计算机图标"><rect x="4" y="5" width="24" height="17" rx="3"/><path d="M11 27h10M16 22v5"/></svg></div>
+              <div><strong>MayOS</strong><span>Version 0.5.0-pre1-dev</span></div>
+            </div>
+            <div class="premium-specs">
+              <div class="premium-spec"><span>Kernel</span><strong>MayKernel x86_64</strong></div>
+              <div class="premium-spec"><span>Build</span><strong>Development Preview</strong></div>
+              <div class="premium-spec"><span>Architecture</span><strong>64-bit</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="premium-dock" aria-hidden="true"><span class="dock-glyph">▦</span><span class="dock-glyph">▱</span><span class="dock-glyph active">⚙</span><span class="dock-glyph">›_</span><span class="dock-glyph">▤</span></div>
+    </div>
+    <figcaption class="premium-caption"><span><strong>新版视觉概念</strong> · 以 HTML/CSS 呈现目标布局，不是 QEMU 实测画面</span><a href="https://github.com/ZhongYeMay/MayOS/pull/12">查看正在开发的原生代码</a></figcaption>
+  </figure>
   <figure class="hero-art actual-desktop">
     <a href="https://github.com/ZhongYeMay/MayOS/releases/download/v0.4.1-pre2/MayOS-0.4.1-pre2-desktop.png" target="_blank" rel="noopener" aria-label="查看真实 MayOS 0.4.1-pre2 QEMU 截图">
       <img src="https://github.com/ZhongYeMay/MayOS/releases/download/v0.4.1-pre2/MayOS-0.4.1-pre2-desktop.png" alt="QEMU 实测 MayOS 0.4.1-pre2：用户指定的顶部菜单、状态图标、文件桌面与居中 Dock" width="1024" height="768" fetchpriority="high">
     </a>
-    <figcaption class="hero-note">真实 QEMU 桌面截图 · 1024 × 768 · 非概念渲染</figcaption>
+    <figcaption class="hero-note">历史 0.4.1-pre2 的真实 QEMU 截图 · 非上方 0.5-dev 设计图 · 1024 × 768</figcaption>
   </figure>
 </section>
 <section class="section surface-section" id="project">
