@@ -75,15 +75,21 @@ jobs:
           gh run download "$VIDEO_RUN" --repo "$GITHUB_REPOSITORY" \
             --pattern 'MayOS-all-features-QEMU-*' \
             --dir "$RUNNER_TEMP/verified"
-          test -s "$RUNNER_TEMP/verified/mayos.iso"
-          test -s "$RUNNER_TEMP/verified/mayos-dual.iso"
-          test -s "$RUNNER_TEMP/verified/recordings/MayKernel64-All-Functions.mp4"
-          test -s "$RUNNER_TEMP/verified/recordings/Linux64-All-Functions.mp4"
-          ls -lh "$RUNNER_TEMP/verified/"*.iso
+          find "$RUNNER_TEMP/verified" -maxdepth 4 -type f | sort | head -40
+          # gh run download --pattern retains the matching artifact name as
+          # a directory. Resolve actual content root instead of assuming flattening.
+          asset_dir="$(find "$RUNNER_TEMP/verified" -maxdepth 3 -type f -name mayos.iso -printf '%h\n' | head -1)"
+          test -n "$asset_dir"
+          echo "ASSET_DIR=$asset_dir" >> "$GITHUB_ENV"
+          test -s "$asset_dir/mayos.iso"
+          test -s "$asset_dir/mayos-dual.iso"
+          test -s "$asset_dir/recordings/MayKernel64-All-Functions.mp4"
+          test -s "$asset_dir/recordings/Linux64-All-Functions.mp4"
+          ls -lh "$asset_dir/"*.iso
       - name: Compare ISO and video SHA256 against original QEMU metadata
         run: |
           set -euo pipefail
-          cd "$RUNNER_TEMP/verified"
+          cd "$ASSET_DIR"
           for kernel in MayKernel64 Linux64; do
             meta="recordings/$kernel-All-Functions.json"
             movie="recordings/$kernel-All-Functions.mp4"
@@ -99,7 +105,7 @@ jobs:
             sudo apt-get update
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
           fi
-          src="$RUNNER_TEMP/verified"
+          src="$ASSET_DIR"
           mkdir dist
           cp "$src/mayos.iso" "dist/MayOS-$VERSION-MayKernel-x86_64.iso"
           cp "$src/mayos-dual.iso" "dist/MayOS-$VERSION-dual-boot-x86_64.iso"
