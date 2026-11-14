@@ -109,6 +109,94 @@ void page_free(void *p) {
         free_pages++;
     }
 }
+/* Bounded destructive-to-test-pages allocator stress, not a whole-RAM
+ * exhaustion test. Every allocated page is returned before exiting.
+ * No firmware-reserved or persistent disk memory is modified. */
+int page_stress_test(void) {
+    u32 initial = free_pages;
+    int ok = 1;
+    for (u32 round = 0; round < 16; round++) {
+        u32 *slots[128] = {0};
+        u32 *replacement[64] = {0};
+        for (u32 i = 0; i < 128; i++) {
+            slots[i] = page_alloc();
+            if (!slots[i]) { ok = 0; break; }
+            /* Allocator guarantees zero-filled fresh pages. */
+            if (slots[i][0] || slots[i][127] ||
+                slots[i][511] || slots[i][1023]) { ok = 0; break; }
+            slots[i][0] = 0x51000000u + (round << 8) + i;
+            slots[i][127] = 0xabcdef01u ^ (i + round);
+            slots[i][511] = ~slots[i][0];
+            slots[i][1023] = ~slots[i][127];
+        }
+        if (ok) {
+            for (u32 i = 0; i < 128; i++) {
+                if (slots[i][0] != 0x51000000u + (round << 8) + i ||
+                    slots[i][127] != (0xabcdef01u ^ (i + round)) ||
+                    slots[i][511] != ~slots[i][0] ||
+                    slots[i][1023] != ~slots[i][127])
+                    ok = 0;
+            }
+        }
+        /* Free alternating pages to force reuse under fragmentation. */
+        if (ok) {
+            for (u32 i = 1; i < 128; i += 2) {
+                page_free(slots[i]);
+                slots[i] = 0;
+            }
+            for (u32 i = 0; i < 64; i++) {
+                replacement[i] = page_alloc();
+                if (!replacement[i]) { ok = 0; break; }
+                if (replacement[i][0] || replacement[i][1023])
+                    ok = 0;
+                for (u32 j = 0; j < 128; j += 2)
+                    if (replacement[i] == slots[j])
+                        ok = 0;
+                for (u32 j = 0; j < i; j++)
+                    if (replacement[i] == replacement[j])
+                        ok = 0;
+                replacement[i][0] = 0xface0000u + i;
+                replacement[i][1023] = ~replacement[i][0];
+                if (!ok) break;
+            }
+            for (u32 i = 0; i < 128; i += 2)
+                if (slots[i] && (slots[i][0] != 0x51000000u + (round << 8) + i ||
+                                  slots[i][1023] != ~(0xabcdef01u ^ (i + round))))
+                    ok = 0;
+            for (u32 i = 0; i < 64; i++)
+                if (replacement[i] &&
+                    (replacement[i][0] != 0xface0000u + i ||
+                     replacement[i][1023] != ~(0xface0000u + i)))
+                    ok = 0;
+        }
+        /* Invalid unaligned pointer must not release an allocation. */
+        for (u32 i = 0; i < 128; i++) {
+            if (slots[i]) {
+                u32 before = free_pages;
+                page_free((void *)((uptr)slots[i] + 1));
+                if (free_pages != before) ok = 0;
+                break;
+            }
+        }
+        for (u32 i = 0; i < 128; i++)
+            if (slots[i]) {
+                void *p = slots[i];
+                page_free(p);
+                /* A double free must not increment free_pages twice. */
+                u32 before = free_pages;
+                page_free(p);
+                if (free_pages != before) ok = 0;
+            }
+        for (u32 i = 0; i < 64; i++)
+            if (replacement[i]) page_free(replacement[i]);
+        if (free_pages != initial) ok = 0;
+        if (!ok) break;
+    }
+    serial(ok ? "MayOS: memstress PASS (16 rounds, 128 pages, fragmentation, free guards)\\n"
+              : "MayOS: memstress FAIL\\n");
+    return ok;
+}
+
 static void memory_init(const u8 *m, u32 flags) {
     /* Multiboot mem_upper describes only the first contiguous range. EFI
        firmware commonly leaves a hole near 8 MiB, so use its full memory map.
