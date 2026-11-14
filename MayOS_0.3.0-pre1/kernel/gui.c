@@ -605,7 +605,7 @@ static void shell(void) {
     if (!strcmp(c, "help")) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
-        emit("mv <path> <new-name>  rm <path>  save  memtest");
+        emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
         emit("theme light|dark  net status  reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
@@ -721,6 +721,12 @@ static void shell(void) {
 #else
         emit("Network: MayKernel has no native NIC / TCP/IP driver.");
         emit("Boot Linux for DHCP, DNS, IP diagnostics and HTTP preview.");
+#endif
+    } else if (!strcmp(c, "memstress")) {
+#ifndef MAYOS_LINUX
+        emit(page_stress_test() ? "memstress: PASS" : "memstress: FAIL");
+#else
+        emit("memstress: native MayKernel only");
 #endif
     } else if (!strcmp(c, "memtest")) {
         u32 before = free_pages;
