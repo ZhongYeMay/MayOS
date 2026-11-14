@@ -108,7 +108,7 @@ assert 'fs_find(2, "Notes.txt")' in source
 # Existing current release is immutable; while this redesign is on a
 # development branch the source must continue reporting its actual version.
 version_header = (GUI.parent / "version.h").read_text(encoding="utf-8")
-assert '#define MAYOS_VERSION "0.5.0-pre1"' in version_header
+assert '#define MAYOS_VERSION "0.5.0-pre2-dev"' in version_header
 assert '#include "version.h"' in source
 assert '#define MAYOS_RELEASE MAYOS_VERSION' in source
 assert 'emit("OS: MayOS " MAYOS_RELEASE);' in source
