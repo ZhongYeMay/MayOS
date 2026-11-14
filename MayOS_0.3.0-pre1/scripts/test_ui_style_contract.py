@@ -73,9 +73,18 @@ assert 'reference_battery_icon(W - 204, 5, ink);' in source
 assert 'int upper = 330 - x * 2 / 3 + x * x / 4500;' in source
 assert 'int lower = 820 - (x - 450) * (x - 450) / 1150;' in source
 assert "static void taskbar(void)" in source
+assert '#include "dock_icons.h"' in source
+assert "mayos_dock_alpha[id]" in source
+assert "static void dock_glyph(" in source
+assert "settings_general_page == 4" in source
+assert "settings_general_page == 5" in source
+assert "settings_general_page == 6" in source
+assert "dock_size=(rx-252)/164" in source
+assert "dock_glass = !(raw[6] & (1u << 15));" in source
+assert "menu_status_icons = !(raw[6] & (1u << 18));" in source
 assert "w->x = (W - 824) / 2;" in source
 assert "int left = (W - 244) / 2, top = H - 92;" in source
-assert "ui_card(left, top, 244, 70, 24," in source
+assert "ui_card(left,top,244,70,24," in source
 assert 'const int centers[] = {first, first + 57, first + 114, first + 171};' in source
 
 # Settings: verify geometry, proportions and actual click targets use the
