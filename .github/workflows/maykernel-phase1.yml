@@ -88,6 +88,8 @@ jobs:
         run: |
           python3 scripts/phase1_memory_fs_stress.py \
             --iso build/mayos.iso --writes 10 --mem-rounds 3 --idle-seconds 15
+      - name: Refuse and preserve corrupted MayFS without disk modifications
+        run: python3 scripts/phase1_corruption_smoke.py
       - name: Archive phase 1 evidence (also on failure)
         if: always()
         uses: actions/upload-artifact@v4
