@@ -1830,8 +1830,8 @@ static void left_click(void) {
         return;
     }
     Window *about = &windows[1];
-    if (!(about->open && !about->min && focus == 1 && settings_tab == 0 &&
-          inside(mx, my, about->x + 220, about->y + 190, 44, 44)))
+    if (!(about->open && !about->min && focus == 1 && settings_tab == 6 &&
+          inside(mx, my, about->x + 223, about->y + 265, 30, 30)))
         egg_clicks = 0;
     if (modal) {
         if (inside(mx, my, 604, 413, 90, 30))
@@ -2013,7 +2013,7 @@ static void left_click(void) {
             return;
         }
         if (id == 1) {
-            if (settings_tab == 0 && inside(rx, ry, 220, 190, 44, 44)) {
+            if (settings_tab == 6 && inside(rx, ry, 223, 265, 30, 30)) {
                 if (ticks - egg_last_click > 150)
                     egg_clicks = 0;
                 egg_last_click = ticks;

@@ -25,11 +25,11 @@ def main():
         # Text is ignored while the modal is open; Enter/Esc returns to the shell.
         vm.type('xxx');vm.key('esc');vm.cmd('pwd');vm.wait('\n/\n')
         assert 'xxx' not in vm.log.read_text(),'Modal leaked keys into the terminal'
-        vm.click(444,716) # Restore About from original macOS-style dock.
-        for _ in range(4):vm.click(428,286)
+        vm.click(50,16) # Open the reference Settings / About page.
+        for _ in range(4):vm.click(414,412)
         before=vm.log.read_text().count('MayOS: meow easter egg opened')
         assert before==1,'Easter egg opened before the fifth click'
-        vm.click(428,286);time.sleep(.2)
+        vm.click(414,412);time.sleep(.2)
         assert vm.log.read_text().count('MayOS: meow easter egg opened')==2
         vm.move(50,50);vm.shot('easter-about');check_photo(BUILD/'easter-about.png')
         vm.click(664,660) # Return button.
