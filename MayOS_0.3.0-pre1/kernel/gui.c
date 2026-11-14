@@ -2279,6 +2279,7 @@ static void key_event(int k) {
     if (k == 27) {
         start_open = context_open = top_panel = 0;
         settings_search_focused = 0;
+        settings_filter[0] = 0;
         return;
     }
     if (settings_search_focused && focus == 1 &&
