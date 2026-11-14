@@ -53,6 +53,31 @@ jobs:
           sha256sum build/mayos.elf build/mayos.iso | tee build/phase1-sha256.txt
       - name: Run actual QEMU and desktop regression suite
         run: make BOOT_FIRMWARE=hybrid test
+      - name: Boot OVMF x64 UEFI GRUB and verify persistence
+        run: |
+          test -f /usr/share/OVMF/OVMF_CODE_4M.fd
+          test -f /usr/share/OVMF/OVMF_VARS_4M.fd
+          python3 scripts/uefi_smoke.py --iso build/mayos.iso --custom-only
+      - name: Verify tested ISO identity and firmware coverage
+        run: |
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          build = Path('build')
+          iso = build / 'mayos.iso'
+          actual = hashlib.sha256(iso.read_bytes()).hexdigest()
+          boot = json.loads((build / 'mayos.iso.boot.json').read_text())
+          uefi = json.loads((build / 'uefi-custom-test-results.json').read_text())
+          assert boot['iso_sha256'] == actual, 'ISO differs from boot manifest'
+          assert uefi['iso_sha256'] == actual, 'UEFI tested a different ISO'
+          assert any('BIOS' in x for x in boot['platforms']), 'BIOS entry missing'
+          assert any('UEFI' in x for x in boot['platforms']), 'UEFI entry missing'
+          required = {'uefi_grub_custom', 'uefi_framebuffer', 'uefi_memory_map',
+                      'uefi_custom_allocator', 'uefi_ps2_keyboard',
+                      'uefi_mayfs_write', 'uefi_mayfs_cold_boot'}
+          assert required <= set(uefi['tests']), 'UEFI regression incomplete'
+          print('PASS: one ISO, both firmware catalogs, real OVMF boot and cold persistence')
+          PY
       - name: Archive phase 1 evidence (also on failure)
         if: always()
         uses: actions/upload-artifact@v4
@@ -65,3 +90,7 @@ jobs:
             MayOS_0.3.0-pre1/build/elf-header.txt
             MayOS_0.3.0-pre1/build/*.log
             MayOS_0.3.0-pre1/build/*test*.json
+            MayOS_0.3.0-pre1/build/*.iso.boot.json
+            MayOS_0.3.0-pre1/build/test-uefi-*.png
+            MayOS_0.3.0-pre1/build/desktop.png
+            MayOS_0.3.0-pre1/build/mayos.iso
