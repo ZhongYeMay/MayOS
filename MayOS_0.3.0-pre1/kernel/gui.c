@@ -348,6 +348,58 @@ static int heading_text(int x, int y, const char *s, u32 color) {
     }
     return x;
 }
+/* The reference About card uses a large white title, softer gray version
+ * and readable, right-aligned metadata. Scale the exact same native glyphs
+ * with 2x bilinear coverage: no browser, OS font service or AA library. */
+static int reference_title_text(int x, int y, const char *s, u32 color) {
+    int start = x;
+    while (*s) {
+        int cp = utf(&s), glyph_id = glyph(cp);
+        int width = cp < 128 ? 8 : 16;
+        for (int yy = 0; yy < 40; yy++) {
+            int sy = yy / 2, sy1 = sy + 1 < 20 ? sy + 1 : sy;
+            for (int xx = 0; xx < width * 2; xx++) {
+                int sx = xx / 2, sx1 = sx + 1 < width ? sx + 1 : sx;
+                u32 a00 = font_bits[glyph_id][sy * 16 + sx];
+                u32 a01 = font_bits[glyph_id][sy1 * 16 + sx];
+                u32 a10 = font_bits[glyph_id][sy * 16 + sx1];
+                u32 a11 = font_bits[glyph_id][sy1 * 16 + sx1];
+                u32 a;
+                if (xx & 1) {
+                    if (yy & 1) a = (a00 + a01 + a10 + a11) / 4;
+                    else a = (a00 + a10) / 2;
+                } else {
+                    a = (yy & 1) ? (a00 + a01) / 2 : a00;
+                }
+                int px = x + xx, py = y + yy;
+                if (a && px >= 0 && py >= 0 && px < W && py < H)
+                    pixels[py * W + px] = blend(pixels[py * W + px], color, a);
+            }
+        }
+        x += width * 2;
+    }
+    return x - start;
+}
+static int ui_text_width(const char *s, int scale_three_halves) {
+    int width = 0;
+    while (*s) {
+        int c = utf(&s);
+        width += c < 128 ? (scale_three_halves ? 12 : 8) :
+                          (scale_three_halves ? 24 : 16);
+    }
+    return width;
+}
+static void reference_right_label(int right, int y, const char *label, u32 color) {
+    heading_text(right - ui_text_width(label, 1), y, label, color);
+}
+static void reference_monitor_icon(int x, int y, u32 color, u32 background) {
+    /* A flat outlined monitor, matching the supplied reference instead
+       of an unrelated Settings gear icon. */
+    soft_roundrect(x, y, 25, 20, 4, color);
+    soft_roundrect(x + 2, y + 2, 21, 16, 2, background);
+    rect(x + 11, y + 20, 3, 3, color);
+    rect(x + 7, y + 23, 11, 2, color);
+}
 static void numtext(int x, int y, u32 n, u32 c) {
     char b[16];
     number(b, n);
@@ -1045,26 +1097,38 @@ static void settings(Window *w) {
     text(x + 24, y + w->h - 37, PLATFORM_ARCH, muted);
     if (settings_tab == 0) {
         heading_text(cx, cy - 8, "About MayOS", ink);
-        text(cx, cy + 33, "SYSTEM / OVERVIEW", muted);
-        ui_card(cx, cy + 105, cw, 289, 22, panel);
-        /* Keep the original click target for the existing hidden cat artwork. */
-        icon(cx + 16, cy + 125, 1, 44);
-        heading_text(cx + 78, cy + 118, "MayOS", ink);
-        text(cx + 78, cy + 152, "Version " MAYOS_RELEASE, muted);
-        rect(cx + 22, cy + 193, cw - 44, 1, line);
-        text(cx + 25, cy + 216, "Kernel", muted);
-        text(cx + 280, cy + 216, PLATFORM_SHORT, ink);
-        text(cx + 25, cy + 250, "Build", muted);
-        text(cx + 280, cy + 250, "Development Preview", ink);
-        text(cx + 25, cy + 284, "Architecture", muted);
-        text(cx + 280, cy + 284, PLATFORM_ARCH, ink);
-        rect(cx + 22, cy + 326, cw - 44, 1, line);
-        text(cx + 25, cy + 344, device, muted);
-        text(cx + 25, cy + 374, "MayOS Team 2023 - 2026", muted);
+        /*
+         * Supplied reference: 1320x580 card with black #000 interior,
+         * #292929 rounded outline, white monitor+name and muted gray version.
+         * Native 1024x768 settings area fits a 566x289 rendition, preserving
+         * the original side navigation and all input hotspot coordinates.
+         */
+        const int card_top = cy + 105, card_height = 289;
+        u32 card_bg = dark ? 0x000000 : 0xffffff;
+        ui_card(cx, card_top, cw, card_height, 24, card_bg);
+        /* Draw the monitor directly (no generic gear tile).
+         * Original Easter-egg click region at (220,190) is unchanged. */
+        reference_monitor_icon(cx + 18, card_top + 40, ink, card_bg);
+        reference_title_text(cx + 60, card_top + 24, "MayOS", ink);
+        heading_text(cx + 60, card_top + 66, "Version " MAYOS_RELEASE, muted);
+        rect(cx + 18, card_top + 115, cw - 36, 1, line);
+        /* The three rows intentionally have no icons, chips or secondary
+           descriptions: exact hierarchy of the approved reference. */
+        heading_text(cx + 18, card_top + 148, "Kernel", muted);
+#ifdef MAYOS_LINUX
+        reference_right_label(cx + cw - 18, card_top + 148, "Linux x86_64", ink);
+#else
+        reference_right_label(cx + cw - 18, card_top + 148, "MayKernel x86_64", ink);
+#endif
+        heading_text(cx + 18, card_top + 184, "Build", muted);
+        reference_right_label(cx + cw - 18, card_top + 184, "Development Preview", ink);
+        heading_text(cx + 18, card_top + 220, "Architecture", muted);
+        reference_right_label(cx + cw - 18, card_top + 220, "64-bit", ink);
+        /* Device rename/Credits remain available beneath the card,
+           outside the screenshot-specific component. */
         text(cx, cy + 412, "This version of MayOS is for test use only.", muted);
         button(cx, cy + 449, 126, "重命名设备", 0);
         button(cx + 140, cy + 449, 194, "开源组件 / Credits", 0);
-        text(cx, cy + 505, "原生界面 / x86_64 开发预览", muted);
     } else if (settings_tab == 1) {
         text(cx, cy, "PERSONALIZATION", accent);
         large_text(cx, cy + 26, "外观设置", ink);
