@@ -318,6 +318,36 @@ static int large_text(int x, int y, const char *s, u32 color) {
     }
     return x;
 }
+/* Smooth 3:2 text scaling for the monochrome UI's primary headings.
+ * Bilinear alpha interpolation, drawn into the native framebuffer. */
+static int heading_text(int x, int y, const char *s, u32 color) {
+    while (*s) {
+        int cp = utf(&s), g = glyph(cp);
+        int src_width = cp < 128 ? 8 : 16;
+        int out_width = src_width * 3 / 2;
+        for (int py = 0; py < 30; py++) {
+            int sy = py * 2 / 3, fy = (py * 2) % 3;
+            int sy1 = sy + 1 < 20 ? sy + 1 : sy;
+            for (int px = 0; px < out_width; px++) {
+                int sx = px * 2 / 3, fx = (px * 2) % 3;
+                int sx1 = sx + 1 < src_width ? sx + 1 : sx;
+                int a00 = font_bits[g][sy * 16 + sx];
+                int a10 = font_bits[g][sy * 16 + sx1];
+                int a01 = font_bits[g][sy1 * 16 + sx];
+                int a11 = font_bits[g][sy1 * 16 + sx1];
+                u32 a = (u32)(a00 * (3 - fx) * (3 - fy) +
+                              a10 * fx * (3 - fy) +
+                              a01 * (3 - fx) * fy +
+                              a11 * fx * fy) / 9;
+                int dx = x + px, dy = y + py;
+                if (a && dx >= 0 && dy >= 0 && dx < W && dy < H)
+                    pixels[dy * W + dx] = blend(pixels[dy * W + dx], color, a);
+            }
+        }
+        x += out_width;
+    }
+    return x;
+}
 static void numtext(int x, int y, u32 n, u32 c) {
     char b[16];
     number(b, n);
@@ -949,7 +979,7 @@ static void desktop(void) {
     }
     rect(0, 0, W, 42, dark ? 0x050506 : 0xf9f9fb);
     rect(0, 41, W, 1, line);
-    text(24, 10, "MayOS", ink);
+    heading_text(24, 6, "MayOS", ink);
     text(126, 10, "文件", muted);
     text(200, 10, "窗口", muted);
     text(274, 10, "应用", muted);
@@ -998,8 +1028,7 @@ static void settings(Window *w) {
     int x = w->x, y = w->y, cx = x + 204, cy = y + 65, cw = w->w - 234;
     rect(x + 1, y + 44, 176, w->h - 46, dark ? 0x080809 : 0xf7f7f9);
     rect(x + 176, y + 62, 1, w->h - 90, line);
-    text(x + 22, y + 64, "Settings", ink);
-    text(x + 22, y + 84, "系统设置", muted);
+    heading_text(x + 22, y + 60, "Settings", ink);
     const char *tabs[] = {"关于系统", "外观设置", "存储空间", "开源组件", "桌面与指针"};
     const int tab_icons[] = {1, 9, 0, 5, 10};
     for (int i = 0; i < 5; i++) {
@@ -1015,12 +1044,12 @@ static void settings(Window *w) {
     text(x + 24, y + w->h - 62, MAYOS_RELEASE, muted);
     text(x + 24, y + w->h - 37, PLATFORM_ARCH, muted);
     if (settings_tab == 0) {
-        text(cx, cy, "About MayOS", ink);
+        heading_text(cx, cy - 8, "About MayOS", ink);
         text(cx, cy + 33, "SYSTEM / OVERVIEW", muted);
         ui_card(cx, cy + 105, cw, 289, 22, panel);
         /* Keep the original click target for the existing hidden cat artwork. */
         icon(cx + 16, cy + 125, 1, 44);
-        text(cx + 78, cy + 124, "MayOS", ink);
+        heading_text(cx + 78, cy + 118, "MayOS", ink);
         text(cx + 78, cy + 152, "Version " MAYOS_RELEASE, muted);
         rect(cx + 22, cy + 193, cw - 44, 1, line);
         text(cx + 25, cy + 216, "Kernel", muted);
