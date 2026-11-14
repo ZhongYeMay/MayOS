@@ -1,8 +1,8 @@
 # MayOS
 
-> 实验性桌面操作系统 · MayKernel x86 / Linux x86_64 · BIOS / UEFI x64
+> 实验性桌面操作系统 · MayKernel x86_64 / Linux x86_64 · BIOS / UEFI x64
 
-MayOS 是一个不断迭代的系统开发项目。最新版源码提供自研 x86 32 位 MayKernel 桌面、Linux x86_64 用户态图形桌面、BusyBox 救援终端，以及共享的文件管理器、设置、终端与编辑器。
+MayOS 是一个不断迭代的系统开发项目。最新版源码提供自研 x86_64 64 位 MayKernel 桌面、Linux x86_64 用户态图形桌面、BusyBox 救援终端，以及共享的文件管理器、设置、终端与编辑器。
 
 ## 代码和网站
 
@@ -16,6 +16,13 @@ MayOS 是一个不断迭代的系统开发项目。最新版源码提供自研 x
 - [许可与第三方组件](MayOS_0.3.0-pre1/docs/third-party/dual-boot.md)
 - [GitHub Releases](https://github.com/ZhongYeMay/MayOS/releases)
 
+## 2026-11-14 日用化第一阶段（开发分支）
+
+- [阶段一工作清单与验收标准](MayOS_0.3.0-pre1/docs/phase1-daily-use-baseline.md)。
+- [PR #12：阶段一构建与启动回归](https://github.com/ZhongYeMay/MayOS/pull/12)。已通过自研 64 位内核构建、BIOS 基础回归与 OVMF UEFI 实测；多次启动和长时稳定性尚须核验。
+- 这些是 **开发分支上的 CI 验证**，不是新的正式 ISO Release，也不代表可在实体机日用。
+- 不修改当前用户界面风格，先完善内核启动、存储保护和异常诊断。
+
 ## 2026-11-01 开发快照（未打包成新的正式镜像）
 
 - 采用 Ubuntu 风格的深紫灰窗口、橙色强调色及扁平化界面，降低卡通感。
@@ -25,7 +32,7 @@ MayOS 是一个不断迭代的系统开发项目。最新版源码提供自研 x
 
 **请区分源码和发布镜像：**上述改动已经进入仓库 `main`，但尚未生成、实测并发布新的匹配 ISO / 视频 / 校验清单。此前 `0.3.0-pre1` 发布包是旧构建，不能据此断言它含这些修改。GitHub Releases 中的旧版本与自动上传失败记录亦须单独核对。
 
-MayOS 的 Linux 桌面文件目前存储在进程 RAM 中，关机后不会保留；自研内核运行在 32 位环境。UEFI x64 是固件/引导架构，不等于 64 位自研内核或 Secure Boot 支持。
+MayOS 的 Linux 桌面文件目前存储在进程 RAM 中，关机后不会保留。当前自研 MayKernel 源码为真正的 x86_64 64 位内核；旧版 Release 不保证包含这一实现。UEFI x64 是固件/引导架构，本身不代表支持 Secure Boot。
 
 仓库早期 16 位 MayOS 0.1 / 0.2 的源文件已从最新工作树删除，但 Git 历史和历史 Release 尚未改写；这不影响当前源码。
 
