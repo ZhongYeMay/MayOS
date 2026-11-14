@@ -8,8 +8,8 @@
 
 ### 交付门槛
 
-- [ ] 每次 PR 的主内核构建成功，确认生成 ELF64 x86-64，产出可启动 ISO 及 SHA-256。
-- [ ] 至少验证 BIOS + OVMF UEFI 两条完整固件 → GRUB → 内核 → 桌面路径；不能只依赖 `qemu -kernel`。
+- [x] 当前 PR 的 MayKernel 构建成功，确认生成 ELF64 x86-64，产出混合启动 ISO 及 SHA-256（Actions 43556114395、43556409969）。后续提交仍需重新验证。
+- [x] 当前 PR 已验证 BIOS 真实 ISO 启动（`make test`）与 OVMF x64 UEFI → GRUB → MayKernel → 桌面，并核对 ISO SHA-256（Actions 43556409969）。
 - [ ] 冷启动与重启各验证多次，保留串口日志和可复现失败记录。
 - [ ] 文件创建、修改、关闭后再次启动并读回；隔离测试磁盘，检查未识别数据盘不被破坏。
 - [ ] 键盘、鼠标、窗口操作、设置持久化和桌面功能回归通过。
@@ -20,9 +20,9 @@
 
 ## 当前可自动执行的基线
 
-仓库 `.github/workflows/maykernel-phase1.yml` 在 Ubuntu 24.04 上安装构建工具，构建自研 x86_64 ELF 与混合 ISO，核对 ELF 架构并调用原有 `make test`（其中包含 QEMU 与桌面烟雾测试），在成功或失败时收集证据。
+仓库 `.github/workflows/maykernel-phase1.yml` 在 Ubuntu 24.04 上安装构建工具，构建自研 x86_64 ELF 与混合 ISO，核对 ELF 架构并调用原有 `make test`（其中包含 BIOS QEMU 与桌面烟雾测试）。随后执行 `uefi_smoke.py --custom-only` 进行实际 OVMF 固件启动与冷启动持久化校验，再由 `phase1_soak.py` 在同一份 ISO 上执行 BIOS 与 UEFI 各 3 次独立冷启动，核对 MayFS 数据完整性。构建日志、JSON、图片、ISO 与哈希保留为 GitHub Actions 附件；每次提交必须以实际 Actions 运行结果为准。
 
-**注意：** 此工作流目前不等同于 BIOS / UEFI 完整双启动验证；`make test-dual` 和 `make test-uefi` 还依赖完整 Linux 双启动构建或既有产物，需要独立构建与核验。运行 GitHub Actions 后才可填报真实结果；不以本文件创建成功代替测试通过。
+**注意：** 已通过的动作包含自研内核的真实 BIOS / OVMF 路径；`phase1_soak.py` 的测试结果需等本次提交的 Actions 成功后确认。该工作流不等同于 Linux + MayKernel 双启动镜像的完整矩阵；`make test-dual` 和 `make test-uefi` 仍依赖完整 Linux 构建或既有产物。未执行的项目不可填写为通过。
 
 ## 阶段二进入条件
 
