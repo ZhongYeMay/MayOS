@@ -1921,7 +1921,7 @@ static void left_click(void) {
     }
     Window *about = &windows[1];
     if (!(about->open && !about->min && focus == 1 && settings_tab == 6 &&
-          inside(mx, my, about->x + 223, about->y + 265, 30, 30)))
+          inside(mx, my, about->x + 275, about->y + 162, 30, 30)))
         egg_clicks = 0;
     if (modal) {
         if (inside(mx, my, 604, 413, 90, 30))
@@ -2045,6 +2045,15 @@ static void left_click(void) {
         raise_window(id);
         int rx = mx - w->x, ry = my - w->y;
         if (ry < 42) {
+            if (id == 1 && rx >= 10 && rx < 78) {
+                /* Three gray traffic-light buttons in the reference window:
+                   close, minimize, maximize (left to right). */
+                settings_search_focused = 0;
+                if (rx < 32) w->open = 0;
+                else if (rx < 52) w->min = 1;
+                else toggle_max(id);
+                return;
+            }
             if (rx > w->w - 46) {
                 if (id == 3 && editor_changed) {
                     notify("请先保存修改，再关闭编辑器");
@@ -2103,7 +2112,7 @@ static void left_click(void) {
             return;
         }
         if (id == 1) {
-            if (settings_tab == 6 && inside(rx, ry, 223, 265, 30, 30)) {
+            if (settings_tab == 6 && inside(rx, ry, 275, 162, 30, 30)) {
                 if (ticks - egg_last_click > 150)
                     egg_clicks = 0;
                 egg_last_click = ticks;
@@ -2111,54 +2120,67 @@ static void left_click(void) {
                     open_easter();
                 return;
             }
-            if (rx < 188) {
-                int tab = (ry - 132) / 36;
-                if (ry >= 132 && tab >= 0 && tab < 7 && (ry - 132) % 36 < 34)
-                    settings_tab = tab;
+            if (inside(rx, ry, 22, 95, 202, 38)) {
+                settings_search_focused = 1;
+                return;
+            }
+            settings_search_focused = 0;
+            if (rx < 227) {
+                const char *names[] = {"General", "Display", "Sound", "Network",
+                                      "Privacy & Security", "Updates", "About MayOS"};
+                for (int i = 0; i < 7; i++) {
+                    int yy = settings_nav_y(w, i);
+                    if (inside(rx, ry, 18, yy, 205, 38) &&
+                        (!settings_filter[0] || settings_filter_match(names[i]))) {
+                        settings_tab = i;
+                        settings_fit_window(w);
+                        return;
+                    }
+                }
             }
             else if (settings_tab == 1) {
                 if (ry >= 220 && ry <= 382) {
-                    if (rx >= 204 && rx < 420) {
+                    if (rx >= 252 && rx < 468) {
                         dark = 0;
                         preferences_save();
-                    } else if (rx >= 440 && rx < 656) {
+                    } else if (rx >= 488 && rx < 704) {
                         dark = 1;
                         preferences_save();
                     }
                 }
-                if (ry >= 457 && ry <= 493 && rx >= 204) {
-                    int i = (rx - 204) / 64;
+                if (ry >= 457 && ry <= 493 && rx >= 252) {
+                    int i = (rx - 252) / 64;
                     if (i >= 0 && i < 6) {
                         accent_choice = i;
                         preferences_save();
                     }
                 }
-                if (ry >= 570 && ry < 602 && rx >= 204 && rx < 468) {
-                    high_contrast = rx >= 336;
+                if (ry >= 570 && ry < 602 && rx >= 252 && rx < 516) {
+                    high_contrast = rx >= 384;
                     preferences_save();
                 }
             } else if (settings_tab == 4) {
-                if (ry >= 206 && ry < 306 && rx >= 204 && rx < 732) {
-                    int i = (rx - 204) / 176;
+                if (ry >= 206 && ry < 306 && rx >= 252 && rx < 780) {
+                    int i = (rx - 252) / 176;
                     if (i < 3) { desktop_style = i; preferences_save(); }
-                } else if (ry >= 363 && ry < 398 && rx >= 204 && rx < 666) {
-                    int i = (rx - 204) / 154;
+                } else if (ry >= 363 && ry < 398 && rx >= 252 && rx < 714) {
+                    int i = (rx - 252) / 154;
                     if (i < 3) { pointer_size = i; preferences_save(); }
-                } else if (ry >= 441 && ry < 477 && rx >= 204 && rx < 718) {
-                    int i = (rx - 204) / 168;
+                } else if (ry >= 441 && ry < 477 && rx >= 252 && rx < 766) {
+                    int i = (rx - 252) / 168;
                     if (i == 2 && !cursor_image_load(1)) {
                         notify("请检查文档/Cursor.ppm（P3，最大16×16）");
                         return;
                     }
                     if (i >= 0 && i < 3) { cursor_style = i; preferences_save(); }
-                } else if (ry >= 520 && ry < 553 && rx >= 204 && rx < 478) {
-                    show_brand = rx < 348;
+                } else if (ry >= 520 && ry < 553 && rx >= 252 && rx < 526) {
+                    show_brand = rx < 396;
                     preferences_save();
-                } else if (inside(rx, ry, 204, 560, 145, 34)) {
+                } else if (inside(rx, ry, 252, 560, 145, 34)) {
                     preferences_reset();
                     notify("个性化设置已恢复默认");
                 }
-            } else if (settings_tab == 2 && inside(rx, ry, 204, 501, 126, 30))
+            } else if (settings_tab == 2 && inside(rx, ry, 252, 501, 126, 30))
                 notify(fs_sync() ? "已同步到磁盘" : "磁盘不可写");
         } else if (id == 0) {
             if (rx < 146) {
@@ -2286,6 +2308,28 @@ static void key_event(int k) {
     }
     if (k == 27) {
         start_open = context_open = top_panel = 0;
+        settings_search_focused = 0;
+        return;
+    }
+    if (settings_search_focused && focus == 1 &&
+        windows[1].open && !windows[1].min) {
+        int n = strlen(settings_filter);
+        if (k == '\b' && n) settings_filter[n - 1] = 0;
+        else if (k >= 32 && k < 127 && n < 29) {
+            settings_filter[n] = k;
+            settings_filter[n + 1] = 0;
+        } else if (k == '\n') {
+            const char *tabs[] = {"General", "Display", "Sound", "Network",
+                                  "Privacy & Security", "Updates", "About MayOS"};
+            for (int i = 0; i < 7; i++) {
+                if (settings_filter_match(tabs[i])) {
+                    settings_tab = i;
+                    settings_fit_window(&windows[1]);
+                    break;
+                }
+            }
+            settings_search_focused = 0;
+        }
         return;
     }
     if (start_open) {
