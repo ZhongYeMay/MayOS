@@ -296,21 +296,21 @@ void fs_init(void) {
                 memcpy(fs_image, backup_image, sizeof(fs_image));
                 active_slot = 1;
                 fs_generation = backup_gen;
-                serial("MayOS: recovered MayFS from backup snapshot\\n");
+                serial("MayOS: recovered MayFS from backup snapshot\n");
             } else {
                 active_slot = 0;
                 fs_generation = main_gen;
             }
             memcpy(files, fs_image + 512, sizeof(files));
             if (!backup_enabled)
-                serial("MayOS: backup region occupied; legacy single-slot mode\\n");
+                serial("MayOS: backup region occupied; legacy single-slot mode\n");
         } else if (main_blank && (!backup_readable || backup_blank)) {
             /* A fresh blank disk gets a primary slot before the backup,
              * so an interrupted first-ever format cannot destroy data. */
             active_slot = 1;
         } else {
             disk_ready = 0;
-            serial("MayOS: invalid/unknown disk; preserved, using RAM fallback\\n");
+            serial("MayOS: invalid/unknown disk; preserved, using RAM fallback\n");
         }
     }
 #endif
