@@ -84,7 +84,7 @@ version_header = (GUI.parent / "version.h").read_text(encoding="utf-8")
 assert '#define MAYOS_VERSION "0.5.0-pre1"' in version_header
 assert '#include "version.h"' in source
 assert '#define MAYOS_RELEASE MAYOS_VERSION' in source
-assert 'heading_text(cx + 60, card_top + 66, "Version " MAYOS_RELEASE, muted);' in source
+assert 'reference_text(cx + 60, card_top + 55, "Version " MAYOS_RELEASE, muted, 0);' in source
 assert 'emit("OS: MayOS " MAYOS_RELEASE);' in source
 assert 'const char *shapes[] = {"■ 黑色方块", "□ 白色方块", "自定义图片"};' in source
 assert "roundrect(14, 60, 76, 508, panel);" not in source
