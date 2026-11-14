@@ -20,9 +20,9 @@
 #define PLATFORM_ARCH "x86_64 / 64-bit"
 #endif
 static u32 pixels[W * H];
-/* Exact grayscale-first UI contract from the user's 1024x768 reference image. */
-static u32 bg = 0x141218, panel = 0x211f26, ink = 0xe6e1e5, muted = 0xcac4d0, line = 0x49454f,
-           accent = 0xe2e2e7, surface_high = 0x2b2930, on_accent = 0x202124, selected_fill = 0x46474d;
+/* MayOS 0.5.0: approved pure-black/charcoal visual system. */
+static u32 bg = 0x050506, panel = 0x080809, ink = 0xf5f5f6, muted = 0xa1a1a5, line = 0x303033,
+           accent = 0xececef, surface_high = 0x18181b, on_accent = 0x111113, selected_fill = 0x29292d;
 static int dark = 1, accent_choice = 0;
 static int desktop_style = 0, pointer_size = 0, show_brand = 1, high_contrast = 0;
 /* 0 = black square, 1 = white square, 2 = custom Documents/Cursor.ppm. */
@@ -217,6 +217,41 @@ static u32 blend(u32 b, u32 f, u32 a) {
         g = (((b >> 8 & 255) * (255 - a) + (f >> 8 & 255) * a) / 255),
         v = (((b & 255) * (255 - a) + (f & 255) * a) / 255);
     return r << 16 | g << 8 | v;
+}
+/* Radius-aware antialiased native surfaces; same code path on MayKernel and Linux. */
+static void soft_roundrect(int x, int y, int w, int h, int radius, u32 c) {
+    if (w <= 0 || h <= 0) return;
+    int r = radius;
+    if (r > w / 2) r = w / 2;
+    if (r > h / 2) r = h / 2;
+    if (!r) { rect(x, y, w, h, c); return; }
+    rect(x + r, y, w - 2 * r, h, c);
+    rect(x, y + r, r, h - 2 * r, c);
+    rect(x + w - r, y + r, r, h - 2 * r, c);
+    for (int yy = 0; yy < r; yy++)
+        for (int xx = 0; xx < r; xx++) {
+            int dx = r - xx - 1, dy = r - yy - 1;
+            int samples = 0;
+            for (int sy = 0; sy < 2; sy++)
+                for (int sx = 0; sx < 2; sx++) {
+                    int u = dx * 2 + sx, v = dy * 2 + sy;
+                    if (u*u + v*v <= 4*r*r) samples++;
+                }
+            if (!samples) continue;
+            int xs[2] = {x + xx, x + w - 1 - xx};
+            int ys[2] = {y + yy, y + h - 1 - yy};
+            for (int j = 0; j < 2; j++)
+                for (int i = 0; i < 2; i++) {
+                    int px = xs[i], py = ys[j];
+                    if (px < 0 || py < 0 || px >= W || py >= H) continue;
+                    u32 *dst = &pixels[py * W + px];
+                    *dst = samples == 4 ? c : blend(*dst, c, (u32)samples * 255 / 4);
+                }
+        }
+}
+static void ui_card(int x, int y, int w, int h, int r, u32 fill) {
+    soft_roundrect(x, y, w, h, r, line);
+    soft_roundrect(x + 1, y + 1, w - 2, h - 2, r - 1, fill);
 }
 #ifndef MAYOS_LINUX
 /* Independently implemented software RGBA renderer for MayKernel game artwork.
@@ -415,11 +450,11 @@ static void symbol(int x, int y, int kind, int size, u32 c) {
     }
 }
 static void icon(int x, int y, int kind, int size) {
-    roundrect(x, y, size, size, surface_high);
-    symbol(x, y, kind, size, ink);
+    symbol(x + 4, y + 4, kind, size - 8, ink);
 }
 static void button(int x, int y, int w, const char *s, int primary) {
-    roundrect(x, y, w, 30, primary ? accent : surface_high);
+    if (primary) soft_roundrect(x, y, w, 30, 10, accent);
+    else ui_card(x, y, w, 30, 10, surface_high);
     text(x + 12, y + 4, s, primary ? on_accent : ink);
 }
 typedef struct {
@@ -857,23 +892,22 @@ static void accept_modal(void) {
     modal = 0;
 }
 static void palette(void) {
-    /* Neutral visual identity is the default. Other accent choices are opt-in. */
-    const u32 dark_primary[]  = {0xe2e2e7, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
-    const u32 light_primary[] = {0x414249, 0x006a64, 0x415f91, 0x904b40, 0x805700, 0x72518c};
-    bg = dark ? 0x141218 : 0xfffbfe;
-    panel = dark ? 0x211f26 : 0xfff7ff;
-    surface_high = dark ? 0x2b2930 : 0xf3edf7;
-    ink = dark ? 0xe6e1e5 : 0x1d1b20;
-    muted = dark ? 0xcac4d0 : 0x49454f;
-    line = dark ? 0x49454f : 0xcac4d0;
+    const u32 dark_primary[] = {0xececef, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
+    const u32 light_primary[] = {0x252529, 0x006a64, 0x415f91, 0x904b40, 0x805700, 0x72518c};
+    bg = dark ? 0x050506 : 0xf5f5f6;
+    panel = dark ? 0x080809 : 0xffffff;
+    surface_high = dark ? 0x18181b : 0xf0f0f2;
+    ink = dark ? 0xf5f5f6 : 0x19191c;
+    muted = dark ? 0xa1a1a5 : 0x626268;
+    line = dark ? 0x303033 : 0xd9d9dd;
     accent = dark ? dark_primary[accent_choice] : light_primary[accent_choice];
-    on_accent = dark ? 0x202124 : 0xffffff;
-    selected_fill = dark ? 0x46474d : 0xe0e1e5;
+    on_accent = dark ? 0x111113 : 0xffffff;
+    selected_fill = dark ? 0x29292d : 0xe4e4e8;
     if (high_contrast) {
-        ink = dark ? 0xffffff : 0x090909;
-        muted = dark ? 0xe7e5eb : 0x222222;
-        line = dark ? 0xa29cad : 0x5d5a61;
-        selected_fill = dark ? 0x505159 : 0xd0d1d5;
+        ink = dark ? 0xffffff : 0x08080a;
+        muted = dark ? 0xf1f1f3 : 0x222225;
+        line = dark ? 0x88888c : 0x66666a;
+        selected_fill = dark ? 0x404045 : 0xc7c7ca;
     }
 }
 /* Reference desktop: macOS-like top menu and dock, with existing MD3 windows.
