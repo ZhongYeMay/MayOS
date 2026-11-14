@@ -78,6 +78,8 @@ jobs:
           assert required <= set(uefi['tests']), 'UEFI regression incomplete'
           print('PASS: one ISO, both firmware catalogs, real OVMF boot and cold persistence')
           PY
+      - name: Reboot BIOS and UEFI three times each, verify unchanged MayFS
+        run: python3 scripts/phase1_soak.py --iso build/mayos.iso --cycles 3
       - name: Archive phase 1 evidence (also on failure)
         if: always()
         uses: actions/upload-artifact@v4
@@ -92,5 +94,6 @@ jobs:
             MayOS_0.3.0-pre1/build/*test*.json
             MayOS_0.3.0-pre1/build/*.iso.boot.json
             MayOS_0.3.0-pre1/build/test-uefi-*.png
+            MayOS_0.3.0-pre1/build/phase1-*.png
             MayOS_0.3.0-pre1/build/desktop.png
             MayOS_0.3.0-pre1/build/mayos.iso
