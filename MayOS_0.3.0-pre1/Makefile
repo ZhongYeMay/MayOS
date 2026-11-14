@@ -19,6 +19,11 @@ EXCEPTION_SELFTEST ?= 0
 ifeq ($(EXCEPTION_SELFTEST),1)
 CFLAGS += -DMAYOS_EXCEPTION_SELFTEST
 endif
+# Only in an isolated, intentionally wedged QEMU ISO; never use for release.
+FS_POWERLOSS_SELFTEST ?= 0
+ifeq ($(FS_POWERLOSS_SELFTEST),1)
+CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
+endif
 OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
