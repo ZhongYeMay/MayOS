@@ -49,86 +49,26 @@ def record(args):
             vm.wait("MayOS: CPU long mode active (64-bit)")
         actions.append("native_x86_64_kernel" if args.kernel == "custom" else "real_Linux_userspace")
 
-        # Personalization settings: two themes, sixth accent, high contrast.
-        vm.click(444, 716)   # Settings from reference-style dock
-        vm.hold(1.0)
-        vm.click(295, 236)
-        vm.hold(.8)
-        vm.click(440, 330)
-        vm.hold(.8)
-        vm.click(729, 549)
-        vm.hold(.7)
-        vm.click(550, 660)
+        # Exact approved monochrome Settings reference: open the top-left
+        # MayOS menu, then dwell on About and the visible navigation items.
+        vm.click(50, 16)
+        vm.hold(2.2)
+        vm.click(270, 301)                 # Display
         vm.hold(1.2)
-        actions += ["light_theme", "sixth_accent_color", "high_contrast"]
-
-        # Existing desktop controls stay in the original Material workspace.
-        vm.click(295, 380)
-        vm.hold(1)
-        vm.click(646, 335)                 # solid background
-        vm.hold(.7)
-        vm.click(822, 335)                 # grid background
-        vm.hold(.9)
-        vm.click(614, 449)                 # medium pointer
-        vm.hold(.6)
-        vm.click(768, 449)                 # large pointer
-        vm.hold(.7)
-        vm.click(610, 530)                 # white square cursor
-        vm.hold(.7)
-        vm.click(445, 530)                 # black square cursor
-        vm.hold(.7)
-        vm.click(790, 530)                 # real P3 image from MayFS Documents
-        vm.hold(1.0)
-        vm.click(599, 605)                 # hide branding
-        vm.hold(1.2)
-        actions += ["gradient_flat_grid_wallpapers", "pointer_sizes",
-                    "white_square_cursor", "black_square_cursor",
-                    "custom_ppm_image_cursor", "branding_toggle"]
-
-        if args.kernel == "custom":
-            from settings_smoke import saved_values, EXPECTED
-            values = saved_values(disk)
-            if values != EXPECTED:
-                raise AssertionError(f"Video setting changes did not persist: {values!r}")
-            before = len(vm.text())
-            vm.q("system_reset")
-            # A QEMU machine reset also reinitializes the emulated PS/2
-            # pointer; the recorder's coordinate tracker must follow suit.
-            vm.mx, vm.my = 530, 390
-            vm.wait("MayOS: desktop preferences applied", offset=before, timeout=60)
-            vm.wait("MayOS: desktop ready", offset=before, timeout=60)
-            vm.hold(1.5)
-            vm.click(444, 716)   # cold boot starts with clean desktop
-            vm.click(295, 380)
-            vm.hold(1.2)
-            actions.append("real_cold_boot_MayFS_settings_restoration")
-        vm.click(450, 645)                 # reset all preferences
-        vm.hold(1.2)
-        actions.append("restore_default_settings")
-
-        # Remaining settings sections and existing native apps.
-        vm.click(295, 288)                 # Storage
-        vm.hold(1.5)
-        vm.click(295, 334)                 # Credits
-        vm.hold(1.5)
-        vm.click(295, 196)                 # About
-        vm.hold(1.1)
-        actions += ["storage_capacity", "open_source_credits", "about_kernel_info"]
-        vm.click(948, 94)                  # close Settings
-        vm.hold(.8)
+        vm.click(270, 481)                 # About MayOS
+        vm.hold(2.2)
+        actions += ["Settings_reference", "Settings_navigation", "About_MayOS"]
         # In the exact screenshot's top bar, every icon has a real native panel.
-        for x, label in ((728, "session_clock_panel"),
-                         (778, "network_status_panel"),
-                         (828, "theme_controls_panel"),
-                         (878, "notifications_panel"),
-                         (928, "power_menu")):
+        for x, label in ((777, "network_status_panel"),
+                         (816, "notifications_panel"),
+                         (855, "power_menu")):
             vm.click(x, 21)
             vm.hold(.85)
             vm.key("esc")
             vm.hold(.2)
             actions.append(label)
 
-        vm.click(346, 716)                 # real file manager via dock
+        vm.click(403, 710)                 # Files from the four-icon Dock
         vm.hold(1.3)
         vm.click(490, 212)                 # new folder modal
         vm.command("RecordedTour")
@@ -155,15 +95,7 @@ def record(args):
         vm.key("esc")
         actions.append("cat_easter_egg")
 
-        if args.kernel == "custom":
-            vm.click(248, 716)             # Applications from dock
-            vm.click(270, 567)             # native game in Applications menu
-            vm.hold(2.0)
-            actions.append("MayKernel_native_game")
-        else:
-            vm.click(738, 716)             # Explorer from dock
-            vm.hold(1.7)
-            actions.append("Linux_Explorer")
+        vm.hold(1.5)
         vm.finish_recording()
     finally:
         vm.close()

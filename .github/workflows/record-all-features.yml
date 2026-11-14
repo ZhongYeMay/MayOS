@@ -76,6 +76,19 @@ jobs:
               -of default=noprint_wrappers=1 "$file"
             test -s "${file%.mp4}.json"
           done
+      - name: Assemble one complete MayOS walkthrough
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euxo pipefail
+          version="$(cat VERSION)"
+          ffmpeg -hide_banner -loglevel error -y \
+            -i build/recordings/MayKernel64-All-Functions.mp4 \
+            -i build/recordings/Linux64-All-Functions.mp4 \
+            -filter_complex '[0:v][1:v]concat=n=2:v=1:a=0[v]' -map '[v]' \
+            -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p -movflags +faststart \
+            "build/recordings/MayOS-${version}-QEMU-combined.mp4"
+          ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height \
+            -of default=noprint_wrappers=1 "build/recordings/MayOS-${version}-QEMU-combined.mp4"
       - name: Upload the real feature videos and test proof
         if: always()
         uses: actions/upload-artifact@v4
