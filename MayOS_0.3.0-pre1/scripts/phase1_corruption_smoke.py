@@ -74,6 +74,60 @@ def main():
     assert slot_valid(pristine, 0) and slot_valid(pristine, 1), (
         'Both snapshot copies must be committed after a successful save')
 
+    # 0a. Simulate a crash after backup commit but before primary commit.
+    # Both checksums remain valid; the backup generation must win.
+    newer = BUILD / 'test-phase1-newer-snapshot.img'
+    shutil.copyfile(pristine, newer)
+    vm = boot(newer, 'phase1-generation-newer-create')
+    try:
+        vm.wait('MayOS: desktop ready')
+        vm.key('f1')
+        command(vm, 'write Documents/newer.txt newest-backup-version', '\nOK\n')
+    finally:
+        vm.stop()
+    assert slot_valid(newer, 0) and slot_valid(newer, 1)
+    mixed = BUILD / 'test-phase1-torn-primary-before-header.img'
+    shutil.copyfile(newer, mixed)
+    with pristine.open('rb') as original, mixed.open('r+b') as target:
+        target.write(original.read(SLOT_BYTES))
+    assert slot_valid(mixed, 0) and slot_valid(mixed, 1)
+    hash_before = digest(mixed)
+    vm = boot(mixed, 'phase1-generation-newer-backup')
+    try:
+        vm.wait('MayOS: recovered MayFS from backup snapshot')
+        vm.wait('MayOS: desktop ready')
+        vm.key('f1')
+        command(vm, 'cat Documents/newer.txt', '\nnewest-backup-version\n')
+    finally:
+        vm.stop()
+    assert digest(mixed) == hash_before, 'Newer generation mount must remain read-only'
+    print('PASS: newer backup wins over valid but stale primary after torn commit',
+          flush=True)
+
+    # 0b. Read legacy MayFS without generation metadata or a backup, then
+    # create dual copies on a subsequent user save.
+    legacy = BUILD / 'test-phase1-legacy-single-slot.img'
+    with legacy.open('wb') as stream:
+        stream.truncate(8 * 1024 * 1024)
+    with pristine.open('rb') as original, legacy.open('r+b') as destination:
+        primary = bytearray(original.read(SLOT_BYTES))
+        primary[12:24] = b'\0' * 12
+        destination.write(primary)
+    assert slot_valid(legacy, 0) and not slot_valid(legacy, 1)
+    vm = boot(legacy, 'phase1-legacy-migrate')
+    try:
+        vm.wait('MayOS: MayFS mounted')
+        vm.wait('MayOS: desktop ready')
+        vm.key('f1')
+        command(vm, 'cat Documents/original.txt', '\noriginal-data\n')
+        command(vm, 'write Documents/migrated.txt legacy-updated', '\nOK\n')
+    finally:
+        vm.stop()
+    assert slot_valid(legacy, 0) and slot_valid(legacy, 1)
+    assert entries(legacy)['migrated.txt'][3] == 'legacy-updated'
+    print('PASS: legacy single-slot MayFS migrates safely on first save',
+          flush=True)
+
     # 1. Corrupt primary payload; backup should mount without modifying disk.
     primary_bad = BUILD / 'test-phase1-primary-damaged.img'
     shutil.copyfile(pristine, primary_bad)
@@ -160,6 +214,8 @@ def main():
         'tested_at_utc': datetime.now(timezone.utc).isoformat(),
         'test_type': 'offline torn-snapshot injection, real QEMU boot/readback',
         'iso_sha256': digest(BUILD / 'mayos.iso'),
+        'generation_precedence_newer_backup': True,
+        'legacy_single_slot_migration': True,
         'primary_damage_backup_recovered': True,
         'repaired_both_copies_after_save': True,
         'torn_backup_keeps_primary_readonly': True,
