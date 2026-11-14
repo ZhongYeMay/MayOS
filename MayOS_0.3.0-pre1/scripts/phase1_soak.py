@@ -72,10 +72,9 @@ def run():
                 vm.key('f1')
                 if expected_disk_hash is None:
                     vm.keyboard_command(f'write {filename} {marker}')
-                    vm.wait('Wrote', timeout=15)
                 offset = len(vm.text)
                 vm.keyboard_command(f'cat {filename}')
-                vm.wait(f'\\n{marker}\\n', offset=offset)
+                vm.wait(f'\n{marker}\n', offset=offset)
                 if index == 0:
                     vm.shot(f'phase1-{firmware}-desktop')
             finally:
@@ -108,7 +107,7 @@ def run():
         'boots': samples,
     }
     (BUILD / 'phase1-soak-test-results.json').write_text(
-        json.dumps(report, indent=2) + '\\n')
+        json.dumps(report, indent=2) + '\n')
     print('PASS: repeated BIOS and UEFI cold boots preserve MayFS without writes', flush=True)
 
 
