@@ -546,15 +546,15 @@ typedef struct {
     const char *title;
 } Window;
 #define WINDOW_COUNT 5
-static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "文件 / Files"},
-                            {186, 74, 800, 620, 0, 0, 0, 0, 0, 0, 0, "系统设置 / System Settings"},
+static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "Files"},
+                            {177, 133, 640, 450, 0, 0, 0, 0, 0, 0, 0, "Settings"},
                             {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
                             {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
                             {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
 static int order[WINDOW_COUNT] = {0, 2, 3, 4, 1}, focus = 1, dirty = 1;
 static int mx = 530, my = 390, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
-           cut = 0, settings_tab = 0;
+           cut = 0, settings_tab = 6;
 static int file_scroll = 0;
 static int desktop_note_selected = 0;
 static int top_panel = 0;  /* 1=clock, 2=network, 3=display, 4=alerts, 5=power */
@@ -1017,12 +1017,16 @@ static void desktop(void) {
             rect(0, y, W, 1, blend(dark ? 0x030304 : 0xf9f9fb,
                                    dark ? 0x151518 : 0xe7e7eb, (u32)y * 120 / H));
         for (int x = 0; x < W; x++) {
-            int high = 105 + (x * x) / 2200 + x / 8;
-            int low = 655 - (x * (W - x)) / 1200;
-            if (high >= 43 && high < H - 90)
-                rect(x, high, 1, 2, dark ? 0x303033 : 0xceced1);
-            if (low > 43 && low < H - 85)
-                rect(x, low, 1, 2, dark ? 0x29292c : 0xd6d6d9);
+            /* Two broad, softly shaded waves matching the reference wallpaper. */
+            int upper = 128 - x / 3 + (x * x) / 4200;
+            int lower = 692 - x / 4 - ((W - x) * (W - x)) / 5000;
+            for (int d = -8; d <= 8; d++) {
+                u32 a = (u32)(8 - (d < 0 ? -d : d)) * 17;
+                if (upper + d > 31 && upper + d < H)
+                    rect(x, upper + d, 1, 1, blend(0x050506, 0x56565a, a));
+                if (lower + d > 31 && lower + d < H)
+                    rect(x, lower + d, 1, 1, blend(0x050506, 0x414145, a));
+            }
         }
     } else if (desktop_style == 1) {
         rect(0, 0, W, H, bg);
@@ -1031,13 +1035,16 @@ static void desktop(void) {
         for (int x = 0; x < W; x += 64) rect(x, 42, 1, H - 42, line);
         for (int y = 42; y < H; y += 64) rect(0, y, W, 1, line);
     }
-    rect(0, 0, W, 42, dark ? 0x050506 : 0xf9f9fb);
-    rect(0, 41, W, 1, line);
-    heading_text(24, 6, "MayOS", ink);
-    text(126, 10, "文件", muted);
-    text(200, 10, "窗口", muted);
-    text(274, 10, "应用", muted);
-    text(348, 10, "终端", muted);
+    rect(0, 0, W, 32, dark ? 0x050506 : 0xf9f9fb);
+    rect(0, 31, W, 1, dark ? 0x171719 : line);
+    symbol(17, 7, 11, 17, ink);
+    heading_text(42, 4, "MayOS", ink);
+    text(101, 8, "Settings", muted);
+    text(164, 8, "File", muted);
+    text(205, 8, "Edit", muted);
+    text(244, 8, "View", muted);
+    text(286, 8, "Window", muted);
+    text(348, 8, "Help", muted);
     int count = 0;
     for (int i = 4; i < FS_MAX && count < 15; i++) {
         if (!files[i].used || files[i].parent != 2) continue;
@@ -1050,15 +1057,22 @@ static void desktop(void) {
         text(x, y + 58, files[i].name, ink);
         count++;
     }
-    const int status_icons[] = {10, 8, 9, 7, 12, 1};
-    for (int i = 0; i < 6; i++)
-        symbol(715 + i * 50, 9, status_icons[i], 24, muted);
+    const int status_icons[] = {4, 8, 7, 12};
+    for (int i = 0; i < 4; i++)
+        symbol(777 + i * 39, 7, status_icons[i], 18, muted);
+    text(907, 8, "Tue Jan 28  10:24", muted);
 }
 static void frame(int id) {
     Window *w = &windows[id];
     soft_roundrect(w->x + 8, w->y + 12, w->w, w->h, 25,
                    dark ? 0x010102 : 0xcccdd1);
     ui_card(w->x, w->y, w->w, w->h, 25, panel);
+    if (id == 1) {
+        circle(w->x + 21, w->y + 22, 6, 0x2b2b2e);
+        circle(w->x + 41, w->y + 22, 6, 0x2b2b2e);
+        circle(w->x + 61, w->y + 22, 6, 0x2b2b2e);
+        return;
+    }
     rect(w->x + 24, w->y + 43, w->w - 48, 1, line);
     symbol(w->x + 18, w->y + 11,
            id == 0 ? 0 : id == 1 ? 1 : id == 4 ? 4 : id == 3 ? 5 : 2,
@@ -1079,25 +1093,25 @@ static void frame(int id) {
         border(w->x + 2, w->y + 2, w->w - 4, w->h - 4, line);
 }
 static void settings(Window *w) {
-    int x = w->x, y = w->y, cx = x + 204, cy = y + 65, cw = w->w - 234;
-    rect(x + 1, y + 44, 176, w->h - 46, dark ? 0x080809 : 0xf7f7f9);
-    rect(x + 176, y + 62, 1, w->h - 90, line);
-    heading_text(x + 22, y + 60, "Settings", ink);
-    const char *tabs[] = {"关于系统", "外观设置", "存储空间", "开源组件", "桌面与指针"};
-    const int tab_icons[] = {1, 9, 0, 5, 10};
-    for (int i = 0; i < 5; i++) {
-        int yy = y + 106 + i * 46;
+    int x = w->x, y = w->y, cx = x + 205, cy = y + 53, cw = w->w - 238;
+    rect(x + 1, y + 36, 187, w->h - 38, dark ? 0x080809 : 0xf7f7f9);
+    rect(x + 187, y + 36, 1, w->h - 38, line);
+    heading_text(x + 20, y + 49, "Settings", ink);
+    ui_card(x + 18, y + 82, 158, 34, 17, dark ? 0x111113 : surface_high);
+    symbol(x + 28, y + 90, 4, 15, muted);
+    text(x + 51, y + 91, "Search Settings", muted);
+    const char *tabs[] = {"General", "Display", "Sound", "Network",
+                          "Privacy & Security", "Updates", "About MayOS"};
+    const int tab_icons[] = {1, 11, 7, 8, 12, 10, 10};
+    for (int i = 0; i < 7; i++) {
+        int yy = y + 132 + i * 36;
         if (settings_tab == i)
-            soft_roundrect(x + 12, yy, 152, 36, 12, selected_fill);
-        symbol(x + 23, yy + 8, tab_icons[i], 19,
+            soft_roundrect(x + 18, yy, 158, 34, 10, selected_fill);
+        symbol(x + 29, yy + 8, tab_icons[i], 18,
                settings_tab == i ? ink : muted);
-        text(x + 55, yy + 7, tabs[i], settings_tab == i ? ink : muted);
+        text(x + 61, yy + 7, tabs[i], settings_tab == i ? ink : muted);
     }
-    rect(x + 22, y + w->h - 126, 132, 1, line);
-    text(x + 24, y + w->h - 106, "帮助 / Help", muted);
-    text(x + 24, y + w->h - 62, MAYOS_RELEASE, muted);
-    text(x + 24, y + w->h - 37, PLATFORM_ARCH, muted);
-    if (settings_tab == 0) {
+    if (settings_tab == 6) {
         heading_text(cx, cy - 8, "About MayOS", ink);
         /*
          * Supplied reference: 1320x580 card with black #000 interior,
@@ -1105,32 +1119,29 @@ static void settings(Window *w) {
          * Native 1024x768 settings area fits a 566x289 rendition, preserving
          * the original side navigation and all input hotspot coordinates.
          */
-        const int card_top = cy + 105, card_height = 289;
+        const int card_top = cy + 48, card_height = 230;
         u32 card_bg = dark ? 0x000000 : 0xffffff;
         ui_card(cx, card_top, cw, card_height, 24, card_bg);
         /* Draw the monitor directly (no generic gear tile).
          * Original Easter-egg click region at (220,190) is unchanged. */
-        reference_monitor_icon(cx + 18, card_top + 40, ink, card_bg);
-        reference_text(cx + 60, card_top + 16, "MayOS", ink, 1);
-        reference_text(cx + 60, card_top + 55, "Version " MAYOS_RELEASE, muted, 0);
-        rect(cx + 18, card_top + 115, cw - 36, 1, line);
+        reference_monitor_icon(cx + 18, card_top + 31, ink, card_bg);
+        reference_text(cx + 57, card_top + 18, "MayOS", ink, 1);
+        reference_text(cx + 57, card_top + 48, "Version " MAYOS_RELEASE, muted, 0);
+        rect(cx + 18, card_top + 96, cw - 36, 1, line);
         /* The three rows intentionally have no icons, chips or secondary
            descriptions: exact hierarchy of the approved reference. */
-        reference_text(cx + 18, card_top + 142, "Kernel", muted, 0);
+        reference_text(cx + 18, card_top + 126, "Kernel", muted, 0);
 #ifdef MAYOS_LINUX
-        reference_right_label(cx + cw - 18, card_top + 142, "Linux x86_64", ink);
+        reference_right_label(cx + cw - 18, card_top + 126, "Linux x86_64", ink);
 #else
-        reference_right_label(cx + cw - 18, card_top + 142, "MayKernel x86_64", ink);
+        reference_right_label(cx + cw - 18, card_top + 126, "MayKernel x86_64", ink);
 #endif
-        reference_text(cx + 18, card_top + 178, "Build", muted, 0);
-        reference_right_label(cx + cw - 18, card_top + 178, "Development Preview", ink);
-        reference_text(cx + 18, card_top + 214, "Architecture", muted, 0);
-        reference_right_label(cx + cw - 18, card_top + 214, "64-bit", ink);
+        reference_text(cx + 18, card_top + 158, "Build", muted, 0);
+        reference_right_label(cx + cw - 18, card_top + 158, "Development Preview", ink);
+        reference_text(cx + 18, card_top + 190, "Architecture", muted, 0);
+        reference_right_label(cx + cw - 18, card_top + 190, "64-bit", ink);
         /* Device rename/Credits remain available beneath the card,
            outside the screenshot-specific component. */
-        text(cx, cy + 412, "This version of MayOS is for test use only.", muted);
-        button(cx, cy + 449, 126, "重命名设备", 0);
-        button(cx + 140, cy + 449, 194, "开源组件 / Credits", 0);
     } else if (settings_tab == 1) {
         text(cx, cy, "PERSONALIZATION", accent);
         large_text(cx, cy + 26, "外观设置", ink);
@@ -1460,22 +1471,21 @@ static void explorer_draw(Window *w) {
 /* Centered macOS-like dock from the user's reference screenshot.
    Icons launch the same native MayOS windows and services. */
 static void taskbar(void) {
-    /* Six existing hit regions remain unchanged: apps, Files, Settings, Shell, Notes, Explorer. */
-    int left = 210, top = H - 84;
-    soft_roundrect(left + 5, top + 8, 604, 76, 28,
+    /* The reference Dock intentionally has only Files, Settings, Terminal and Trash. */
+    int left = 382, top = H - 92;
+    soft_roundrect(left + 5, top + 8, 244, 70, 25,
                    dark ? 0x020203 : 0xc0c0c6);
-    ui_card(left, top, 604, 76, 27, dark ? 0x0a0a0c : 0xf7f7f9);
-    for (int i = 0; i < 6; i++) {
-        int x = left + 16 + i * 98, id = i - 1;
-        int active = i == 0 ? start_open :
-                     (id >= 0 && windows[id].open && !windows[id].min && focus == id);
-        int hover = inside(mx, my, x - 7, top + 4, 61, 65);
+    ui_card(left, top, 244, 70, 24, dark ? 0x0a0a0c : 0xf7f7f9);
+    const int ids[] = {0, 1, 2, 3};
+    for (int i = 0; i < 4; i++) {
+        int x = left + 21 + i * 57, id = ids[i];
+        int active = windows[id].open && !windows[id].min && focus == id;
+        int hover = inside(mx, my, x - 7, top + 4, 50, 57);
         if (active || hover)
-            soft_roundrect(x - 5, top + 4, 57, 59, 16,
+            soft_roundrect(x - 5, top + 5, 48, 54, 15,
                            active ? selected_fill : surface_high);
-        int kind = i == 0 ? 6 : id == 3 ? 5 : id;
-        symbol(x + 5, top + 14 - (hover ? 2 : 0), kind, 36, active ? ink : muted);
-        if (active) soft_roundrect(x + 16, top + 67, 13, 3, 1, accent);
+        int kind = id == 3 ? 3 : id;
+        symbol(x + 4, top + 15 - (hover ? 2 : 0), kind, 34, active ? ink : muted);
     }
 }
 /* Functional, keyboard-dismissable popovers are deliberately invisible
@@ -1868,58 +1878,35 @@ static void left_click(void) {
         return;
     }
     /* The actual reference screenshot's status icons have real click targets. */
-    if (my < 42) {
-        if (mx < 110 || (mx >= 265 && mx < 340)) {
-            top_panel = 0;
-            start_open = !start_open;
-            search[0] = 0;
-        } else if (mx < 191) {
-            top_panel = 0;
-            raise_window(0);
-        } else if (mx < 265) {
-            top_panel = 0;
-            for (int i = 0; i < WINDOW_COUNT; i++)
-                if (windows[i].open) { raise_window(i); return; }
-            raise_window(0);
-        } else if (mx < 426) {
-            top_panel = 0;
-            raise_window(2);
-        } else if (mx >= 955) {
+    if (my < 32) {
+        if (mx < 96) {
             top_panel = 0;
             raise_window(1);
-        } else if (mx >= 705) {
-            int id = (mx - 705) / 50 + 1;
+        } else if (mx >= 770 && mx < 930) {
+            int id = (mx - 770) / 39 + 2;
             if (id > 5) id = 5;
             top_panel = top_panel == id ? 0 : id;
             start_open = 0;
         }
         return;
     }
-    /* Dock: application grid, Files, Settings, Terminal, Notes editor, Explorer. */
-    if (my >= H - 84) {
-        const int centers[] = {248, 346, 444, 542, 640, 738};
-        for (int i = 0; i < 6; i++) {
-            if (!inside(mx, my, centers[i] - 34, H - 80, 68, 69))
+    /* Reference Dock: Files, Settings, Terminal, Trash. */
+    if (my >= H - 92) {
+        const int centers[] = {403, 460, 517, 574};
+        for (int i = 0; i < 4; i++) {
+            if (!inside(mx, my, centers[i] - 24, H - 88, 52, 60))
                 continue;
             if (i == 0) {
-                start_open = !start_open;
-                search[0] = 0;
-            } else if (i == 1) {
                 raise_window(0);
-            } else if (i == 2) {
+            } else if (i == 1) {
                 raise_window(1);
-            } else if (i == 3) {
+            } else if (i == 2) {
                 raise_window(2);
-            } else if (i == 4) {
-                int note = fs_find(2, "Notes.txt");
-                if (editor_file >= 0)
-                    raise_window(3);
-                else if (note >= 0)
-                    open_file(note);
-                else
-                    raise_window(0);
             } else {
-                raise_window(4);
+                folder = 3;
+                file_scroll = 0;
+                selected = -1;
+                raise_window(0);
             }
             return;
         }
@@ -2034,16 +2021,11 @@ static void left_click(void) {
                     open_easter();
                 return;
             }
-            if (rx < 177) {
-                int tab = (ry - 106) / 46;
-                if (ry >= w->h - 110 && ry < w->h - 75)
-                    begin_modal(6, -1);
-                else if (ry >= 106 && tab >= 0 && tab < 5 && (ry - 106) % 46 < 36)
+            if (rx < 188) {
+                int tab = (ry - 132) / 36;
+                if (ry >= 132 && tab >= 0 && tab < 7 && (ry - 132) % 36 < 34)
                     settings_tab = tab;
-            } else if (settings_tab == 0 && inside(rx, ry, 204, 514, 126, 30))
-                begin_modal(4, -1);
-            else if (settings_tab == 0 && inside(rx, ry, 344, 514, 194, 30))
-                settings_tab = 3;
+            }
             else if (settings_tab == 1) {
                 if (ry >= 220 && ry <= 382) {
                     if (rx >= 204 && rx < 420) {

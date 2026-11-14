@@ -52,10 +52,18 @@ assert "surface_high = dark ? 0x18181b : 0xf0f0f2;" in source
 assert "line = dark ? 0x303033 : 0xd9d9dd;" in source
 assert "static void soft_roundrect(" in source
 assert "static int heading_text(" in source
-assert 'heading_text(24, 6, "MayOS", ink);' in source
-assert 'heading_text(x + 22, y + 60, "Settings", ink);' in source
+assert 'heading_text(42, 4, "MayOS", ink);' in source
+assert 'text(101, 8, "Settings", muted);' in source
+assert 'text(164, 8, "File", muted);' in source
+assert 'text(205, 8, "Edit", muted);' in source
+assert 'text(244, 8, "View", muted);' in source
+assert 'text(286, 8, "Window", muted);' in source
+assert 'text(348, 8, "Help", muted);' in source
+assert 'text(907, 8, "Tue Jan 28  10:24", muted);' in source
+assert 'heading_text(x + 20, y + 49, "Settings", ink);' in source
+assert '"Privacy & Security", "Updates", "About MayOS"' in source
 assert 'heading_text(cx, cy - 8, "About MayOS", ink);' in source
-assert 'reference_text(cx + 60, card_top + 16, "MayOS", ink, 1);' in source
+assert 'reference_text(cx + 57, card_top + 18, "MayOS", ink, 1);' in source
 assert "static void ui_card(" in source
 assert "static void reference_monitor_icon(" in source
 assert "static void reference_text(" in source
@@ -63,16 +71,16 @@ assert "static int reference_font_width(" in source
 assert "premium_title_bitmap[g]" in source
 assert "premium_body_bitmap[g]" in source
 assert "static void reference_right_label(" in source
-assert 'reference_monitor_icon(cx + 18, card_top + 40, ink, card_bg);' in source
-assert 'reference_text(cx + 18, card_top + 142, "Kernel", muted, 0);' in source
-assert 'reference_right_label(cx + cw - 18, card_top + 142, "MayKernel x86_64", ink);' in source
-assert 'reference_right_label(cx + cw - 18, card_top + 214, "64-bit", ink);' in source
+assert 'reference_monitor_icon(cx + 18, card_top + 31, ink, card_bg);' in source
+assert 'reference_text(cx + 18, card_top + 126, "Kernel", muted, 0);' in source
+assert 'reference_right_label(cx + cw - 18, card_top + 126, "MayKernel x86_64", ink);' in source
+assert 'reference_right_label(cx + cw - 18, card_top + 190, "64-bit", ink);' in source
 assert 'u32 card_bg = dark ? 0x000000 : 0xffffff;' in source
 assert "ui_card(w->x, w->y, w->w, w->h, 25, panel);" in source
 assert "ui_card(cx, card_top, cw, card_height, 24, card_bg);" in source
-assert 'reference_text(cx + 60, card_top + 55, "Version " MAYOS_RELEASE, muted, 0);' in source
-assert 'reference_right_label(cx + cw - 18, card_top + 178, "Development Preview", ink);' in source
-assert "ui_card(left, top, 604, 76, 27," in source
+assert 'reference_text(cx + 57, card_top + 48, "Version " MAYOS_RELEASE, muted, 0);' in source
+assert 'reference_right_label(cx + cw - 18, card_top + 158, "Development Preview", ink);' in source
+assert "ui_card(left, top, 244, 70, 24," in source
 assert "set gfxmode" not in source  # no graphics firmware tweaks via GUI
 assert "static void cursor(void)" in source
 assert "#include \"material_icons.h\"" in source
@@ -84,18 +92,14 @@ version_header = (GUI.parent / "version.h").read_text(encoding="utf-8")
 assert '#define MAYOS_VERSION "0.5.0-pre1"' in version_header
 assert '#include "version.h"' in source
 assert '#define MAYOS_RELEASE MAYOS_VERSION' in source
-assert 'reference_text(cx + 60, card_top + 55, "Version " MAYOS_RELEASE, muted, 0);' in source
+assert 'reference_text(cx + 57, card_top + 48, "Version " MAYOS_RELEASE, muted, 0);' in source
 assert 'emit("OS: MayOS " MAYOS_RELEASE);' in source
 assert 'const char *shapes[] = {"■ 黑色方块", "□ 白色方块", "自定义图片"};' in source
 assert "roundrect(14, 60, 76, 508, panel);" not in source
 assert "static void desktop(void)" in source
 assert "static void taskbar(void)" in source
-assert 'text(126, 10, "文件", muted);' in source
-assert 'text(200, 10, "窗口", muted);' in source
-assert 'text(274, 10, "应用", muted);' in source
-assert 'text(348, 10, "终端", muted);' in source
-assert "int left = 210, top = H - 84;" in source
-assert "int high = 105 + (x * x) / 2200 + x / 8;" in source
-assert 'fs_find(2, "Notes.txt")' in source
-assert '{186, 74, 800, 620, 0, 0, 0, 0, 0, 0, 0, "系统设置 / System Settings"}' in source
-print("PASS: approved 0.5 premium monochrome visual contract, AA cards, About layout, macOS menu, dock geometry and input hotspots")
+assert "int left = 382, top = H - 92;" in source
+assert "int upper = 128 - x / 3 + (x * x) / 4200;" in source
+assert '{177, 133, 640, 450, 0, 0, 0, 0, 0, 0, 0, "Settings"}' in source
+assert "settings_tab = 6" in source
+print("PASS: exact approved monochrome Settings reference, menu, wallpaper, About card and four-icon Dock")
