@@ -49,6 +49,37 @@ void serial(const char *s) {
         outb(0x3f8, *s++);
     }
 }
+/* A fatal CPU exception must leave a serial diagnosis, not silently triple-fault.
+ * This is not process isolation or exception recovery. */
+static void serial_hex64(u64 value) {
+    static const char digits[] = "0123456789abcdef";
+    char out[19];
+    out[0] = '0';
+    out[1] = 'x';
+    for (int i = 0; i < 16; i++)
+        out[i + 2] = digits[(value >> ((15 - i) * 4)) & 15];
+    out[18] = 0;
+    serial(out);
+}
+void kernel_exception(u64 vector, u64 error, u64 rip) {
+    char number_buf[12];
+    serial("MayOS: FATAL EXCEPTION vector=");
+    number(number_buf, (u32)vector);
+    serial(number_buf);
+    serial(" error=");
+    serial_hex64(error);
+    serial(" rip=");
+    serial_hex64(rip);
+    if (vector == 14) {
+        u64 fault_address;
+        __asm__ volatile("mov %%cr2, %0" : "=r"(fault_address));
+        serial(" cr2=");
+        serial_hex64(fault_address);
+    }
+    serial("\n");
+    for (;;)
+        __asm__ volatile("cli; hlt");
+}
 volatile u32 ticks;
 u32 memory_mb, free_pages;
 char cpu_name[64];
@@ -170,11 +201,17 @@ struct Gate {
 } __attribute__((packed));
 static struct Gate idt[256];
 extern void timer_stub(void);
+extern void (*const mayos_exception_stubs[32])(void);
 void timer_interrupt(void) {
     ticks++;
     outb(0x20, 0x20);
 }
 static void timer_init(void) {
+    for (u32 vector = 0; vector < 32; vector++) {
+        uptr handler = (uptr)mayos_exception_stubs[vector];
+        idt[vector] = (struct Gate){(u16)handler, 8, 0, 0x8e,
+            (u16)(handler >> 16), (u32)(handler >> 32), 0};
+    }
     uptr a = (uptr)timer_stub;
     idt[32] = (struct Gate){(u16)a, 8, 0, 0x8e, (u16)(a >> 16), (u32)(a >> 32), 0};
     struct {
@@ -284,6 +321,10 @@ void hardware_init(u32 magic, u32 info) {
     cpu_name[48] = 0;
     ps2_init();
     timer_init();
+#ifdef MAYOS_EXCEPTION_SELFTEST
+    serial("MayOS: intentional invalid-opcode exception self-test\n");
+    __asm__ volatile("ud2");
+#endif
     serial("MayOS: framebuffer, memory, PIT and PS/2 ready\n");
 }
 void present(u32 *p) {
