@@ -71,14 +71,46 @@ def record(args):
         vm.hold(3.0)
         actions.append("real_About_card_after_theme_change")
 
-        # General is an actual navigation hub for the legacy advanced controls.
-        vm.click(315, 276)                 # General; window expands for controls
-        vm.hold(1.0)
-        vm.click(598, 223)                 # Desktop & Pointer in General
-        vm.hold(1.4)
-        vm.click(942, 117)                 # Back to General (actual button)
-        vm.hold(.8)
+        # The General hub preserves previous controls and adds macOS-like
+        # functional panels. Real pointer input is captured in QEMU frames.
+        vm.click(315, 276)                 # About > General (compact view)
+        vm.hold(.7)
+        vm.click(598, 195)                 # General > Desktop & Pointer
+        vm.hold(.9)
+        vm.click(942, 117)                 # Back to General
+        vm.hold(.6)
         actions.append("real_General_desktop_pointer_navigation")
+
+        vm.click(600, 379)                 # General > Dock & Menu Bar
+        vm.hold(1.0)
+        vm.click(850, 238)                 # Large antialiased Dock icons
+        vm.hold(1.1)
+        vm.click(685, 322)                 # Hide running indicators
+        vm.hold(.6)
+        vm.click(691, 408)                 # Solid Dock, then restore glass
+        vm.hold(.6)
+        vm.click(555, 408)                 # Restore translucent Dock
+        vm.click(550, 490)                 # Enable app-name hover
+        vm.hold(.8)
+        vm.click(690, 576)                 # Hide top status icons
+        vm.hold(.6)
+        vm.click(550, 576)                 # Restore status icons
+        vm.click(942, 117)                 # Return to General
+        actions += ["real_dock_size", "running_app_indicators",
+                    "dock_surface_and_hover_names", "menu_bar_status_visibility"]
+
+        vm.click(600, 446)                 # General > Accessibility
+        vm.hold(.8)
+        vm.click(688, 238)                 # High contrast
+        vm.click(850, 330)                 # Large pointer
+        vm.click(550, 426)                 # Reduce Dock movement
+        vm.hold(.9)
+        vm.click(942, 117)
+        vm.click(600, 510)                 # Keyboard & Shortcuts
+        vm.hold(1.0)
+        vm.click(942, 117)
+        actions += ["real_accessibility_contrast_pointer_and_motion",
+                    "actual_keyboard_shortcuts_panel"]
 
         # Each reference sidebar label has its own meaningful page.
         for y, name in ((202, "general"),
@@ -90,7 +122,7 @@ def record(args):
             vm.click(315, y)
             vm.hold(1.0)
             actions.append("settings_" + name)
-        vm.click(195, 636)                 # About at bottom
+        vm.click(315, 569)                 # About at bottom
         vm.hold(3.0)
         vm.click(248, 132)                 # First traffic-light: close Settings
         vm.hold(2.2)
