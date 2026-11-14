@@ -39,7 +39,7 @@ def main():
         vm.click(444,716);vm.shot('about-mayos-premium-050')
         about=Image.open(BUILD/'about-mayos-premium-050.png').convert('RGB')
         assert about.getpixel((390,390))==(48,48,51),'About outline is missing'
-        assert about.getpixel((400,390))==(8,8,9),'About inner card is not near-black'
+        assert about.getpixel((400,390))==(0,0,0),'About inner card is not reference black'
         vm.click(295,236);vm.click(710,350);vm.shot('dark-settings')
         assert Image.open(BUILD/'dark-settings.png').getpixel((900,500))==(8,8,9)
         vm.click(440,330);vm.shot('light-settings')
