@@ -67,7 +67,7 @@ def record(args):
         vm.hold(1.3)
         vm.key("esc")                      # Clear search and restore all sections
         actions.append("real_light_and_dark_appearance_switch")
-        vm.click(315, 548)                 # About item on full-height sidebar
+        vm.click(315, 570)                 # About item on full-height sidebar
         vm.hold(3.0)
         actions.append("real_About_card_after_theme_change")
 
