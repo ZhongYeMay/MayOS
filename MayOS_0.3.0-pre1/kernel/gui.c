@@ -550,6 +550,7 @@ static void open_easter(void) {
 static char modal_text[64], notice[120], search[48], device[48] = "MayOS Workstation";
 static char settings_filter[42];
 static int settings_search_focused;
+static int settings_general_page = 0; /* 0 overview, 1 desktop, 2 storage, 3 credits */
 static u32 notice_until = 0, last_click_tick;
 static int last_clicked = -1;
 static int editor_file = -1, editor_changed = 0;
@@ -1202,6 +1203,19 @@ static void settings(Window *w) {
         reference_right_label(cx + cw - 23, card_top + 157, "Development Preview", ink);
         reference_text(cx + 23, card_top + 192, "Architecture", muted, 0);
         reference_right_label(cx + cw - 23, card_top + 192, "64-bit", ink);
+    } else if (settings_tab == 0 && settings_general_page == 0) {
+        reference_text(cx, cy - 12, "General", ink, 1);
+        const char *names[] = {"Desktop & Pointer", "Storage & Files", "Open Source & Credits"};
+        const char *descs[] = {"Wallpapers, cursor and desktop controls",
+                               "MayFS session, disk and sync information",
+                               "Component list and open-source licenses"};
+        for (int i = 0; i < 3; i++) {
+            int yy = cy + 80 + i * 95;
+            ui_card(cx, yy, cw, 74, 18, panel);
+            reference_text(cx + 20, yy + 9, names[i], ink, 0);
+            reference_text(cx + 20, yy + 40, descs[i], muted, 2);
+            reference_text(cx + cw - 30, yy + 19, ">", muted, 0);
+        }
     } else if (settings_tab == 1) {
         text(cx, cy, "PERSONALIZATION", accent);
         large_text(cx, cy + 26, "外观设置", ink);
@@ -1231,7 +1245,8 @@ static void settings(Window *w) {
         text(cx, cy + 474, "文本与边框对比度", ink);
         button(cx, cy + 505, 118, "标准", !high_contrast);
         button(cx + 132, cy + 505, 118, "高对比", high_contrast);
-    } else if (settings_tab == 2) {
+    } else if (settings_tab == 0 && settings_general_page == 2) {
+        button(cx + cw - 142, cy + 2, 132, "Back to General", 0);
         text(cx, cy, "STORAGE / SESSION", accent);
         large_text(cx, cy + 26, "存储空间", ink);
 #ifdef MAYOS_LINUX
@@ -1269,7 +1284,8 @@ static void settings(Window *w) {
         text(cx, cy + 377, "原型存储格式；请使用专用虚拟数据盘。", muted);
         button(cx, cy + 436, 126, "立即同步", 1);
 #endif
-    } else if (settings_tab == 3) {
+    } else if (settings_tab == 0 && settings_general_page == 3) {
+        button(cx + cw - 142, cy + 2, 132, "Back to General", 0);
         text(cx, cy, "OPEN SOURCE / CREDITS", accent);
         large_text(cx, cy + 26, "开源组件", ink);
         text(cx, cy + 77, "感谢以下项目。各组件保留各自许可证。", muted);
@@ -1287,7 +1303,8 @@ static void settings(Window *w) {
         text(cx, cy + 452, "QEMU: GPL-2.0 / OVMF: BSD-2-Clause-Patent", muted);
         text(cx, cy + 479, "完整许可与对应源码见发行包的 licenses 文档。", muted);
         text(cx, cy + 513, "MayOS Team 2023 - 2026.", ink);
-    } else {
+    } else if (settings_tab == 0 && settings_general_page == 1) {
+        button(cx + cw - 142, cy + 2, 132, "Back to General", 0);
         text(cx, cy, "DESKTOP / POINTER", accent);
         large_text(cx, cy + 26, "桌面与指针", ink);
         text(cx, cy + 77, "可随时预览；无需重新启动桌面。", muted);
@@ -1326,6 +1343,46 @@ static void settings(Window *w) {
 #else
         text(cx + 168, cy + 505, disk_ready ? "MayFS: 自动保存" : "RAM: 本次会话有效", muted);
 #endif
+    } else if (settings_tab == 2) {
+        reference_text(cx, cy - 12, "Sound", ink, 1);
+        ui_card(cx, cy + 80, cw, 235, 22, panel);
+        reference_text(cx + 22, cy + 104, "Audio output", ink, 1);
+#ifdef MAYOS_LINUX
+        reference_text(cx + 22, cy + 165, "Linux audio depends on the host backend.", muted, 2);
+        reference_text(cx + 22, cy + 206, "Volume controls are not available yet.", muted, 2);
+#else
+        reference_text(cx + 22, cy + 165, "MayKernel does not yet expose audio output.", muted, 2);
+        reference_text(cx + 22, cy + 206, "A hardware driver is still required.", muted, 2);
+#endif
+    } else if (settings_tab == 3) {
+        reference_text(cx, cy - 12, "Network", ink, 1);
+        ui_card(cx, cy + 80, cw, 235, 22, panel);
+        reference_text(cx + 22, cy + 104, "Connection status", ink, 1);
+#ifdef MAYOS_LINUX
+        char network_info[180] = {0};
+        int status = platform_network_status(network_info, sizeof(network_info));
+        reference_text(cx + 22, cy + 165,
+                       status > 0 ? "Linux network backend is available." :
+                                    "Network connection is not ready.",
+                       muted, 2);
+#else
+        reference_text(cx + 22, cy + 165, "MayKernel network stack is not ready.", muted, 2);
+#endif
+        reference_text(cx + 22, cy + 206, "No simulated Wi-Fi connection is shown.", muted, 2);
+    } else if (settings_tab == 4) {
+        reference_text(cx, cy - 12, "Privacy & Security", ink, 1);
+        ui_card(cx, cy + 80, cw, 260, 22, panel);
+        reference_text(cx + 22, cy + 108, "Experimental system", ink, 1);
+        reference_text(cx + 22, cy + 169, "Do not store important private data.", muted, 2);
+        reference_text(cx + 22, cy + 204, "MayFS is not an encrypted filesystem.", muted, 2);
+        reference_text(cx + 22, cy + 239, "Security hardening remains incomplete.", muted, 2);
+    } else {
+        reference_text(cx, cy - 12, "Updates", ink, 1);
+        ui_card(cx, cy + 80, cw, 245, 22, panel);
+        reference_text(cx + 22, cy + 105, "MayOS " MAYOS_RELEASE, ink, 1);
+        reference_text(cx + 22, cy + 166, "Release channel: development preview", muted, 2);
+        reference_text(cx + 22, cy + 203, "Automatic system updates are not ready.", muted, 2);
+        reference_text(cx + 22, cy + 240, "View official releases on GitHub.", muted, 2);
     }
 }
 static int file_list[FS_MAX], file_count;
@@ -2108,7 +2165,19 @@ static void left_click(void) {
                     }
                 }
             }
-            else if (settings_tab == 1) {
+            else if (settings_tab == 0 && settings_general_page == 0) {
+                if (rx >= 252 && rx < 795) {
+                    for (int i = 0; i < 3; i++)
+                        if (ry >= 135 + i * 95 && ry < 209 + i * 95) {
+                            settings_general_page = i + 1;
+                            return;
+                        }
+                }
+            } else if (settings_tab == 0 && settings_general_page > 0 &&
+                       inside(rx, ry, 652, 57, 132, 32)) {
+                settings_general_page = 0;
+                return;
+            } else if (settings_tab == 1) {
                 if (ry >= 220 && ry <= 382) {
                     if (rx >= 252 && rx < 468) {
                         dark = 0;
@@ -2129,7 +2198,7 @@ static void left_click(void) {
                     high_contrast = rx >= 384;
                     preferences_save();
                 }
-            } else if (settings_tab == 4) {
+            } else if (settings_tab == 0 && settings_general_page == 1) {
                 if (ry >= 206 && ry < 306 && rx >= 252 && rx < 780) {
                     int i = (rx - 252) / 176;
                     if (i < 3) { desktop_style = i; preferences_save(); }
@@ -2150,7 +2219,7 @@ static void left_click(void) {
                     preferences_reset();
                     notify("个性化设置已恢复默认");
                 }
-            } else if (settings_tab == 2 && inside(rx, ry, 252, 501, 126, 30))
+            } else if (settings_tab == 0 && settings_general_page == 2 && inside(rx, ry, 252, 501, 126, 30))
                 notify(fs_sync() ? "已同步到磁盘" : "磁盘不可写");
         } else if (id == 0) {
             if (rx < 146) {
