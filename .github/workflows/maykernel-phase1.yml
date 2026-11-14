@@ -84,6 +84,10 @@ jobs:
           PY
       - name: Reboot BIOS and UEFI three times each, verify unchanged MayFS
         run: python3 scripts/phase1_soak.py --iso build/mayos.iso --cycles 3
+      - name: Stress allocator and MayFS under real BIOS and OVMF guests
+        run: |
+          python3 scripts/phase1_memory_fs_stress.py \
+            --iso build/mayos.iso --writes 10 --mem-rounds 3 --idle-seconds 15
       - name: Archive phase 1 evidence (also on failure)
         if: always()
         uses: actions/upload-artifact@v4
@@ -99,6 +103,7 @@ jobs:
             MayOS_0.3.0-pre1/build/*.iso.boot.json
             MayOS_0.3.0-pre1/build/test-uefi-*.png
             MayOS_0.3.0-pre1/build/phase1-*.png
+            MayOS_0.3.0-pre1/build/phase1-memory-filesystem-results.json
             MayOS_0.3.0-pre1/build/desktop.png
             MayOS_0.3.0-pre1/build/mayos.iso
       - name: Build and boot isolated exception-diagnostic ISO (NOT for release)
