@@ -58,6 +58,12 @@ assert {"index.html", "demos.html", "download.html"} <= set(docs)
 for name in ("index.html", "download.html"):
     assert CURRENT in docs[name][1], (name, "stale release")
     assert "0.3.0-pre2" not in docs[name][1], name
+assert "0.5.0-pre1-dev" in docs["index.html"][1], "development UI preview missing"
+assert "0.5.0-pre1-dev" in docs["download.html"][1], "download disclaimer missing"
+assert 'id="design-preview"' in docs["index.html"][1], "preview anchor missing"
+assert "不是 QEMU 实测画面" in docs["index.html"][1], "design preview must not be passed off as QEMU"
+assert "0.4.1-pre2" in docs["download.html"][1], "historic release download not retained"
+assert "v0.4.1-pre2" in docs["index.html"][1], "historic release link lost"
 assert CURRENT in docs["demos.html"][1], "latest real-QEMU demo missing"
 
 pending = []
