@@ -51,7 +51,8 @@ static void run(u32 width, u32 height, u32 bpp, int bgr) {
 int main(void) {
     for (int bpp = 16; bpp <= 32; bpp += 8) {
         run(640, 480, bpp, 0); run(800, 600, bpp, 0);
-        run(1024, 768, bpp, 0); run(1920, 1080, bpp, 1);
+        run(1024, 768, bpp, 0); run(1280, 720, bpp, 0);
+        run(1920, 1080, bpp, 1);
     }
     puts("PASS: both kernels' framebuffer adapter, resolutions, RGB565/24/32/BGR, pitch, offsets and bounds");
 }

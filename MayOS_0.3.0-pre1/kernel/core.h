@@ -7,8 +7,8 @@ typedef signed int i32;
 typedef unsigned long long u64;
 /* Host-size unsigned pointer type, including the freestanding x86_64 ABI. */
 typedef unsigned long uptr;
-#define W 1024
-#define H 768
+#define W 1280
+#define H 720
 #define FS_MAX 48
 #define FILE_CAP 4096
 #ifdef MAYOS_LINUX

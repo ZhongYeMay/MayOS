@@ -78,7 +78,7 @@ def main():
     vm=VM(disk,'test-first')
     try:
         vm.shot('desktop')
-        vm.key('f1');vm.cmd('neofetch');vm.wait('OS: MayOS 0.5.0-pre1');vm.wait('Kernel: MayKernel x86_64 (custom)');vm.shot('terminal')
+        vm.key('f1');vm.cmd('neofetch');vm.wait('OS: MayOS 0.5.0-pre2-dev');vm.wait('Kernel: MayKernel x86_64 (custom)');vm.shot('terminal')
         vm.cmd('memtest');vm.wait('memtest: PASS')
         vm.cmd('mkdir Projects');vm.cmd('write Projects/persist.txt reboot-survives')
         vm.cmd('cat Projects/persist.txt');vm.wait('\nreboot-survives\n')
@@ -86,7 +86,7 @@ def main():
         vm.cmd('mv persist.txt saved.txt');vm.wait('Renamed')
         vm.cmd('touch delete.txt');vm.cmd('rm delete.txt');vm.wait('Moved to Trash')
         # Use the actual emulated mouse, GUI modal, editor and Ctrl-S.
-        vm.click(403,710);vm.shot('files')
+        vm.click(539,664);vm.shot('files')
         vm.click(370,212);vm.type('gui.txt\n');time.sleep(.3);vm.key('ret');time.sleep(.2)
         vm.type('GUI-PERSIST');vm.key('ctrl-s');time.sleep(.4);vm.shot('editor')
         data=entries(disk)

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Record a truthful, unedited QEMU feature walkthrough after every GUI update.
+"""Record a truthful QEMU walkthrough of the *current* MayOS desktop UI.
 
-Includes both new settings and actual system functions. Frames are sampled from
-the running guest by QMP and encoded with FFmpeg. No screenshot reconstruction.
+Every scripted click targets current native input coordinates. Capture uses
+real QMP frames, never screenshot reconstruction or static concept artwork.
 """
 from __future__ import annotations
 import argparse
@@ -49,53 +49,110 @@ def record(args):
             vm.wait("MayOS: CPU long mode active (64-bit)")
         actions.append("native_x86_64_kernel" if args.kernel == "custom" else "real_Linux_userspace")
 
-        # Exact approved monochrome Settings reference: open the top-left
-        # MayOS menu, then dwell on About and the visible navigation items.
-        vm.click(50, 16)
-        vm.hold(2.2)
-        vm.click(270, 301)                 # Display
-        vm.hold(1.2)
-        vm.click(270, 481)                 # About MayOS
-        vm.hold(2.2)
-        actions += ["Settings_reference", "Settings_navigation", "About_MayOS"]
-        # In the exact screenshot's top bar, every icon has a real native panel.
-        for x, label in ((777, "network_status_panel"),
-                         (816, "notifications_panel"),
-                         (855, "power_menu")):
-            vm.click(x, 21)
-            vm.hold(.85)
-            vm.key("esc")
-            vm.hold(.2)
-            actions.append(label)
+        # Actual screenshot-matched four-icon Dock (Files/Settings/Terminal/Trash).
+        # Every mouse coordinate corresponds to kernel/gui.c input hitboxes.
+        vm.click(596, 662)                 # Settings Dock icon
+        vm.hold(4.0)                       # Show screenshot-accurate About card
+        actions.append("reference_About_MayOS_proportional_font")
 
-        vm.click(403, 710)                 # Files from the four-icon Dock
+        # Search field is genuinely interactive. Enter selects the first match;
+        # Escape clears the filter so the sidebar is reachable again.
+        vm.click(310, 230)
+        vm.command("Display")
+        vm.hold(2.0)
+        actions.append("real_settings_search_and_display_navigation")
+        vm.click(552, 330)                 # Light appearance tile
         vm.hold(1.3)
-        vm.click(490, 212)                 # new folder modal
-        vm.command("RecordedTour")
-        vm.hold(1.1)
-        actions.append("file_manager_create_folder")
-        vm.click(370, 212)                 # new text file / editor
-        vm.command("recorded.txt")
-        vm.hold(1)
-        actions.append("new_text_file_dialog")
+        vm.click(794, 330)                 # Dark appearance tile
+        vm.hold(1.3)
+        vm.key("esc")                      # Clear search and restore all sections
+        actions.append("real_light_and_dark_appearance_switch")
+        vm.click(315, 570)                 # About item on full-height sidebar
+        vm.hold(3.0)
+        actions.append("real_About_card_after_theme_change")
 
-        vm.key("f1")                       # real MayShell
+        # The General hub preserves previous controls and adds macOS-like
+        # functional panels. Real pointer input is captured in QEMU frames.
+        vm.click(315, 276)                 # About > General (compact view)
+        vm.hold(.7)
+        vm.click(598, 195)                 # General > Desktop & Pointer
+        vm.hold(.9)
+        vm.click(942, 117)                 # Back to General
+        vm.hold(.6)
+        actions.append("real_General_desktop_pointer_navigation")
+
+        vm.click(600, 379)                 # General > Dock & Menu Bar
+        vm.hold(1.0)
+        vm.click(850, 238)                 # Large antialiased Dock icons
+        vm.hold(1.1)
+        vm.click(685, 322)                 # Hide running indicators
+        vm.hold(.6)
+        vm.click(691, 408)                 # Solid Dock, then restore glass
+        vm.hold(.6)
+        vm.click(555, 408)                 # Restore translucent Dock
+        vm.click(550, 490)                 # Enable app-name hover
         vm.hold(.8)
+        vm.click(690, 576)                 # Hide top status icons
+        vm.hold(.6)
+        vm.click(550, 576)                 # Restore status icons
+        vm.click(942, 117)                 # Return to General
+        actions += ["real_dock_size", "running_app_indicators",
+                    "dock_surface_and_hover_names", "menu_bar_status_visibility"]
+
+        vm.click(600, 446)                 # General > Accessibility
+        vm.hold(.8)
+        vm.click(688, 238)                 # High contrast
+        vm.click(850, 330)                 # Large pointer
+        vm.click(550, 426)                 # Reduce Dock movement
+        vm.hold(.9)
+        vm.click(942, 117)
+        vm.click(600, 510)                 # Keyboard & Shortcuts
+        vm.hold(1.0)
+        vm.click(942, 117)
+        actions += ["real_accessibility_contrast_pointer_and_motion",
+                    "actual_keyboard_shortcuts_panel"]
+
+        # Each reference sidebar label has its own meaningful page.
+        for y, name in ((202, "general"),
+                        (242, "display"),
+                        (282, "sound"),
+                        (322, "network"),
+                        (362, "privacy_security"),
+                        (402, "updates")):
+            vm.click(315, y)
+            vm.hold(1.0)
+            actions.append("settings_" + name)
+        vm.click(315, 569)                 # About at bottom
+        vm.hold(3.0)
+        vm.click(248, 132)                 # First traffic-light: close Settings
+        vm.hold(2.2)
+        actions.append("functional_settings_traffic_light_close")
+
+        vm.click(539, 664)                 # Files from the redesigned Dock
+        vm.hold(2.2)
+        actions.append("real_file_manager")
+        vm.click(370, 212)                 # New file dialogue
+        vm.command("recorded.txt")
+        vm.hold(1.0)
+        actions.append("new_file_dialog")
+
+        vm.key("f1")                       # Actual MayShell (not HTML terminal)
+        vm.hold(.9)
         offset = len(vm.text())
         vm.command("neofetch")
         vm.wait("Kernel:", offset=offset, timeout=25)
-        vm.hold(1.5)
+        vm.hold(2.5)
         vm.command("help")
-        vm.hold(1.4)
+        vm.hold(2.0)
         vm.command("ls")
-        vm.hold(1.3)
-        actions += ["MayShell", "kernel_info", "help_commands", "list_files"]
-        vm.command("meow")
         vm.hold(1.7)
-        vm.key("esc")
-        actions.append("cat_easter_egg")
-
-        vm.hold(1.5)
+        actions += ["real_MayShell", "kernel_version", "help_commands", "file_listing"]
+        if args.kernel == "custom":
+            vm.command("meow")
+            vm.hold(2.0)
+            vm.key("esc")
+            actions.append("native_cat_easter_egg")
+        vm.hold(5.0)                       # Reliable >=35s reviewed video evidence
         vm.finish_recording()
     finally:
         vm.close()
@@ -109,7 +166,7 @@ def record(args):
          "-show_entries", "stream=codec_name,width,height,nb_frames",
          "-of", "json", str(args.output)], text=True)
     stream = json.loads(video_info)["streams"][0]
-    if stream.get("codec_name") != "h264" or stream.get("width") != 1024 or stream.get("height") != 768:
+    if stream.get("codec_name") != "h264" or stream.get("width") != 1280 or stream.get("height") != 720:
         raise AssertionError(f"invalid video stream: {stream}")
     result = {
         "release_source_version": args.release,

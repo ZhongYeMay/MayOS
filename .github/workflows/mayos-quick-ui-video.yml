@@ -1,0 +1,83 @@
+name: MayOS quick real QEMU Dock and Settings video
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mayos-quick-ui-video.yml'
+      - 'MayOS_0.3.0-pre1/kernel/gui.c'
+      - 'MayOS_0.3.0-pre1/scripts/dock_icons.py'
+      - 'MayOS_0.3.0-pre1/scripts/record_feature_tour.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mayos-quick-ui-video.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mayos-quick-ui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-qemu-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Use signed Ubuntu package mirror
+        run: bash scripts/configure-ci-apt-mirror.sh
+      - name: Install native build and QEMU recording dependencies
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Acquire::Retries=3 \
+            build-essential grub-common grub-pc-bin grub-efi-amd64-bin \
+            xorriso mtools qemu-system-x86 ovmf ffmpeg python3-pil \
+            fonts-noto-cjk fonts-dejavu-core
+      - name: Build and verify genuine 1280x720 MayKernel64 ISO
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          python3 scripts/test_ui_style_contract.py
+          make all
+          python3 scripts/ui_smoke.py
+          python3 scripts/settings_smoke.py
+          readelf -h build/mayos.elf | grep -q 'ELF64'
+      - name: Record real QEMU Dock and macOS-style Settings interactions
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          mkdir -p build/recordings
+          python3 scripts/record_feature_tour.py --kernel custom \
+            --iso build/mayos.iso --source-commit "$GITHUB_SHA" \
+            --output build/recordings/MayKernel64-Dock-and-Settings.mp4
+      - name: Verify iOS-compatible H.264 1280x720 MP4
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          movie=build/recordings/MayKernel64-Dock-and-Settings.mp4
+          test -s "$movie"
+          ffprobe -v error -select_streams v:0 \
+            -show_entries stream=codec_name,profile,width,height,pix_fmt \
+            -of default=noprint_wrappers=1 "$movie" > build/recordings/video-spec.txt
+          grep -Fqx 'codec_name=h264' build/recordings/video-spec.txt
+          grep -Fqx 'width=1280' build/recordings/video-spec.txt
+          grep -Fqx 'height=720' build/recordings/video-spec.txt
+          grep -Fqx 'pix_fmt=yuv420p' build/recordings/video-spec.txt
+          ffmpeg -hide_banner -loglevel error -i "$movie" -f null -
+          sha256sum "$movie" build/mayos.iso > build/recordings/sha256sums.txt
+      - name: Upload actual QEMU evidence even on later failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-1280x720-Dock-Settings-video-${{ github.sha }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            MayOS_0.3.0-pre1/build/recordings/*.mp4
+            MayOS_0.3.0-pre1/build/recordings/*.json
+            MayOS_0.3.0-pre1/build/recordings/*.txt
+            MayOS_0.3.0-pre1/build/about-mayos-reference-050.png
+            MayOS_0.3.0-pre1/build/desktop-reference-050.png
+            MayOS_0.3.0-pre1/build/settings-reference-first-boot.png

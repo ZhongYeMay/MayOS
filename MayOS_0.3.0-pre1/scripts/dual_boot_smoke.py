@@ -352,7 +352,7 @@ def main():
         # The RAM-only filesystem is verified by the Linux shell checks above
         # and the GUI write/read round-trip. Do not require an optional status
         # line that some GUI builds omit from their serial transcript.
-        vm.click(346, 716)  # Files in restored bottom macOS-style dock
+        vm.click(539, 664)  # True 1280x720 centered Files Dock target
         vm.click(370, 212)
         vm.keyboard_command('linux-editor.txt')
         time.sleep(.2)

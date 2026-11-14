@@ -12,7 +12,8 @@ from dual_boot_smoke import BootVM, BUILD
 ROOT = Path(__file__).resolve().parents[1]
 config = ROOT / "boot/grub/grub.cfg"
 original = config.read_text()
-cases = [("bios64", "max", "1024x768x32", 1024, 768, 32),
+cases = [("bios64-wide", "max", "1280x720x32", 1280, 720, 32),
+         ("bios64", "max", "1024x768x32", 1024, 768, 32),
          ("bios64-small", "max", "800x600x16", 800, 600, 16),
          ("uefi64-wide", "max", "1920x1080x32", 1920, 1080, 32)]
 records = []

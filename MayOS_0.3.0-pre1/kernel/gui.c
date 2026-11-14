@@ -2,6 +2,7 @@
 #include "core.h"
 #include "font.h"
 #include "material_icons.h"
+#include "dock_icons.h"
 #ifndef MAYOS_LINUX
 #include "galgame.h"
 #endif
@@ -25,6 +26,8 @@ static u32 bg = 0x050506, panel = 0x080809, ink = 0xf5f5f6, muted = 0xa1a1a5, li
            accent = 0xececef, surface_high = 0x18181b, on_accent = 0x111113, selected_fill = 0x29292d;
 static int dark = 1, accent_choice = 0;
 static int desktop_style = 0, pointer_size = 0, show_brand = 1, high_contrast = 0;
+static int dock_size = 1, dock_indicators = 1, dock_glass = 1;
+static int dock_hover_labels = 0, reduce_motion = 0, menu_status_icons = 1;
 /* 0 = black square, 1 = white square, 2 = custom Documents/Cursor.ppm. */
 static int cursor_style = 0;
 static int custom_cursor_width = 0, custom_cursor_height = 0;
@@ -100,7 +103,10 @@ static int cursor_image_load(int create_sample) {
 static void preferences_save(void) {
     u32 raw[8] = {MAYOS_PREFS_MAGIC, (u32)dark, (u32)accent_choice,
                   (u32)desktop_style, (u32)pointer_size, (u32)show_brand,
-                  (u32)high_contrast | ((u32)cursor_style << 8), 1};
+                  (u32)high_contrast | ((u32)cursor_style << 8) |
+                  ((u32)dock_size << 12) | ((u32)!dock_indicators << 14) |
+                  ((u32)!dock_glass << 15) | ((u32)dock_hover_labels << 16) |
+                  ((u32)reduce_motion << 17) | ((u32)!menu_status_icons << 18), 1};
     /* Linux and diskless MayKernel keep the new values for this session. */
     fs_prefs_write((const u8 *)raw, sizeof(raw));
 }
@@ -108,8 +114,8 @@ static void preferences_load(void) {
     u32 raw[8];
     if (!fs_prefs_read((u8 *)raw, sizeof(raw)) || raw[0] != MAYOS_PREFS_MAGIC ||
         raw[7] != 1 || raw[1] > 1 || raw[2] >= 6 || raw[3] >= 3 ||
-        raw[4] >= 3 || raw[5] > 1 || (raw[6] & ~0x301u) != 0 ||
-        ((raw[6] >> 8) & 3u) >= 3)
+        raw[4] >= 3 || raw[5] > 1 || (raw[6] & ~0x7f301u) != 0 ||
+        ((raw[6] >> 8) & 3u) >= 3 || ((raw[6] >> 12) & 3u) >= 3)
         return;
     dark = (int)raw[1];
     accent_choice = (int)raw[2];
@@ -118,6 +124,12 @@ static void preferences_load(void) {
     show_brand = (int)raw[5];
     high_contrast = (int)(raw[6] & 1u);
     cursor_style = (int)((raw[6] >> 8) & 3u);
+    dock_size = (int)((raw[6] >> 12) & 3u);
+    dock_indicators = !(raw[6] & (1u << 14));
+    dock_glass = !(raw[6] & (1u << 15));
+    dock_hover_labels = !!(raw[6] & (1u << 16));
+    reduce_motion = !!(raw[6] & (1u << 17));
+    menu_status_icons = !(raw[6] & (1u << 18));
     if (cursor_style == 2 && !cursor_image_load(0)) {
         cursor_style = 0;
         serial("MayOS: invalid custom pointer; using black square\n");
@@ -132,6 +144,12 @@ static void preferences_reset(void) {
     cursor_style = 0;
     show_brand = 1;
     high_contrast = 0;
+    dock_size = 1;
+    dock_indicators = 1;
+    dock_glass = 1;
+    dock_hover_labels = 0;
+    reduce_motion = 0;
+    menu_status_icons = 1;
     preferences_save();
 }
 static void rect(int x, int y, int w, int h, u32 c) {
@@ -318,36 +336,6 @@ static int large_text(int x, int y, const char *s, u32 color) {
     }
     return x;
 }
-/* Smooth 3:2 text scaling for the monochrome UI's primary headings.
- * Bilinear alpha interpolation, drawn into the native framebuffer. */
-static int heading_text(int x, int y, const char *s, u32 color) {
-    while (*s) {
-        int cp = utf(&s), g = glyph(cp);
-        int src_width = cp < 128 ? 8 : 16;
-        int out_width = src_width * 3 / 2;
-        for (int py = 0; py < 30; py++) {
-            int sy = py * 2 / 3, fy = (py * 2) % 3;
-            int sy1 = sy + 1 < 20 ? sy + 1 : sy;
-            for (int px = 0; px < out_width; px++) {
-                int sx = px * 2 / 3, fx = (px * 2) % 3;
-                int sx1 = sx + 1 < src_width ? sx + 1 : sx;
-                int a00 = font_bits[g][sy * 16 + sx];
-                int a10 = font_bits[g][sy * 16 + sx1];
-                int a01 = font_bits[g][sy1 * 16 + sx];
-                int a11 = font_bits[g][sy1 * 16 + sx1];
-                u32 a = (u32)(a00 * (3 - fx) * (3 - fy) +
-                              a10 * fx * (3 - fy) +
-                              a01 * (3 - fx) * fy +
-                              a11 * fx * fy) / 9;
-                int dx = x + px, dy = y + py;
-                if (a && dx >= 0 && dy >= 0 && dx < W && dy < H)
-                    pixels[dy * W + dx] = blend(pixels[dy * W + dx], color, a);
-            }
-        }
-        x += out_width;
-    }
-    return x;
-}
 /* Separate proportional Sans alpha atlas; generated from installed
  * DejaVu Sans at BUILD TIME. No font engine or browser in MayKernel runtime.
  * One fixed baseline for every glyph avoids uneven letter heights. */
@@ -361,22 +349,30 @@ static int reference_font_glyph(int codepoint) {
     }
     return -1;
 }
-static int reference_font_width(const char *s, int title) {
+/* Reference typography: 26px titles, 19px body, 15px menu/sidebars.
+ * Glyphs are rasterized by scripts/font.py at build time. */
+static int reference_font_width(const char *s, int style) {
     int total = 0;
     while (*s) {
         int codepoint = utf(&s), g = reference_font_glyph(codepoint);
-        total += g >= 0 ? (title ? premium_title_advance[g] :
-                                     premium_body_advance[g]) : 12;
+        total += g >= 0 ? (style == 1 ? premium_title_advance[g] :
+                           style == 2 ? premium_menu_advance[g] :
+                                        premium_body_advance[g]) : 12;
     }
     return total;
 }
-static void reference_text(int x, int y, const char *s, u32 color, int title) {
-    int stride = title ? 36 : 28, height = title ? 40 : 30;
+static void reference_text(int x, int y, const char *s, u32 color, int style) {
+    int stride = style == 1 ? 36 : style == 2 ? 24 : 28;
+    int height = style == 1 ? 40 : style == 2 ? 26 : 30;
     while (*s) {
         int codepoint = utf(&s), g = reference_font_glyph(codepoint);
         if (g < 0) { x += 12; continue; }
-        const u8 *bitmap = title ? premium_title_bitmap[g] : premium_body_bitmap[g];
-        int advance = title ? premium_title_advance[g] : premium_body_advance[g];
+        const u8 *bitmap = style == 1 ? premium_title_bitmap[g] :
+                            style == 2 ? premium_menu_bitmap[g] :
+                                         premium_body_bitmap[g];
+        int advance = style == 1 ? premium_title_advance[g] :
+                      style == 2 ? premium_menu_advance[g] :
+                                   premium_body_advance[g];
         for (int yy = 0; yy < height; yy++) {
             int py = y + yy;
             if (py < 0 || py >= H) continue;
@@ -547,7 +543,7 @@ typedef struct {
 } Window;
 #define WINDOW_COUNT 5
 static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "Files"},
-                            {177, 133, 640, 450, 0, 0, 0, 0, 0, 0, 0, "Settings"},
+                            {(W - 824) / 2, 110, 824, 480, 0, 0, 0, 0, 0, 0, 0, "Settings"},
                             {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
                             {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
                             {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
@@ -570,6 +566,9 @@ static void open_easter(void) {
     serial("MayOS: meow easter egg opened\n");
 }
 static char modal_text[64], notice[120], search[48], device[48] = "MayOS Workstation";
+static char settings_filter[42];
+static int settings_search_focused;
+static int settings_general_page = 0; /* 0 overview, 1 desktop, 2 storage, 3 credits */
 static u32 notice_until = 0, last_click_tick;
 static int last_clicked = -1;
 static int editor_file = -1, editor_changed = 0;
@@ -1010,57 +1009,115 @@ static void document_symbol(int x, int y, int size, u32 color) {
     stroke(x0 + 6, y0 + size / 2, x1 - 5, y0 + size / 2, 2, color);
     stroke(x0 + 6, y0 + size / 2 + 7, x1 - 5, y0 + size / 2 + 7, 2, color);
 }
+/* Lightweight vector status glyphs, no raster asset or embedded screenshot. */
+static void reference_search_icon(int x, int y, u32 color) {
+    ring(x + 8, y + 8, 6, 2, color);
+    stroke(x + 13, y + 13, x + 19, y + 19, 2, color);
+}
+static void reference_speaker_icon(int x, int y, u32 color) {
+    rect(x + 1, y + 7, 5, 7, color);
+    stroke(x + 6, y + 7, x + 12, y + 2, 2, color);
+    stroke(x + 12, y + 2, x + 12, y + 19, 2, color);
+    stroke(x + 12, y + 19, x + 6, y + 14, 2, color);
+    stroke(x + 16, y + 5, x + 19, y + 11, 1, color);
+    stroke(x + 19, y + 11, x + 16, y + 17, 1, color);
+}
+static void reference_battery_icon(int x, int y, u32 color) {
+    border(x + 1, y + 5, 22, 12, color);
+    rect(x + 23, y + 9, 3, 4, color);
+    rect(x + 4, y + 8, 16, 6, color);
+}
+static void reference_nav_icon(int x, int y, int tab, u32 color) {
+    if (tab == 0) {
+        symbol(x, y, 1, 22, color);
+    } else if (tab == 1) {
+        reference_monitor_icon(x, y + 1, color, panel);
+    } else if (tab == 2) {
+        reference_speaker_icon(x, y, color);
+    } else if (tab == 3) {
+        symbol(x, y, 8, 22, color);
+    } else if (tab == 4) {
+        ring(x + 12, y + 8, 6, 2, color);
+        ui_card(x + 5, y + 10, 15, 12, 3, color);
+        rect(x + 7, y + 12, 11, 8, panel);
+    } else if (tab == 5) {
+        ring(x + 12, y + 11, 9, 2, color);
+        stroke(x + 19, y + 3, x + 22, y + 9, 2, color);
+        stroke(x + 22, y + 9, x + 15, y + 9, 2, color);
+    } else {
+        ring(x + 12, y + 12, 10, 2, color);
+        circle(x + 12, y + 7, 2, color);
+        rect(x + 11, y + 11, 3, 9, color);
+    }
+}
+static int settings_nav_y(const Window *w, int tab) {
+    return tab == 6 ? w->h - 70 : 154 + tab * 40;
+}
 static void desktop(void) {
-    /* Pure-black monochrome with two thin silver arcs; native framebuffer only. */
+    /* Screenshot-independent, procedurally rendered silver-wave wallpaper.
+       Two broad anti-aliased charcoal curves replace the old 1px arcs. */
     if (desktop_style == 0) {
         for (int y = 0; y < H; y++)
-            rect(0, y, W, 1, blend(dark ? 0x030304 : 0xf9f9fb,
-                                   dark ? 0x151518 : 0xe7e7eb, (u32)y * 120 / H));
+            rect(0, y, W, 1, blend(dark ? 0x020203 : 0xfbfbfc,
+                                   dark ? 0x111113 : 0xececef, (u32)y * 105 / H));
         for (int x = 0; x < W; x++) {
-            /* Two broad, softly shaded waves matching the reference wallpaper. */
-            int upper = 128 - x / 3 + (x * x) / 4200;
-            int lower = 692 - x / 4 - ((W - x) * (W - x)) / 5000;
-            for (int d = -8; d <= 8; d++) {
-                u32 a = (u32)(8 - (d < 0 ? -d : d)) * 17;
-                if (upper + d > 31 && upper + d < H)
-                    rect(x, upper + d, 1, 1, blend(0x050506, 0x56565a, a));
-                if (lower + d > 31 && lower + d < H)
-                    rect(x, lower + d, 1, 1, blend(0x050506, 0x414145, a));
+            int upper = 330 - x * 2 / 3 + x * x / 4500;
+            int lower = 820 - (x - 450) * (x - 450) / 1150;
+            for (int dy = -43; dy <= 43; dy++) {
+                int d = dy < 0 ? -dy : dy;
+                u32 strength = (u32)(43 - d) * 3;
+                int uy = upper + dy;
+                if (uy > 32 && uy < H) {
+                    u32 color = dark ? (dy > 0 ? 0x636367 : 0x39393d) : 0xb5b5bc;
+                    pixels[uy * W + x] = blend(pixels[uy * W + x], color, strength);
+                }
+                int ly = lower + dy;
+                if (x > 275 && ly > 32 && ly < H) {
+                    u32 color = dark ? (dy > 0 ? 0x28282d : 0x737378) : 0xaaaab2;
+                    pixels[ly * W + x] = blend(pixels[ly * W + x], color,
+                                               strength * 3 / 4);
+                }
             }
         }
     } else if (desktop_style == 1) {
         rect(0, 0, W, H, bg);
     } else {
         rect(0, 0, W, H, bg);
-        for (int x = 0; x < W; x += 64) rect(x, 42, 1, H - 42, line);
-        for (int y = 42; y < H; y += 64) rect(0, y, W, 1, line);
+        for (int x = 0; x < W; x += 64) rect(x, 33, 1, H - 33, line);
+        for (int y = 33; y < H; y += 64) rect(0, y, W, 1, line);
     }
-    rect(0, 0, W, 32, dark ? 0x050506 : 0xf9f9fb);
-    rect(0, 31, W, 1, dark ? 0x171719 : line);
-    symbol(17, 7, 11, 17, ink);
-    heading_text(42, 4, "MayOS", ink);
-    text(101, 8, "Settings", muted);
-    text(164, 8, "File", muted);
-    text(205, 8, "Edit", muted);
-    text(244, 8, "View", muted);
-    text(286, 8, "Window", muted);
-    text(348, 8, "Help", muted);
-    int count = 0;
-    for (int i = 4; i < FS_MAX && count < 15; i++) {
-        if (!files[i].used || files[i].parent != 2) continue;
-        int x = 125 + (count % 5) * 124, y = 96 + (count / 5) * 100;
-        int hover = inside(mx, my, x, y, 104, 90);
-        if (selected == i || hover ||
-            (desktop_note_selected && !strcmp(files[i].name, "Notes.txt")))
-            ui_card(x + 12, y - 3, 68, 79, 17, selected_fill);
-        icon(x + 21, y, files[i].dir ? 0 : 5, 50);
-        text(x, y + 58, files[i].name, ink);
-        count++;
+    /* Top bar matches the reference's English menu order and icon density. */
+    rect(0, 0, W, 33, dark ? 0x030304 : 0xf9f9fb);
+    rect(0, 32, W, 1, dark ? 0x17171a : line);
+    reference_monitor_icon(17, 4, ink, dark ? 0x030304 : 0xf9f9fb);
+    reference_text(52, 2, "MayOS", ink, 0);
+    const char *menus[] = {"Settings", "File", "Edit", "View", "Window", "Help"};
+    const int locations[] = {132, 214, 261, 306, 354, 429};
+    for (int i = 0; i < 6; i++)
+        reference_text(locations[i], 5, menus[i], muted, 2);
+    if(menu_status_icons) {
+        reference_search_icon(W - 320, 6, ink);
+        symbol(W - 278, 7, 8, 20, ink);
+        reference_speaker_icon(W - 236, 5, ink);
+        reference_battery_icon(W - 204, 5, ink);
     }
-    const int status_icons[] = {4, 8, 7, 12};
-    for (int i = 0; i < 4; i++)
-        symbol(777 + i * 39, 7, status_icons[i], 18, muted);
-    text(907, 8, "Tue Jan 28  10:24", muted);
+    text(W - 161, 7, "Tue Jan 28 10:24", muted);
+    /* The reference has a clean workspace when its Settings window is open.
+       Desktop files remain accessible when Settings is closed. */
+    if (!windows[1].open || windows[1].min) {
+        int count = 0;
+        for (int i = 4; i < FS_MAX && count < 15; i++) {
+            if (!files[i].used || files[i].parent != 2) continue;
+            int x = 125 + (count % 5) * 124, y = 96 + (count / 5) * 100;
+            int hover = inside(mx, my, x, y, 104, 90);
+            if (selected == i || hover ||
+                (desktop_note_selected && !strcmp(files[i].name, "Notes.txt")))
+                ui_card(x + 12, y - 3, 68, 79, 17, selected_fill);
+            icon(x + 21, y, files[i].dir ? 0 : 5, 50);
+            text(x, y + 58, files[i].name, ink);
+            count++;
+        }
+    }
 }
 static void frame(int id) {
     Window *w = &windows[id];
@@ -1092,56 +1149,98 @@ static void frame(int id) {
     if (high_contrast)
         border(w->x + 2, w->y + 2, w->w - 4, w->h - 4, line);
 }
+static int settings_filter_match(const char *label) {
+    if (!settings_filter[0]) return 1;
+    for (; *label; label++) {
+        int i = 0;
+        while (settings_filter[i] && label[i]) {
+            char a = label[i], b = settings_filter[i];
+            if (a >= 'A' && a <= 'Z') a += 32;
+            if (b >= 'A' && b <= 'Z') b += 32;
+            if (a != b) break;
+            i++;
+        }
+        if (!settings_filter[i]) return 1;
+    }
+    return 0;
+}
+static void settings_fit_window(Window *w) {
+    /* Compact, screenshot-matched About; full-height advanced settings.
+       Both use identical mouse offsets derived from the same window rect. */
+    w->max = 0;
+    if (settings_tab == 6) {
+        w->x = (W - 824) / 2; w->y = 110; w->w = 824; w->h = 480;
+    } else {
+        w->x = (W - 824) / 2; w->y = 48; w->w = 824; w->h = H - 145;
+    }
+}
 static void settings(Window *w) {
-    int x = w->x, y = w->y, cx = x + 205, cy = y + 53, cw = w->w - 238;
-    rect(x + 1, y + 36, 187, w->h - 38, dark ? 0x080809 : 0xf7f7f9);
-    rect(x + 187, y + 36, 1, w->h - 38, line);
-    heading_text(x + 20, y + 49, "Settings", ink);
-    ui_card(x + 18, y + 82, 158, 34, 17, dark ? 0x111113 : surface_high);
-    symbol(x + 28, y + 90, 4, 15, muted);
-    text(x + 51, y + 91, "Search Settings", muted);
+    int x = w->x, y = w->y, cx = x + 252, cy = y + 55, cw = w->w - 282;
+    u32 search_bg = dark ? 0x0c0c0e : 0xf3f3f5;
+    /* Native sidebar, divider and search input match the screenshot
+       proportions rather than reusing generic 0.4.x settings chrome. */
+    rect(x + 226, y + 41, 1, w->h - 62, line);
+    reference_text(x + 24, y + 49, "Settings", ink, 1);
+    ui_card(x + 22, y + 95, 202, 38, 19, search_bg);
+    reference_search_icon(x + 32, y + 103, muted);
+    reference_text(x + 60, y + 100,
+                   settings_filter[0] ? settings_filter : "Search Settings",
+                   settings_filter[0] ? ink : muted, 2);
+    if (settings_search_focused) {
+        int width = reference_font_width(settings_filter[0] ?
+                                         settings_filter : "Search Settings", 2);
+        if (settings_filter[0] && width < 159)
+            rect(x + 62 + width, y + 105, 1, 17, ink);
+    }
     const char *tabs[] = {"General", "Display", "Sound", "Network",
                           "Privacy & Security", "Updates", "About MayOS"};
-    const int tab_icons[] = {1, 11, 7, 8, 12, 10, 10};
     for (int i = 0; i < 7; i++) {
-        int yy = y + 132 + i * 36;
+        if (!settings_filter_match(tabs[i])) continue;
+        int yy = y + settings_nav_y(w, i);
         if (settings_tab == i)
-            soft_roundrect(x + 18, yy, 158, 34, 10, selected_fill);
-        symbol(x + 29, yy + 8, tab_icons[i], 18,
-               settings_tab == i ? ink : muted);
-        text(x + 61, yy + 7, tabs[i], settings_tab == i ? ink : muted);
+            soft_roundrect(x + 18, yy, 205, 38, 12, selected_fill);
+        reference_nav_icon(x + 30, yy + 9, i, settings_tab == i ? ink : muted);
+        reference_text(x + 67, yy + 7, tabs[i],
+                       settings_tab == i ? ink : muted, 2);
     }
+    rect(x + 22, y + w->h - 86, 202, 1, line);
     if (settings_tab == 6) {
-        heading_text(cx, cy - 8, "About MayOS", ink);
-        /*
-         * Supplied reference: 1320x580 card with black #000 interior,
-         * #292929 rounded outline, white monitor+name and muted gray version.
-         * Native 1024x768 settings area fits a 566x289 rendition, preserving
-         * the original side navigation and all input hotspot coordinates.
-         */
-        const int card_top = cy + 48, card_height = 230;
+        reference_text(cx, cy - 12, "About MayOS", ink, 1);
+        const int card_top = cy + 76, card_height = 248;
         u32 card_bg = dark ? 0x000000 : 0xffffff;
-        ui_card(cx, card_top, cw, card_height, 24, card_bg);
-        /* Draw the monitor directly (no generic gear tile).
-         * Original Easter-egg click region at (220,190) is unchanged. */
-        reference_monitor_icon(cx + 18, card_top + 31, ink, card_bg);
-        reference_text(cx + 57, card_top + 18, "MayOS", ink, 1);
-        reference_text(cx + 57, card_top + 48, "Version " MAYOS_RELEASE, muted, 0);
-        rect(cx + 18, card_top + 96, cw - 36, 1, line);
-        /* The three rows intentionally have no icons, chips or secondary
-           descriptions: exact hierarchy of the approved reference. */
-        reference_text(cx + 18, card_top + 126, "Kernel", muted, 0);
+        ui_card(cx, card_top, cw, card_height, 23, card_bg);
+        reference_monitor_icon(cx + 23, card_top + 31, ink, card_bg);
+        reference_text(cx + 68, card_top + 13, "MayOS", ink, 1);
+        reference_text(cx + 68, card_top + 51, "Version " MAYOS_RELEASE, muted, 0);
+        rect(cx + 23, card_top + 103, cw - 46, 1, line);
+        reference_text(cx + 23, card_top + 122, "Kernel", muted, 0);
 #ifdef MAYOS_LINUX
-        reference_right_label(cx + cw - 18, card_top + 126, "Linux x86_64", ink);
+        reference_right_label(cx + cw - 23, card_top + 122, "Linux x86_64", ink);
 #else
-        reference_right_label(cx + cw - 18, card_top + 126, "MayKernel x86_64", ink);
+        reference_right_label(cx + cw - 23, card_top + 122, "MayKernel x86_64", ink);
 #endif
-        reference_text(cx + 18, card_top + 158, "Build", muted, 0);
-        reference_right_label(cx + cw - 18, card_top + 158, "Development Preview", ink);
-        reference_text(cx + 18, card_top + 190, "Architecture", muted, 0);
-        reference_right_label(cx + cw - 18, card_top + 190, "64-bit", ink);
-        /* Device rename/Credits remain available beneath the card,
-           outside the screenshot-specific component. */
+        reference_text(cx + 23, card_top + 157, "Build", muted, 0);
+        reference_right_label(cx + cw - 23, card_top + 157, "Development Preview", ink);
+        reference_text(cx + 23, card_top + 192, "Architecture", muted, 0);
+        reference_right_label(cx + cw - 23, card_top + 192, "64-bit", ink);
+    } else if (settings_tab == 0 && settings_general_page == 0) {
+        reference_text(cx,cy-12,"General",ink,1);
+        const char *names[]={"Desktop & Pointer","Storage & Files",
+                             "Open Source & Credits","Dock & Menu Bar",
+                             "Accessibility","Keyboard & Shortcuts"};
+        const char *descs[]={"Wallpaper, pointer and desktop labels",
+                             "MayFS files, capacity and sync",
+                             "Licenses and component credits",
+                             "Dock icons, indicators and menu status",
+                             "Contrast, pointer size and reduce motion",
+                             "Implemented keyboard navigation commands"};
+        for(int i=0;i<6;i++) {
+            int yy=cy+62+i*64;
+            ui_card(cx,yy,cw,58,15,panel);
+            reference_text(cx+17,yy+5,names[i],ink,0);
+            reference_text(cx+17,yy+35,descs[i],muted,2);
+            reference_text(cx+cw-27,yy+12,">",muted,0);
+        }
     } else if (settings_tab == 1) {
         text(cx, cy, "PERSONALIZATION", accent);
         large_text(cx, cy + 26, "外观设置", ink);
@@ -1171,7 +1270,8 @@ static void settings(Window *w) {
         text(cx, cy + 474, "文本与边框对比度", ink);
         button(cx, cy + 505, 118, "标准", !high_contrast);
         button(cx + 132, cy + 505, 118, "高对比", high_contrast);
-    } else if (settings_tab == 2) {
+    } else if (settings_tab == 0 && settings_general_page == 2) {
+        button(cx + cw - 142, cy + 2, 132, "Back to General", 0);
         text(cx, cy, "STORAGE / SESSION", accent);
         large_text(cx, cy + 26, "存储空间", ink);
 #ifdef MAYOS_LINUX
@@ -1209,7 +1309,8 @@ static void settings(Window *w) {
         text(cx, cy + 377, "原型存储格式；请使用专用虚拟数据盘。", muted);
         button(cx, cy + 436, 126, "立即同步", 1);
 #endif
-    } else if (settings_tab == 3) {
+    } else if (settings_tab == 0 && settings_general_page == 3) {
+        button(cx + cw - 142, cy + 2, 132, "Back to General", 0);
         text(cx, cy, "OPEN SOURCE / CREDITS", accent);
         large_text(cx, cy + 26, "开源组件", ink);
         text(cx, cy + 77, "感谢以下项目。各组件保留各自许可证。", muted);
@@ -1227,7 +1328,8 @@ static void settings(Window *w) {
         text(cx, cy + 452, "QEMU: GPL-2.0 / OVMF: BSD-2-Clause-Patent", muted);
         text(cx, cy + 479, "完整许可与对应源码见发行包的 licenses 文档。", muted);
         text(cx, cy + 513, "MayOS Team 2023 - 2026.", ink);
-    } else {
+    } else if (settings_tab == 0 && settings_general_page == 1) {
+        button(cx + cw - 142, cy + 2, 132, "Back to General", 0);
         text(cx, cy, "DESKTOP / POINTER", accent);
         large_text(cx, cy + 26, "桌面与指针", ink);
         text(cx, cy + 77, "可随时预览；无需重新启动桌面。", muted);
@@ -1266,6 +1368,93 @@ static void settings(Window *w) {
 #else
         text(cx + 168, cy + 505, disk_ready ? "MayFS: 自动保存" : "RAM: 本次会话有效", muted);
 #endif
+    } else if (settings_tab == 0 && settings_general_page == 4) {
+        button(cx+cw-142,cy+2,132,"Back to General",0);
+        reference_text(cx,cy-12,"Dock & Menu Bar",ink,1);
+        reference_text(cx,cy+83,"Dock icon size",ink,0);
+        const char *sizes[]={"Compact","Standard","Large"};
+        for(int i=0;i<3;i++)button(cx+i*164,cy+119,154,sizes[i],dock_size==i);
+        reference_text(cx,cy+170,"Open app indicators",ink,0);
+        button(cx,cy+205,154,"Show",dock_indicators);
+        button(cx+164,cy+205,154,"Hide",!dock_indicators);
+        reference_text(cx,cy+255,"Dock surface",ink,0);
+        button(cx,cy+290,154,"Translucent",dock_glass);
+        button(cx+164,cy+290,154,"Solid",!dock_glass);
+        reference_text(cx,cy+340,"App names on hover",ink,0);
+        button(cx,cy+375,154,"Show",dock_hover_labels);
+        button(cx+164,cy+375,154,"Hide",!dock_hover_labels);
+        reference_text(cx,cy+425,"Menu bar status icons",ink,0);
+        button(cx,cy+460,154,"Show",menu_status_icons);
+        button(cx+164,cy+460,154,"Hide",!menu_status_icons);
+    } else if (settings_tab == 0 && settings_general_page == 5) {
+        button(cx+cw-142,cy+2,132,"Back to General",0);
+        reference_text(cx,cy-12,"Accessibility",ink,1);
+        reference_text(cx,cy+82,"Text and border contrast",ink,0);
+        button(cx,cy+120,154,"Standard",!high_contrast);
+        button(cx+164,cy+120,154,"High contrast",high_contrast);
+        reference_text(cx,cy+177,"Pointer size",ink,0);
+        const char *pointers[]={"Small","Standard","Large"};
+        for(int i=0;i<3;i++)button(cx+i*164,cy+213,154,pointers[i],pointer_size==i);
+        reference_text(cx,cy+270,"Reduce Dock motion",ink,0);
+        button(cx,cy+308,154,"On",reduce_motion);
+        button(cx+164,cy+308,154,"Off",!reduce_motion);
+        reference_text(cx,cy+364,"Desktop build label",ink,0);
+        button(cx,cy+402,154,"Show",show_brand);
+        button(cx+164,cy+402,154,"Hide",!show_brand);
+        reference_text(cx,cy+455,"Changes apply immediately and save to MayFS.",muted,2);
+    } else if (settings_tab == 0 && settings_general_page == 6) {
+        button(cx+cw-142,cy+2,132,"Back to General",0);
+        reference_text(cx,cy-12,"Keyboard & Shortcuts",ink,1);
+        const char *keys[]={"F1","Esc","Enter","Ctrl+S"};
+        const char *actions[]={"Open MayShell","Close active overlay",
+                               "Confirm selection","Save editor file"};
+        for(int i=0;i<4;i++) {
+            int yy=cy+82+i*84;
+            ui_card(cx,yy,cw,67,14,panel);
+            reference_text(cx+19,yy+9,keys[i],ink,0);
+            reference_text(cx+165,yy+14,actions[i],muted,2);
+        }
+        reference_text(cx,cy+443,"Shortcuts show implemented native commands.",muted,2);
+    } else if (settings_tab == 2) {
+        reference_text(cx, cy - 12, "Sound", ink, 1);
+        ui_card(cx, cy + 80, cw, 235, 22, panel);
+        reference_text(cx + 22, cy + 104, "Audio output", ink, 1);
+#ifdef MAYOS_LINUX
+        reference_text(cx + 22, cy + 165, "Linux audio depends on the host backend.", muted, 2);
+        reference_text(cx + 22, cy + 206, "Volume controls are not available yet.", muted, 2);
+#else
+        reference_text(cx + 22, cy + 165, "MayKernel does not yet expose audio output.", muted, 2);
+        reference_text(cx + 22, cy + 206, "A hardware driver is still required.", muted, 2);
+#endif
+    } else if (settings_tab == 3) {
+        reference_text(cx, cy - 12, "Network", ink, 1);
+        ui_card(cx, cy + 80, cw, 235, 22, panel);
+        reference_text(cx + 22, cy + 104, "Connection status", ink, 1);
+#ifdef MAYOS_LINUX
+        char network_info[180] = {0};
+        int status = platform_network_status(network_info, sizeof(network_info));
+        reference_text(cx + 22, cy + 165,
+                       status > 0 ? "Linux network backend is available." :
+                                    "Network connection is not ready.",
+                       muted, 2);
+#else
+        reference_text(cx + 22, cy + 165, "MayKernel network stack is not ready.", muted, 2);
+#endif
+        reference_text(cx + 22, cy + 206, "No simulated Wi-Fi connection is shown.", muted, 2);
+    } else if (settings_tab == 4) {
+        reference_text(cx, cy - 12, "Privacy & Security", ink, 1);
+        ui_card(cx, cy + 80, cw, 260, 22, panel);
+        reference_text(cx + 22, cy + 108, "Experimental system", ink, 1);
+        reference_text(cx + 22, cy + 169, "Do not store important private data.", muted, 2);
+        reference_text(cx + 22, cy + 204, "MayFS is not an encrypted filesystem.", muted, 2);
+        reference_text(cx + 22, cy + 239, "Security hardening remains incomplete.", muted, 2);
+    } else {
+        reference_text(cx, cy - 12, "Updates", ink, 1);
+        ui_card(cx, cy + 80, cw, 245, 22, panel);
+        reference_text(cx + 22, cy + 105, "MayOS " MAYOS_RELEASE, ink, 1);
+        reference_text(cx + 22, cy + 166, "Release channel: development preview", muted, 2);
+        reference_text(cx + 22, cy + 203, "Automatic system updates are not ready.", muted, 2);
+        reference_text(cx + 22, cy + 240, "View official releases on GitHub.", muted, 2);
     }
 }
 static int file_list[FS_MAX], file_count;
@@ -1470,29 +1659,54 @@ static void explorer_draw(Window *w) {
 }
 /* Centered macOS-like dock from the user's reference screenshot.
    Icons launch the same native MayOS windows and services. */
+/* Build-time 4x antialiased alpha glyphs composited by the native renderer. */
+static void dock_glyph(int x,int y,int id,int side,u32 color) {
+    if(id<0||id>=4||side<1||side>48)return;
+    for(int py=0;py<side;py++) {
+        int dy=y+py;
+        if(dy<0||dy>=H)continue;
+        for(int px=0;px<side;px++) {
+            int dx=x+px;
+            if(dx<0||dx>=W)continue;
+            u32 a=mayos_dock_alpha[id][(py*48/side)*48+px*48/side];
+            if(a)pixels[dy*W+dx]=blend(pixels[dy*W+dx],color,a);
+        }
+    }
+}
 static void taskbar(void) {
-    /* The reference Dock intentionally has only Files, Settings, Terminal and Trash. */
-    int left = 382, top = H - 92;
-    soft_roundrect(left + 5, top + 8, 244, 70, 25,
-                   dark ? 0x020203 : 0xc0c0c6);
-    ui_card(left, top, 244, 70, 24, dark ? 0x0a0a0c : 0xf7f7f9);
-    const int ids[] = {0, 1, 2, 3};
-    for (int i = 0; i < 4; i++) {
-        int x = left + 21 + i * 57, id = ids[i];
-        int active = windows[id].open && !windows[id].min && focus == id;
-        int hover = inside(mx, my, x - 7, top + 4, 50, 57);
-        if (active || hover)
-            soft_roundrect(x - 5, top + 5, 48, 54, 15,
-                           active ? selected_fill : surface_high);
-        int kind = id == 3 ? 3 : id;
-        symbol(x + 4, top + 15 - (hover ? 2 : 0), kind, 34, active ? ink : muted);
+    /* Keep the exact approved four-icon Dock and all existing hitboxes. */
+    int left=(W-244)/2,top=H-92;
+    if(dock_glass) {
+        soft_roundrect(left+5,top+8,244,70,25,dark?0x020203:0xc0c0c6);
+        ui_card(left,top,244,70,24,dark?0x0a0a0c:0xf7f7f9);
+    } else ui_card(left,top,244,70,24,dark?0x000000:0xffffff);
+    int side=dock_size==0?34:dock_size==2?46:40;
+    const char *names[]={"Files","Settings","Terminal","Trash"};
+    for(int id=0;id<4;id++) {
+        int x=left+21+id*57;
+        int active=windows[id].open&&!windows[id].min&&focus==id;
+        int hover=inside(mx,my,x-7,top+4,50,57);
+        if(active||hover)
+            soft_roundrect(x-5,top+5,48,54,15,active?selected_fill:surface_high);
+        int lift=hover&&!reduce_motion?2:0;
+        dock_glyph(x+19-side/2,top+13+(46-side)/2-lift,id,side,active?ink:muted);
+        if(dock_indicators&&windows[id].open&&!windows[id].min)
+            circle(x+19,top+61,2,ink);
+        if(hover&&dock_hover_labels) {
+            int width=reference_font_width(names[id],2)+20;
+            int tx=x+19-width/2;
+            if(tx<0)tx=0;
+            if(tx+width>W)tx=W-width;
+            ui_card(tx,top-34,width,27,9,panel);
+            reference_text(tx+10,top-31,names[id],ink,2);
+        }
     }
 }
 /* Functional, keyboard-dismissable popovers are deliberately invisible
    until the user clicks the corresponding screenshot-matched status glyph. */
 static void status_panel_draw(void) {
     if (!top_panel) return;
-    int x = 690, y = 51, w = 318, h = 235;
+    int x = W - 334, y = 51, w = 318, h = 235;
     roundrect(x + 4, y + 5, w, h, dark ? 0x111115 : 0xd4d2d7);
     roundrect(x, y, w, h, panel);
     rect(x + 18, y + 50, w - 36, 1, line);
@@ -1552,7 +1766,7 @@ static int search_match(int id) {
     return id >= 0 && id < 5 && contains(names[id], search);
 }
 static void start_draw(void) {
-    int x = 210, y = H - 500;
+    int x = (W - 326) / 2, y = H - 500;
     roundrect(x + 3, y + 4, 326, 410, dark ? 0x141218 : 0xd8d1df);
     roundrect(x, y, 326, 410, panel);
     text(x + 22, y + 19, "应用程序 / Applications", ink);
@@ -1593,7 +1807,7 @@ static void context_draw(void) {
         text(ctxx + 15, ctxy + 9 + i * 34, items[i], i == 7 ? 0xda7373 : ink);
 }
 static void modal_draw(void) {
-    int x = 308, y = 262;
+    int x = (W - 408) / 2, y = (H - 202) / 2;
     roundrect(x + 5, y + 6, 408, 202, dark ? 0x141218 : 0xd8d1df);
     roundrect(x, y, 408, 202, panel);
     const char *title = modal == 1   ? "新建文本文件"
@@ -1626,10 +1840,11 @@ static void modal_draw(void) {
 }
 /* Kept outside the normal window list: hidden until explicitly discovered. */
 static void easter_draw(void) {
-    roundrect(288, 72, 460, 626, dark ? 0x101a29 : 0xb9c8d7);
-    roundrect(282, 66, 460, 626, panel);
-    text(306, 85, "喵！你发现了一位小住客", ink);
-    text(710, 83, "×", muted);
+    const int left = (W - 460) / 2;
+    roundrect(left + 6, 72, 460, 626, dark ? 0x101a29 : 0xb9c8d7);
+    roundrect(left, 66, 460, 626, panel);
+    text(left + 24, 85, "喵！你发现了一位小住客", ink);
+    text(left + 428, 83, "×", muted);
     int px = (W - CAT_W) / 2, py = 124;
     for (int y = 0; y < CAT_H; y++)
         for (int x = 0; x < CAT_W; x++) {
@@ -1638,9 +1853,9 @@ static void easter_draw(void) {
             pixels[(py + y) * W + px + x] =
                 ((r << 3 | r >> 2) << 16) | ((g << 2 | g >> 4) << 8) | (b << 3 | b >> 2);
         }
-    text(306, 623, "喵，原来你在这里。", ink);
-    text(306, 653, "按 Esc 返回", muted);
-    button(610, 646, 108, "返回桌面", 1);
+    text(left + 24, 623, "喵，原来你在这里。", ink);
+    text(left + 24, 653, "按 Esc 返回", muted);
+    button(left + 328, 646, 108, "返回桌面", 1);
 }
 static void cursor(void) {
     int side = 12 + pointer_size * 6;
@@ -1825,18 +2040,19 @@ static void left_click(void) {
     if (maygame_active()) { maygame_click(mx,my); return; }
 #endif
     if (egg_open) {
-        if (inside(mx, my, 696, 76, 38, 34) || inside(mx, my, 610, 646, 108, 30))
+        if (inside(mx, my, (W - 460) / 2 + 414, 76, 38, 34) ||
+            inside(mx, my, (W - 460) / 2 + 328, 646, 108, 30))
             egg_open = 0;
         return;
     }
     Window *about = &windows[1];
     if (!(about->open && !about->min && focus == 1 && settings_tab == 6 &&
-          inside(mx, my, about->x + 223, about->y + 265, 30, 30)))
+          inside(mx, my, about->x + 275, about->y + 162, 30, 30)))
         egg_clicks = 0;
     if (modal) {
-        if (inside(mx, my, 604, 413, 90, 30))
+        if (inside(mx, my, (W - 408) / 2 + 296, (H - 202) / 2 + 151, 90, 30))
             accept_modal();
-        else if (inside(mx, my, 512, 413, 80, 30))
+        else if (inside(mx, my, (W - 408) / 2 + 204, (H - 202) / 2 + 151, 80, 30))
             modal = 0;
         return;
     }
@@ -1851,26 +2067,26 @@ static void left_click(void) {
     if (top_panel && my >= 42) {
         int id = top_panel;
         top_panel = 0;
-        if (inside(mx, my, 690, 51, 318, 235)) {
-            if (id == 1 && inside(mx, my, 709, 244, 145, 34)) {
+        if (inside(mx, my, W - 334, 51, 318, 235)) {
+            if (id == 1 && inside(mx, my, W - 315, 244, 145, 34)) {
                 raise_window(1);
-            } else if (id == 2 && inside(mx, my, 709, 244, 164, 34)) {
+            } else if (id == 2 && inside(mx, my, W - 315, 244, 164, 34)) {
                 raise_window(4);
             } else if (id == 3) {
-                if (inside(mx, my, 709, 159, 126, 34)) {
+                if (inside(mx, my, W - 315, 159, 126, 34)) {
                     dark = 1; preferences_save();
-                } else if (inside(mx, my, 851, 159, 126, 34)) {
+                } else if (inside(mx, my, W - 173, 159, 126, 34)) {
                     dark = 0; preferences_save();
-                } else if (inside(mx, my, 709, 244, 164, 34)) {
+                } else if (inside(mx, my, W - 315, 244, 164, 34)) {
                     raise_window(1);
                 }
-            } else if (id == 4 && inside(mx, my, 709, 244, 145, 34)) {
+            } else if (id == 4 && inside(mx, my, W - 315, 244, 145, 34)) {
                 notice_until = 0;
                 notice[0] = 0;
             } else if (id == 5) {
-                if (inside(mx, my, 709, 168, 126, 34)) {
+                if (inside(mx, my, W - 315, 168, 126, 34)) {
                     fs_sync(); reboot();
-                } else if (inside(mx, my, 851, 168, 126, 34)) {
+                } else if (inside(mx, my, W - 173, 168, 126, 34)) {
                     fs_sync(); poweroff();
                 }
             }
@@ -1882,9 +2098,9 @@ static void left_click(void) {
         if (mx < 96) {
             top_panel = 0;
             raise_window(1);
-        } else if (mx >= 770 && mx < 930) {
-            int id = (mx - 770) / 39 + 2;
-            if (id > 5) id = 5;
+        } else if (mx >= W - 335 && menu_status_icons) {
+            int id = mx < W - 286 ? 1 : mx < W - 244 ? 2 :
+                     mx < W - 202 ? 3 : mx < W - 166 ? 5 : 4;
             top_panel = top_panel == id ? 0 : id;
             start_open = 0;
         }
@@ -1892,7 +2108,8 @@ static void left_click(void) {
     }
     /* Reference Dock: Files, Settings, Terminal, Trash. */
     if (my >= H - 92) {
-        const int centers[] = {403, 460, 517, 574};
+        const int first = (W - 244) / 2 + 21;
+        const int centers[] = {first, first + 57, first + 114, first + 171};
         for (int i = 0; i < 4; i++) {
             if (!inside(mx, my, centers[i] - 24, H - 88, 52, 60))
                 continue;
@@ -1913,7 +2130,7 @@ static void left_click(void) {
         return;
     }
     if (start_open) {
-        int x = 210, y = H - 500;
+        int x = (W - 326) / 2, y = H - 500;
         if (inside(mx, my, x, y, 326, 410)) {
             for (int i = 0; i < 5; i++)
                 if (search_match(i) && inside(mx, my, x + 16, y + 100 + i * 47, 294, 46)) {
@@ -1955,6 +2172,15 @@ static void left_click(void) {
         raise_window(id);
         int rx = mx - w->x, ry = my - w->y;
         if (ry < 42) {
+            if (id == 1 && rx >= 10 && rx < 78) {
+                /* Three gray traffic-light buttons in the reference window:
+                   close, minimize, maximize (left to right). */
+                settings_search_focused = 0;
+                if (rx < 32) w->open = 0;
+                else if (rx < 52) w->min = 1;
+                else toggle_max(id);
+                return;
+            }
             if (rx > w->w - 46) {
                 if (id == 3 && editor_changed) {
                     notify("请先保存修改，再关闭编辑器");
@@ -2013,7 +2239,7 @@ static void left_click(void) {
             return;
         }
         if (id == 1) {
-            if (settings_tab == 6 && inside(rx, ry, 223, 265, 30, 30)) {
+            if (settings_tab == 6 && inside(rx, ry, 275, 162, 30, 30)) {
                 if (ticks - egg_last_click > 150)
                     egg_clicks = 0;
                 egg_last_click = ticks;
@@ -2021,54 +2247,105 @@ static void left_click(void) {
                     open_easter();
                 return;
             }
-            if (rx < 188) {
-                int tab = (ry - 132) / 36;
-                if (ry >= 132 && tab >= 0 && tab < 7 && (ry - 132) % 36 < 34)
-                    settings_tab = tab;
+            if (inside(rx, ry, 22, 95, 202, 38)) {
+                settings_search_focused = 1;
+                return;
             }
-            else if (settings_tab == 1) {
+            settings_search_focused = 0;
+            if (rx < 227) {
+                const char *names[] = {"General", "Display", "Sound", "Network",
+                                      "Privacy & Security", "Updates", "About MayOS"};
+                for (int i = 0; i < 7; i++) {
+                    int yy = settings_nav_y(w, i);
+                    if (inside(rx, ry, 18, yy, 205, 38) &&
+                        (!settings_filter[0] || settings_filter_match(names[i]))) {
+                        settings_tab = i;
+                        settings_fit_window(w);
+                        return;
+                    }
+                }
+            }
+            else if (settings_tab == 0 && settings_general_page == 0) {
+                if (rx >= 252 && rx < 795) {
+                    for (int i = 0; i < 6; i++)
+                        if (ry >= 117 + i * 64 && ry < 175 + i * 64) {
+                            settings_general_page = i + 1;
+                            return;
+                        }
+                }
+            } else if (settings_tab == 0 && settings_general_page > 0 &&
+                       inside(rx, ry, 652, 57, 132, 32)) {
+                settings_general_page = 0;
+                return;
+            } else if (settings_tab == 1) {
                 if (ry >= 220 && ry <= 382) {
-                    if (rx >= 204 && rx < 420) {
+                    if (rx >= 252 && rx < 468) {
                         dark = 0;
                         preferences_save();
-                    } else if (rx >= 440 && rx < 656) {
+                    } else if (rx >= 488 && rx < 704) {
                         dark = 1;
                         preferences_save();
                     }
                 }
-                if (ry >= 457 && ry <= 493 && rx >= 204) {
-                    int i = (rx - 204) / 64;
+                if (ry >= 457 && ry <= 493 && rx >= 252) {
+                    int i = (rx - 252) / 64;
                     if (i >= 0 && i < 6) {
                         accent_choice = i;
                         preferences_save();
                     }
                 }
-                if (ry >= 570 && ry < 602 && rx >= 204 && rx < 468) {
-                    high_contrast = rx >= 336;
+                if (ry >= 570 && ry < 602 && rx >= 252 && rx < 516) {
+                    high_contrast = rx >= 384;
                     preferences_save();
                 }
-            } else if (settings_tab == 4) {
-                if (ry >= 206 && ry < 306 && rx >= 204 && rx < 732) {
-                    int i = (rx - 204) / 176;
+            } else if (settings_tab == 0 && settings_general_page == 1) {
+                if (ry >= 206 && ry < 306 && rx >= 252 && rx < 780) {
+                    int i = (rx - 252) / 176;
                     if (i < 3) { desktop_style = i; preferences_save(); }
-                } else if (ry >= 363 && ry < 398 && rx >= 204 && rx < 666) {
-                    int i = (rx - 204) / 154;
+                } else if (ry >= 363 && ry < 398 && rx >= 252 && rx < 714) {
+                    int i = (rx - 252) / 154;
                     if (i < 3) { pointer_size = i; preferences_save(); }
-                } else if (ry >= 441 && ry < 477 && rx >= 204 && rx < 718) {
-                    int i = (rx - 204) / 168;
+                } else if (ry >= 441 && ry < 477 && rx >= 252 && rx < 766) {
+                    int i = (rx - 252) / 168;
                     if (i == 2 && !cursor_image_load(1)) {
                         notify("请检查文档/Cursor.ppm（P3，最大16×16）");
                         return;
                     }
                     if (i >= 0 && i < 3) { cursor_style = i; preferences_save(); }
-                } else if (ry >= 520 && ry < 553 && rx >= 204 && rx < 478) {
-                    show_brand = rx < 348;
+                } else if (ry >= 520 && ry < 553 && rx >= 252 && rx < 526) {
+                    show_brand = rx < 396;
                     preferences_save();
-                } else if (inside(rx, ry, 204, 560, 145, 34)) {
+                } else if (inside(rx, ry, 252, 560, 145, 34)) {
                     preferences_reset();
                     notify("个性化设置已恢复默认");
                 }
-            } else if (settings_tab == 2 && inside(rx, ry, 204, 501, 126, 30))
+            } else if (settings_tab == 0 && settings_general_page == 4) {
+                if (ry >= 174 && ry < 205 && rx >= 252 && rx < 740) {
+                    dock_size=(rx-252)/164;
+                    if(dock_size>2)dock_size=2;
+                } else if (ry >= 260 && ry < 293 && rx >= 252 && rx < 570) {
+                    dock_indicators=rx<410;
+                } else if (ry >= 345 && ry < 378 && rx >= 252 && rx < 570) {
+                    dock_glass=rx<410;
+                } else if (ry >= 430 && ry < 463 && rx >= 252 && rx < 570) {
+                    dock_hover_labels=rx<410;
+                } else if (ry >= 515 && ry < 548 && rx >= 252 && rx < 570) {
+                    menu_status_icons=rx<410;
+                } else return;
+                preferences_save();
+            } else if (settings_tab == 0 && settings_general_page == 5) {
+                if (ry >= 175 && ry < 209 && rx >= 252 && rx < 570) {
+                    high_contrast=rx>=410;
+                } else if (ry >= 268 && ry < 300 && rx >= 252 && rx < 740) {
+                    pointer_size=(rx-252)/164;
+                    if(pointer_size>2)pointer_size=2;
+                } else if (ry >= 363 && ry < 397 && rx >= 252 && rx < 570) {
+                    reduce_motion=rx<410;
+                } else if (ry >= 457 && ry < 491 && rx >= 252 && rx < 570) {
+                    show_brand=rx<410;
+                } else return;
+                preferences_save();
+            } else if (settings_tab == 0 && settings_general_page == 2 && inside(rx, ry, 252, 501, 126, 30))
                 notify(fs_sync() ? "已同步到磁盘" : "磁盘不可写");
         } else if (id == 0) {
             if (rx < 146) {
@@ -2196,6 +2473,29 @@ static void key_event(int k) {
     }
     if (k == 27) {
         start_open = context_open = top_panel = 0;
+        settings_search_focused = 0;
+        settings_filter[0] = 0;
+        return;
+    }
+    if (settings_search_focused && focus == 1 &&
+        windows[1].open && !windows[1].min) {
+        int n = strlen(settings_filter);
+        if (k == '\b' && n) settings_filter[n - 1] = 0;
+        else if (k >= 32 && k < 127 && n < 29) {
+            settings_filter[n] = k;
+            settings_filter[n + 1] = 0;
+        } else if (k == '\n') {
+            const char *tabs[] = {"General", "Display", "Sound", "Network",
+                                  "Privacy & Security", "Updates", "About MayOS"};
+            for (int i = 0; i < 7; i++) {
+                if (settings_filter_match(tabs[i])) {
+                    settings_tab = i;
+                    settings_fit_window(&windows[1]);
+                    break;
+                }
+            }
+            settings_search_focused = 0;
+        }
         return;
     }
     if (start_open) {
