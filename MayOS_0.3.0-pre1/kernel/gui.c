@@ -996,76 +996,46 @@ static void frame(int id) {
 }
 static void settings(Window *w) {
     int x = w->x, y = w->y, cx = x + 204, cy = y + 65, cw = w->w - 234;
-    rect(x + 1, y + 43, 176, w->h - 44, bg);
-    rect(x + 176, y + 43, 1, w->h - 44, line);
-    text(x + 24, y + 64, "WORKSTATION", muted);
+    rect(x + 1, y + 44, 176, w->h - 46, dark ? 0x080809 : 0xf7f7f9);
+    rect(x + 176, y + 62, 1, w->h - 90, line);
+    text(x + 22, y + 64, "Settings", ink);
+    text(x + 22, y + 84, "系统设置", muted);
     const char *tabs[] = {"关于系统", "外观设置", "存储空间", "开源组件", "桌面与指针"};
-    const char *marks[] = {"01", "02", "03", "04", "05"};
+    const int tab_icons[] = {1, 9, 0, 5, 10};
     for (int i = 0; i < 5; i++) {
         int yy = y + 106 + i * 46;
-        if (settings_tab == i) {
-            roundrect(x + 12, yy, 152, 36, selected_fill);
-            rect(x + 12, yy + 8, 2, 20, accent);
-        }
-        text(x + 25, yy + 7, marks[i], settings_tab == i ? accent : muted);
+        if (settings_tab == i)
+            soft_roundrect(x + 12, yy, 152, 36, 12, selected_fill);
+        symbol(x + 23, yy + 8, tab_icons[i], 19,
+               settings_tab == i ? ink : muted);
         text(x + 55, yy + 7, tabs[i], settings_tab == i ? ink : muted);
     }
     rect(x + 22, y + w->h - 126, 132, 1, line);
-    text(x + 24, y + w->h - 106, "帮助 / Help", accent);
+    text(x + 24, y + w->h - 106, "帮助 / Help", muted);
     text(x + 24, y + w->h - 62, MAYOS_RELEASE, muted);
     text(x + 24, y + w->h - 37, PLATFORM_ARCH, muted);
     if (settings_tab == 0) {
-        text(cx, cy, "SYSTEM / ABOUT", accent);
-        large_text(cx, cy + 23, "MayOS", ink);
-        roundrect(cx + 111, cy + 32, 161, 25, dark ? 0x26433f : 0xdeeeea);
-        text(cx + 124, cy + 35, MAYOS_RELEASE, accent);
-        text(cx, cy + 72, "系统 > 关于 / " PLATFORM_SHORT, muted);
-        roundrect(cx, cy + 105, cw, 90, bg);
+        text(cx, cy, "About MayOS", ink);
+        text(cx, cy + 33, "SYSTEM / OVERVIEW", muted);
+        ui_card(cx, cy + 105, cw, 289, 22, panel);
+        /* Keep the original click target for the existing hidden cat artwork. */
         icon(cx + 16, cy + 125, 1, 44);
-        text(cx + 78, cy + 117, device, ink);
-        text(cx + 78, cy + 146, platform_kernel(), accent);
-        text(cx + 78, cy + 170, PLATFORM_ARCH, muted);
-#ifdef MAYOS_LINUX
-        text(cx, cy + 217, "FASTFETCH / SYSTEM", ink);
-        rect(cx, cy + 243, cw, 1, line);
-        char fastfetch_lines[1152];
-        if (platform_fastfetch(fastfetch_lines, sizeof(fastfetch_lines))) {
-            char *start = fastfetch_lines;
-            for (int n = 0; n < 5 && *start; n++) {
-                char *end = start;
-                while (*end && *end != '\n')
-                    end++;
-                char terminator = *end;
-                *end = 0;
-                text(cx, cy + 254 + n * 20, start, ink);
-                if (!terminator)
-                    break;
-                start = end + 1;
-            }
-        } else {
-            text(cx, cy + 266, "Fastfetch not bundled in this Linux image.", muted);
-            text(cx, cy + 294, "Rebuild with --fastfetch /path/to/fastfetch.", muted);
-        }
-#else
-        text(cx, cy + 217, "硬件与运行环境", ink);
-        rect(cx, cy + 243, cw, 1, line);
-        char shortcpu[49];
-        copy(shortcpu, cpu_name, sizeof(shortcpu));
-        text(cx, cy + 254, "处理器", muted);
-        text(cx + 94, cy + 254, shortcpu, ink);
-        text(cx, cy + 284, "内存", muted);
-        numtext(cx + 94, cy + 284, memory_mb, ink);
-        text(cx + 143, cy + 284, "MiB / 实际检测", muted);
-        text(cx, cy + 314, "显示", muted);
-        text(cx + 94, cy + 314, "1024 × 768 / 32-bit", ink);
-#endif
-        rect(cx, cy + 346, cw, 1, line);
-        text(cx, cy + 357, "MayOS Team 2023 - 2026.", ink);
-        text(cx, cy + 383, "This version of MayOS is for test use only.", 0xd5b583);
-        text(cx, cy + 411, "第三方组件与许可证请查看“开源组件”。", muted);
+        text(cx + 78, cy + 124, "MayOS", ink);
+        text(cx + 78, cy + 152, "Version " MAYOS_RELEASE, muted);
+        rect(cx + 22, cy + 193, cw - 44, 1, line);
+        text(cx + 25, cy + 216, "Kernel", muted);
+        text(cx + 280, cy + 216, PLATFORM_SHORT, ink);
+        text(cx + 25, cy + 250, "Build", muted);
+        text(cx + 280, cy + 250, "Development Preview", ink);
+        text(cx + 25, cy + 284, "Architecture", muted);
+        text(cx + 280, cy + 284, PLATFORM_ARCH, ink);
+        rect(cx + 22, cy + 326, cw - 44, 1, line);
+        text(cx + 25, cy + 344, device, muted);
+        text(cx + 25, cy + 374, "MayOS Team 2023 - 2026", muted);
+        text(cx, cy + 412, "This version of MayOS is for test use only.", muted);
         button(cx, cy + 449, 126, "重命名设备", 0);
         button(cx + 140, cy + 449, 194, "开源组件 / Credits", 0);
-        text(cx, cy + 505, "Desktop session / experimental release", muted);
+        text(cx, cy + 505, "原生界面 / x86_64 开发预览", muted);
     } else if (settings_tab == 1) {
         text(cx, cy, "PERSONALIZATION", accent);
         large_text(cx, cy + 26, "外观设置", ink);
@@ -1281,16 +1251,16 @@ static void terminal_draw(Window *w) {
     if (start < 0)
         start = 0;
     for (int i = start; i < end; i++)
-        text(x + 18, y + 12 + (i - start) * 21, output[i], 0xc4d5df);
+        text(x + 18, y + 12 + (i - start) * 21, output[i], ink);
     int py = w->y + w->h - 48;
     text(x + 18, py, "may@mayos", accent);
-    int xx = text(x + 98, py, ":~ $ ", 0x90abc8);
-    text(xx, py, command, 0xf1f6ff);
+    int xx = text(x + 98, py, ":~ $ ", muted);
+    text(xx, py, command, ink);
     if (ticks % 100 < 55)
         rect(xx + cmdlen * 8, py + 3, 7, 16, accent);
-    rect(x + 1, w->y + w->h - 29, w->w - 4, 1, 0x21313f);
-    text(x + 18, w->y + w->h - 24, "MayShell / " PLATFORM_SHORT, 0x678793);
-    text(x + w->w - 220, w->y + w->h - 24, "↑ 历史   ↓ 清空   F1 终端", 0x678793);
+    rect(x + 1, w->y + w->h - 29, w->w - 4, 1, line);
+    text(x + 18, w->y + w->h - 24, "MayShell / " PLATFORM_SHORT, muted);
+    text(x + w->w - 220, w->y + w->h - 24, "↑ 历史   ↓ 清空   F1 终端", muted);
 }
 static void editor_draw(Window *w) {
     int x = w->x, y = w->y;
