@@ -68,18 +68,19 @@ assert "settings_search_focused = 1" in source
 # native icons, and four-app floating dock with unchanged shortcuts.
 assert 'reference_text(52, 2, "MayOS", ink, 0);' in source
 assert 'const char *menus[] = {"Settings", "File", "Edit", "View", "Window", "Help"};' in source
-assert 'reference_search_icon(704, 6, ink);' in source
-assert 'reference_battery_icon(820, 5, ink);' in source
+assert 'reference_search_icon(W - 320, 6, ink);' in source
+assert 'reference_battery_icon(W - 204, 5, ink);' in source
 assert 'int upper = 330 - x * 2 / 3 + x * x / 4500;' in source
 assert 'int lower = 820 - (x - 450) * (x - 450) / 1150;' in source
 assert "static void taskbar(void)" in source
-assert "int left = 382, top = H - 92;" in source
+assert "w->x = (W - 824) / 2;" in source
+assert "int left = (W - 244) / 2, top = H - 92;" in source
 assert "ui_card(left, top, 244, 70, 24," in source
-assert 'const int centers[] = {403, 460, 517, 574};' in source
+assert 'const int centers[] = {first, first + 57, first + 114, first + 171};' in source
 
 # Settings: verify geometry, proportions and actual click targets use the
 # same navigation function. Screenshot-only controls are not acceptable.
-assert '{100, 120, 824, 480, 0, 0, 0, 0, 0, 0, 0, "Settings"}' in source
+assert '{(W - 824) / 2, 110, 824, 480, 0, 0, 0, 0, 0, 0, 0, "Settings"}' in source
 assert 'int x = w->x, y = w->y, cx = x + 252, cy = y + 55, cw = w->w - 282;' in source
 assert 'reference_text(x + 24, y + 49, "Settings", ink, 1);' in source
 assert 'ui_card(x + 22, y + 95, 202, 38, 19, search_bg);' in source
