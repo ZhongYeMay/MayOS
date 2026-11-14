@@ -55,20 +55,23 @@ assert "static int heading_text(" in source
 assert 'heading_text(24, 6, "MayOS", ink);' in source
 assert 'heading_text(x + 22, y + 60, "Settings", ink);' in source
 assert 'heading_text(cx, cy - 8, "About MayOS", ink);' in source
-assert 'reference_title_text(cx + 60, card_top + 24, "MayOS", ink);' in source
+assert 'reference_text(cx + 60, card_top + 16, "MayOS", ink, 1);' in source
 assert "static void ui_card(" in source
 assert "static void reference_monitor_icon(" in source
-assert "static int reference_title_text(" in source
+assert "static void reference_text(" in source
+assert "static int reference_font_width(" in source
+assert "premium_title_bitmap[g]" in source
+assert "premium_body_bitmap[g]" in source
 assert "static void reference_right_label(" in source
 assert 'reference_monitor_icon(cx + 18, card_top + 40, ink, card_bg);' in source
-assert 'heading_text(cx + 18, card_top + 148, "Kernel", muted);' in source
-assert 'reference_right_label(cx + cw - 18, card_top + 148, "MayKernel x86_64", ink);' in source
-assert 'reference_right_label(cx + cw - 18, card_top + 220, "64-bit", ink);' in source
+assert 'reference_text(cx + 18, card_top + 142, "Kernel", muted, 0);' in source
+assert 'reference_right_label(cx + cw - 18, card_top + 142, "MayKernel x86_64", ink);' in source
+assert 'reference_right_label(cx + cw - 18, card_top + 214, "64-bit", ink);' in source
 assert 'u32 card_bg = dark ? 0x000000 : 0xffffff;' in source
 assert "ui_card(w->x, w->y, w->w, w->h, 25, panel);" in source
 assert "ui_card(cx, card_top, cw, card_height, 24, card_bg);" in source
-assert 'heading_text(cx + 60, card_top + 66, "Version " MAYOS_RELEASE, muted);' in source
-assert 'reference_right_label(cx + cw - 18, card_top + 184, "Development Preview", ink);' in source
+assert 'reference_text(cx + 60, card_top + 55, "Version " MAYOS_RELEASE, muted, 0);' in source
+assert 'reference_right_label(cx + cw - 18, card_top + 178, "Development Preview", ink);' in source
 assert "ui_card(left, top, 604, 76, 27," in source
 assert "set gfxmode" not in source  # no graphics firmware tweaks via GUI
 assert "static void cursor(void)" in source
