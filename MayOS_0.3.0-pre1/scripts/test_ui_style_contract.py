@@ -83,7 +83,7 @@ assert "dock_size=(rx-252)/164" in source
 assert "dock_glass = !(raw[6] & (1u << 15));" in source
 assert "menu_status_icons = !(raw[6] & (1u << 18));" in source
 assert "w->x = (W - 824) / 2;" in source
-assert "int left = (W - 244) / 2, top = H - 92;" in source
+assert "int left=(W-244)/2,top=H-92;" in source
 assert "ui_card(left,top,244,70,24," in source
 assert 'const int centers[] = {first, first + 57, first + 114, first + 171};' in source
 
