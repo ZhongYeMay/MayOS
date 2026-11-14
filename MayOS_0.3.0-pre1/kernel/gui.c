@@ -1043,12 +1043,12 @@ static void settings(Window *w) {
         text(cx, cy + 120, "窗口外观", ink);
         for (int i = 0; i < 2; i++) {
             int xx = cx + i * 236;
-            roundrect(xx, cy + 155, 216, 128, i ? 0x0e1b26 : 0xe3eaed);
-            roundrect(xx + 18, cy + 171, 180, 87, i ? 0x18232e : 0xffffff);
-            rect(xx + 18, cy + 171, 180, 19, i ? 0x2b3a46 : 0xd5e1e5);
-            rect(xx + 18, cy + 190, 40, 68, i ? 0x101924 : 0xf0f4f5);
-            rect(xx + 71, cy + 208, 90, 4, i ? 0x506978 : 0xc0d0d6);
-            rect(xx + 71, cy + 222, 111, 4, i ? 0x324b59 : 0xd8e2e6);
+            roundrect(xx, cy + 155, 216, 128, i ? 0x101013 : 0xededee);
+            roundrect(xx + 18, cy + 171, 180, 87, i ? 0x171719 : 0xffffff);
+            rect(xx + 18, cy + 171, 180, 19, i ? 0x242427 : 0xe4e4e6);
+            rect(xx + 18, cy + 190, 40, 68, i ? 0x0c0c0e : 0xf8f8f9);
+            rect(xx + 71, cy + 208, 90, 4, i ? 0x6c6c72 : 0xc0c0c7);
+            rect(xx + 71, cy + 222, 111, 4, i ? 0x404045 : 0xd8d8de);
             text(xx, cy + 297, i ? "深色 / Dark" : "浅色 / Light", ink);
             if (dark == i) {
                 circle(xx + 201, cy + 306, 8, accent);
@@ -1134,8 +1134,8 @@ static void settings(Window *w) {
             if (i == 0)
                 for (int j = 0; j < 58; j += 4)
                     rect(px + 11, cy + 152 + j, 138, 4,
-                         blend(dark ? 0x25212d : 0xe8e1ec,
-                               dark ? 0x3c304a : 0xd4cae0, (u32)j * 255 / 58));
+                         blend(dark ? 0x101013 : 0xf2f2f3,
+                               dark ? 0x35353a : 0xd4d4d9, (u32)j * 255 / 58));
             if (i == 2)
                 for (int j = 0; j < 138; j += 23)
                     rect(px + 11 + j, cy + 152, 1, 58, accent);
@@ -1242,7 +1242,7 @@ static void files_draw(Window *w) {
 }
 static void terminal_draw(Window *w) {
     int x = w->x + 1, y = w->y + 43;
-    rect(x, y, w->w - 2, w->h - 44, dark ? 0x19161f : 0x2b2930);
+    rect(x, y, w->w - 2, w->h - 44, dark ? 0x09090a : 0xf6f6f8);
     int rows = (w->h - 108) / 21;
     int end = out_count - scroll;
     if (end < 0)
