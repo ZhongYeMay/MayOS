@@ -98,6 +98,8 @@ jobs:
             --iso build/mayos.iso --writes 12 --mem-rounds 4 --idle-seconds 60
       - name: Refuse and preserve corrupted MayFS without disk modifications
         run: python3 scripts/phase1_corruption_smoke.py
+      - name: Test MayFS foreign backup and ATA disk capacity boundaries
+        run: python3 scripts/phase1_storage_bounds_smoke.py --iso build/mayos.iso
       - name: Archive phase 1 evidence (also on failure)
         if: always()
         uses: actions/upload-artifact@v4
