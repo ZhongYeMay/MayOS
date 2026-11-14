@@ -1,0 +1,67 @@
+name: Phase 1 - MayKernel boot and regression baseline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "MayOS_0.3.0-pre1/kernel/**"
+      - "MayOS_0.3.0-pre1/scripts/**"
+      - "MayOS_0.3.0-pre1/Makefile"
+      - ".github/workflows/maykernel-phase1.yml"
+  pull_request:
+    paths:
+      - "MayOS_0.3.0-pre1/kernel/**"
+      - "MayOS_0.3.0-pre1/scripts/**"
+      - "MayOS_0.3.0-pre1/Makefile"
+      - ".github/workflows/maykernel-phase1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  custom-kernel:
+    name: x86_64 MayKernel ISO and QEMU smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: MayOS_0.3.0-pre1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install BIOS/UEFI ISO and QEMU test dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential gcc-multilib python3 python3-pil \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools dosfstools \
+            qemu-system-x86 ovmf fonts-noto-cjk fonts-dejavu-core
+      - name: Check toolchain
+        run: |
+          gcc --version | head -1
+          qemu-system-x86_64 --version | head -1
+          python3 --version
+      - name: Build custom x86_64 kernel and BIOS/UEFI ISO
+        run: make BOOT_FIRMWARE=hybrid all
+      - name: Check ELF architecture and ISO integrity
+        run: |
+          file build/mayos.elf
+          readelf -h build/mayos.elf | tee build/elf-header.txt
+          readelf -h build/mayos.elf | grep -q 'ELF64'
+          readelf -h build/mayos.elf | grep -q 'Advanced Micro Devices X86-64'
+          test -s build/mayos.iso
+          sha256sum build/mayos.elf build/mayos.iso | tee build/phase1-sha256.txt
+      - name: Run actual QEMU and desktop regression suite
+        run: make BOOT_FIRMWARE=hybrid test
+      - name: Archive phase 1 evidence (also on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel-phase1-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            MayOS_0.3.0-pre1/build/phase1-sha256.txt
+            MayOS_0.3.0-pre1/build/elf-header.txt
+            MayOS_0.3.0-pre1/build/*.log
+            MayOS_0.3.0-pre1/build/*test*.json
