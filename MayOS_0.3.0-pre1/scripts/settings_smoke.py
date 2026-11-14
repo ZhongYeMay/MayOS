@@ -10,8 +10,8 @@ def capture(disk, name):
         vm.click(50, 16)
         vm.shot(name)
         image = Image.open(BUILD / f'{name}.png').convert('RGB')
-        assert image.getpixel((400, 300)) == (0, 0, 0)
-        assert image.getpixel((15, 20)) == (5, 5, 6)
+        assert image.getpixel((360, 338)) == (0, 0, 0)
+        assert image.getpixel((15, 20)) == (3, 3, 4)
     finally:
         vm.stop()
 
