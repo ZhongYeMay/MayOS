@@ -16,6 +16,10 @@ MayOS 是一个不断迭代的系统开发项目。最新版源码提供自研 x
 - [许可与第三方组件](MayOS_0.3.0-pre1/docs/third-party/dual-boot.md)
 - [GitHub Releases](https://github.com/ZhongYeMay/MayOS/releases)
 
+## 当前开发版本（尚未发布）
+
+**MayOS `0.5.0-pre1-dev`**（MayKernel x86_64 / Linux x86_64）。系统“关于”与 MayShell `neofetch` 使用同一份版本常量；下一次拟发布的测试版为 `0.5.0-pre1`，但只有通过完整验收并创建 Release 后才能使用正式发布标记。现有 `0.4.1-pre2` 官网和已发布附件不变。
+
 ## 2026-11-14 日用化第一阶段（开发分支）
 
 - [阶段一工作清单与验收标准](MayOS_0.3.0-pre1/docs/phase1-daily-use-baseline.md)。
