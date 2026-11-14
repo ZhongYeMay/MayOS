@@ -57,6 +57,10 @@ jobs:
             echo "ERROR: fault-injection flag enabled in the normal ISO" >&2
             exit 1
           fi
+          if strings build/mayos.elf | grep -q 'FS POWERLOSS DIAGNOSTIC'; then
+            echo "ERROR: destructive diagnostic hook enabled in production ISO" >&2
+            exit 1
+          fi
           test -s build/mayos.iso
           sha256sum build/mayos.elf build/mayos.iso | tee build/phase1-sha256.txt
       - name: Run actual QEMU and desktop regression suite
@@ -112,6 +116,26 @@ jobs:
             MayOS_0.3.0-pre1/build/phase1-memory-filesystem-results.json
             MayOS_0.3.0-pre1/build/desktop.png
             MayOS_0.3.0-pre1/build/mayos.iso
+      - name: Build isolated MayFS hard-power-cut diagnostic ISO and SIGKILL QEMU
+        run: |
+          mkdir -p build/phase1-normal
+          cp build/mayos.iso build/phase1-normal/mayos.iso
+          make clean
+          make BOOT_FIRMWARE=hybrid FS_POWERLOSS_SELFTEST=1 all
+          python3 -m py_compile scripts/phase1_powercut_smoke.py
+          python3 scripts/phase1_powercut_smoke.py \
+            --normal-iso build/phase1-normal/mayos.iso \
+            --diagnostic-iso build/mayos.iso
+      - name: Archive separate power-cut diagnostic evidence (no faulting ISO)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel-powercut-selftest-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            MayOS_0.3.0-pre1/build/phase1-powercut-test-results.json
+            MayOS_0.3.0-pre1/build/phase1-powercut*.log
       - name: Build and boot isolated exception-diagnostic ISO (NOT for release)
         run: |
           make clean
