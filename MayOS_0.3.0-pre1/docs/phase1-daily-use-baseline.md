@@ -10,19 +10,19 @@
 
 - [x] 当前 PR 的 MayKernel 构建成功，确认生成 ELF64 x86-64，产出混合启动 ISO 及 SHA-256（Actions 43556114395、43556409969）。后续提交仍需重新验证。
 - [x] 当前 PR 已验证 BIOS 真实 ISO 启动（`make test`）与 OVMF x64 UEFI → GRUB → MayKernel → 桌面，并核对 ISO SHA-256（Actions 43556409969）。
-- [ ] 冷启动与重启各验证多次，保留串口日志和可复现失败记录。
+- [ ] 冷启动与重启各验证多次，保留串口日志和可复现失败记录。**已通过 BIOS 和 UEFI 各 3 次冷启动；热重启和长时循环仍待验证。**
 - [ ] 文件创建、修改、关闭后再次启动并读回；隔离测试磁盘，检查未识别数据盘不被破坏。
 - [ ] 键盘、鼠标、窗口操作、设置持久化和桌面功能回归通过。
-- [ ] 异常与内存边界处理有可测证据：异常向量、分页/地址映射、保留内存跳过、分配失败处理。
+- [ ] 异常与内存边界处理有可测证据：异常向量、分页/地址映射、保留内存跳过、分配失败处理。**已通过受控 #UD 故障注入验证异常向量、错误码与 RIP 日志；其他边界及恢复能力未完成。**
 - [ ] 记录连续运行和高频文件操作的稳定性测试结果；不能把短时启动成功当成可靠性证明。
 - [ ] 发布的 ISO、截图、真实 QEMU 录屏、测试报告和源码提交 SHA 严格对应。
 - [ ] 任何失败均阻止将版本宣称为稳定版或日用版。
 
 ## 当前可自动执行的基线
 
-仓库 `.github/workflows/maykernel-phase1.yml` 在 Ubuntu 24.04 上安装构建工具，构建自研 x86_64 ELF 与混合 ISO，核对 ELF 架构并调用原有 `make test`（其中包含 BIOS QEMU 与桌面烟雾测试）。随后执行 `uefi_smoke.py --custom-only` 进行实际 OVMF 固件启动与冷启动持久化校验，再由 `phase1_soak.py` 在同一份 ISO 上执行 BIOS 与 UEFI 各 3 次独立冷启动，核对 MayFS 数据完整性。构建日志、JSON、图片、ISO 与哈希保留为 GitHub Actions 附件；每次提交必须以实际 Actions 运行结果为准。
+仓库 `.github/workflows/maykernel-phase1.yml` 在 Ubuntu 24.04 上安装构建工具，构建自研 x86_64 ELF 与混合 ISO，核对 ELF 架构并调用原有 `make test`（其中包含 BIOS QEMU 与桌面烟雾测试）。随后执行 `uefi_smoke.py --custom-only` 进行实际 OVMF 固件启动与冷启动持久化校验，再由 `phase1_soak.py` 在同一份 ISO 上执行 BIOS 与 UEFI 各 3 次独立冷启动，核对 MayFS 数据完整性。之后在上传普通 ISO 证据之后，重新构建**仅用于测试且会主动触发错误的诊断 ISO**，使用 `exception_smoke.py` 进行 QEMU 无效指令 `#UD` 故障注入，验证串口日志包含异常向量、错误码与 RIP。诊断 ISO 从不作为正式 ISO 或普通 ISO 附件交付。构建日志、JSON、图片、正常 ISO 与哈希保留为 GitHub Actions 附件；每次提交必须以实际 Actions 运行结果为准。
 
-**注意：** 已通过的动作包含自研内核的真实 BIOS / OVMF 路径；`phase1_soak.py` 的测试结果需等本次提交的 Actions 成功后确认。该工作流不等同于 Linux + MayKernel 双启动镜像的完整矩阵；`make test-dual` 和 `make test-uefi` 仍依赖完整 Linux 构建或既有产物。未执行的项目不可填写为通过。
+**本轮经核验的证据：** [Actions #43557182839](https://github.com/ZhongYeMay/MayOS/actions/runs/43557182839) 验证 ELF64、BIOS 基础回归、OVMF UEFI 冷启动、同一 ISO 下 BIOS/UEFI 各 3 次冷启动及 MayFS 完整性，并在另行构建的诊断 ISO 内验证 #UD 向量 6、错误码与 RIP 日志。该工作流不等同于 Linux + MayKernel 双启动镜像的完整矩阵；`make test-dual` 和 `make test-uefi` 仍依赖完整 Linux 构建或既有产物。未执行的项目不可填写为通过。
 
 ## 阶段二进入条件
 
