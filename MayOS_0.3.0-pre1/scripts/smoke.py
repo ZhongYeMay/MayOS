@@ -78,7 +78,7 @@ def main():
     vm=VM(disk,'test-first')
     try:
         vm.shot('desktop')
-        vm.key('f1');vm.cmd('neofetch');vm.wait('Kernel: MayKernel x86_64 (custom)');vm.shot('terminal')
+        vm.key('f1');vm.cmd('neofetch');vm.wait('OS: MayOS 0.5.0-pre1-dev');vm.wait('Kernel: MayKernel x86_64 (custom)');vm.shot('terminal')
         vm.cmd('memtest');vm.wait('memtest: PASS')
         vm.cmd('mkdir Projects');vm.cmd('write Projects/persist.txt reboot-survives')
         vm.cmd('cat Projects/persist.txt');vm.wait('\nreboot-survives\n')
