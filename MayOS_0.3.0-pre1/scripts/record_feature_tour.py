@@ -20,7 +20,11 @@ def record(args):
     args.output = args.output.resolve()
     args.firmware = "bios"
     args.ovmf_code = args.ovmf_vars = None
-    args.release = (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
+    root = Path(__file__).resolve().parents[1]
+    args.release = (root / "VERSION").read_text().strip()
+    declared_version = (root / "kernel" / "version.h").read_text(encoding="utf-8")
+    if f'#define MAYOS_VERSION "{args.release}"' not in declared_version:
+        raise ValueError("VERSION and kernel/version.h mismatch; refuse mislabeled video")
     if not re.fullmatch(r"[0-9a-f]{40}", args.source_commit):
         raise ValueError("Exact 40-character source commit required")
     if not args.iso.is_file():
