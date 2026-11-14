@@ -67,7 +67,7 @@ def record(args):
         vm.hold(1.3)
         vm.key("esc")                      # Clear search and restore all sections
         actions.append("real_light_and_dark_appearance_switch")
-        vm.click(195, 617)                 # About item on full-height sidebar
+        vm.click(195, 636)                 # About item on full-height sidebar
         vm.hold(3.0)
         actions.append("real_About_card_after_theme_change")
 
@@ -90,7 +90,7 @@ def record(args):
             vm.click(195, y)
             vm.hold(1.0)
             actions.append("settings_" + name)
-        vm.click(195, 617)                 # About at bottom
+        vm.click(195, 636)                 # About at bottom
         vm.hold(3.0)
         vm.click(121, 142)                 # First traffic-light: close Settings
         vm.hold(2.2)
