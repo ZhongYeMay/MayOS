@@ -51,52 +51,52 @@ def record(args):
 
         # Actual screenshot-matched four-icon Dock (Files/Settings/Terminal/Trash).
         # Every mouse coordinate corresponds to kernel/gui.c input hitboxes.
-        vm.click(477, 710)                 # Settings Dock icon
+        vm.click(596, 662)                 # Settings Dock icon
         vm.hold(4.0)                       # Show screenshot-accurate About card
         actions.append("reference_About_MayOS_proportional_font")
 
         # Search field is genuinely interactive. Enter selects the first match;
         # Escape clears the filter so the sidebar is reachable again.
-        vm.click(190, 232)
+        vm.click(310, 230)
         vm.command("Display")
         vm.hold(2.0)
         actions.append("real_settings_search_and_display_navigation")
-        vm.click(390, 325)                 # Light appearance tile
+        vm.click(552, 330)                 # Light appearance tile
         vm.hold(1.3)
-        vm.click(637, 325)                 # Dark appearance tile
+        vm.click(794, 330)                 # Dark appearance tile
         vm.hold(1.3)
         vm.key("esc")                      # Clear search and restore all sections
         actions.append("real_light_and_dark_appearance_switch")
-        vm.click(195, 636)                 # About item on full-height sidebar
+        vm.click(315, 548)                 # About item on full-height sidebar
         vm.hold(3.0)
         actions.append("real_About_card_after_theme_change")
 
         # General is an actual navigation hub for the legacy advanced controls.
-        vm.click(195, 290)                 # General; window expands for controls
+        vm.click(315, 276)                 # General; window expands for controls
         vm.hold(1.0)
-        vm.click(450, 220)                 # Desktop & Pointer in General
+        vm.click(598, 223)                 # Desktop & Pointer in General
         vm.hold(1.4)
-        vm.click(821, 128)                 # Back to General (actual button)
+        vm.click(942, 117)                 # Back to General (actual button)
         vm.hold(.8)
         actions.append("real_General_desktop_pointer_navigation")
 
         # Each reference sidebar label has its own meaningful page.
-        for y, name in ((230, "general"),
-                        (270, "display"),
-                        (310, "sound"),
-                        (350, "network"),
-                        (390, "privacy_security"),
-                        (430, "updates")):
-            vm.click(195, y)
+        for y, name in ((202, "general"),
+                        (242, "display"),
+                        (282, "sound"),
+                        (322, "network"),
+                        (362, "privacy_security"),
+                        (402, "updates")):
+            vm.click(315, y)
             vm.hold(1.0)
             actions.append("settings_" + name)
         vm.click(195, 636)                 # About at bottom
         vm.hold(3.0)
-        vm.click(121, 142)                 # First traffic-light: close Settings
+        vm.click(248, 132)                 # First traffic-light: close Settings
         vm.hold(2.2)
         actions.append("functional_settings_traffic_light_close")
 
-        vm.click(403, 710)                 # Files from the redesigned Dock
+        vm.click(539, 664)                 # Files from the redesigned Dock
         vm.hold(2.2)
         actions.append("real_file_manager")
         vm.click(370, 212)                 # New file dialogue
@@ -134,7 +134,7 @@ def record(args):
          "-show_entries", "stream=codec_name,width,height,nb_frames",
          "-of", "json", str(args.output)], text=True)
     stream = json.loads(video_info)["streams"][0]
-    if stream.get("codec_name") != "h264" or stream.get("width") != 1024 or stream.get("height") != 768:
+    if stream.get("codec_name") != "h264" or stream.get("width") != 1280 or stream.get("height") != 720:
         raise AssertionError(f"invalid video stream: {stream}")
     result = {
         "release_source_version": args.release,
