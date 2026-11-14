@@ -72,8 +72,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/verified"
+          # --pattern adds an artifact-name subdirectory. --name extracts
+          # directly into the requested directory, where validation expects it.
           gh run download "$VIDEO_RUN" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'MayOS-all-features-QEMU-*' \
+            --name 'MayOS-all-features-QEMU-a6ef2fc51b1d569fe05cca8d65f2807abdd8991a' \
             --dir "$RUNNER_TEMP/verified"
           find "$RUNNER_TEMP/verified" -maxdepth 4 -type f | sort | head -40
           # gh run download --pattern retains the matching artifact name as
