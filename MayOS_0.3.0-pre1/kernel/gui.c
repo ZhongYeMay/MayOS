@@ -348,49 +348,51 @@ static int heading_text(int x, int y, const char *s, u32 color) {
     }
     return x;
 }
-/* The reference About card uses a large white title, softer gray version
- * and readable, right-aligned metadata. Scale the exact same native glyphs
- * with 2x bilinear coverage: no browser, OS font service or AA library. */
-static int reference_title_text(int x, int y, const char *s, u32 color) {
-    int start = x;
+/* Separate proportional Sans alpha atlas; generated from installed
+ * DejaVu Sans at BUILD TIME. No font engine or browser in MayKernel runtime.
+ * One fixed baseline for every glyph avoids uneven letter heights. */
+static int reference_font_glyph(int codepoint) {
+    int lo = 0, hi = PREMIUM_FONT_COUNT - 1;
+    while (lo <= hi) {
+        int middle = (lo + hi) / 2;
+        if (premium_font_code[middle] == codepoint) return middle;
+        if (premium_font_code[middle] < codepoint) lo = middle + 1;
+        else hi = middle - 1;
+    }
+    return -1;
+}
+static int reference_font_width(const char *s, int title) {
+    int total = 0;
     while (*s) {
-        int cp = utf(&s), glyph_id = glyph(cp);
-        int width = cp < 128 ? 8 : 16;
-        for (int yy = 0; yy < 40; yy++) {
-            int sy = yy / 2, sy1 = sy + 1 < 20 ? sy + 1 : sy;
-            for (int xx = 0; xx < width * 2; xx++) {
-                int sx = xx / 2, sx1 = sx + 1 < width ? sx + 1 : sx;
-                u32 a00 = font_bits[glyph_id][sy * 16 + sx];
-                u32 a01 = font_bits[glyph_id][sy1 * 16 + sx];
-                u32 a10 = font_bits[glyph_id][sy * 16 + sx1];
-                u32 a11 = font_bits[glyph_id][sy1 * 16 + sx1];
-                u32 a;
-                if (xx & 1) {
-                    if (yy & 1) a = (a00 + a01 + a10 + a11) / 4;
-                    else a = (a00 + a10) / 2;
-                } else {
-                    a = (yy & 1) ? (a00 + a01) / 2 : a00;
-                }
-                int px = x + xx, py = y + yy;
-                if (a && px >= 0 && py >= 0 && px < W && py < H)
-                    pixels[py * W + px] = blend(pixels[py * W + px], color, a);
+        int codepoint = utf(&s), g = reference_font_glyph(codepoint);
+        total += g >= 0 ? (title ? premium_title_advance[g] :
+                                     premium_body_advance[g]) : 12;
+    }
+    return total;
+}
+static void reference_text(int x, int y, const char *s, u32 color, int title) {
+    int stride = title ? 36 : 28, height = title ? 40 : 30;
+    while (*s) {
+        int codepoint = utf(&s), g = reference_font_glyph(codepoint);
+        if (g < 0) { x += 12; continue; }
+        const u8 *bitmap = title ? premium_title_bitmap[g] : premium_body_bitmap[g];
+        int advance = title ? premium_title_advance[g] : premium_body_advance[g];
+        for (int yy = 0; yy < height; yy++) {
+            int py = y + yy;
+            if (py < 0 || py >= H) continue;
+            for (int xx = 0; xx < stride && xx < advance + 3; xx++) {
+                int px = x + xx;
+                if (px < 0 || px >= W) continue;
+                u8 alpha = bitmap[yy * stride + xx];
+                if (alpha)
+                    pixels[py * W + px] = blend(pixels[py * W + px], color, alpha);
             }
         }
-        x += width * 2;
+        x += advance;
     }
-    return x - start;
-}
-static int ui_text_width(const char *s, int scale_three_halves) {
-    int width = 0;
-    while (*s) {
-        int c = utf(&s);
-        width += c < 128 ? (scale_three_halves ? 12 : 8) :
-                          (scale_three_halves ? 24 : 16);
-    }
-    return width;
 }
 static void reference_right_label(int right, int y, const char *label, u32 color) {
-    heading_text(right - ui_text_width(label, 1), y, label, color);
+    reference_text(right - reference_font_width(label, 0), y, label, color, 0);
 }
 static void reference_monitor_icon(int x, int y, u32 color, u32 background) {
     /* A flat outlined monitor, matching the supplied reference instead
@@ -1109,21 +1111,21 @@ static void settings(Window *w) {
         /* Draw the monitor directly (no generic gear tile).
          * Original Easter-egg click region at (220,190) is unchanged. */
         reference_monitor_icon(cx + 18, card_top + 40, ink, card_bg);
-        reference_title_text(cx + 60, card_top + 24, "MayOS", ink);
-        heading_text(cx + 60, card_top + 66, "Version " MAYOS_RELEASE, muted);
+        reference_text(cx + 60, card_top + 16, "MayOS", ink, 1);
+        reference_text(cx + 60, card_top + 55, "Version " MAYOS_RELEASE, muted, 0);
         rect(cx + 18, card_top + 115, cw - 36, 1, line);
         /* The three rows intentionally have no icons, chips or secondary
            descriptions: exact hierarchy of the approved reference. */
-        heading_text(cx + 18, card_top + 148, "Kernel", muted);
+        reference_text(cx + 18, card_top + 142, "Kernel", muted, 0);
 #ifdef MAYOS_LINUX
-        reference_right_label(cx + cw - 18, card_top + 148, "Linux x86_64", ink);
+        reference_right_label(cx + cw - 18, card_top + 142, "Linux x86_64", ink);
 #else
-        reference_right_label(cx + cw - 18, card_top + 148, "MayKernel x86_64", ink);
+        reference_right_label(cx + cw - 18, card_top + 142, "MayKernel x86_64", ink);
 #endif
-        heading_text(cx + 18, card_top + 184, "Build", muted);
-        reference_right_label(cx + cw - 18, card_top + 184, "Development Preview", ink);
-        heading_text(cx + 18, card_top + 220, "Architecture", muted);
-        reference_right_label(cx + cw - 18, card_top + 220, "64-bit", ink);
+        reference_text(cx + 18, card_top + 178, "Build", muted, 0);
+        reference_right_label(cx + cw - 18, card_top + 178, "Development Preview", ink);
+        reference_text(cx + 18, card_top + 214, "Architecture", muted, 0);
+        reference_right_label(cx + cw - 18, card_top + 214, "64-bit", ink);
         /* Device rename/Credits remain available beneath the card,
            outside the screenshot-specific component. */
         text(cx, cy + 412, "This version of MayOS is for test use only.", muted);
