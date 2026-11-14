@@ -84,6 +84,10 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
           path: |
+            MayOS_0.3.0-pre1/build/mayos.iso
+            MayOS_0.3.0-pre1/build/mayos-dual.iso
+            MayOS_0.3.0-pre1/build/mayos.iso.boot.json
+            MayOS_0.3.0-pre1/build/dual-boot-test-results.json
             MayOS_0.3.0-pre1/build/recordings/*.mp4
             MayOS_0.3.0-pre1/build/recordings/*.json
             MayOS_0.3.0-pre1/build/desktop-macos-md3-reference.png

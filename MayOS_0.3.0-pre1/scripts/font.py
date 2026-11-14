@@ -28,4 +28,34 @@ with out.open('w') as f:
         d.text((3 if symbol else 0,0 if c<128 or symbol else -3),chr(c),font=ascii_font if c<128 or symbol else font,fill=255)
         f.write('{'+','.join(map(str,im.tobytes()))+'},\n')
     f.write('};\n')
+    # The reference About card is large, proportional and sans-serif rather
+    # than the 13px monospace system bitmap. Rasterize only our UI Latin glyphs
+    # to a separate source-specific alpha atlas. The final OS uses no font files.
+    premium_chars = ''.join(sorted(set(
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .-_/')))
+    premium_font = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+    title_font = ImageFont.truetype(premium_font, 26)
+    info_font = ImageFont.truetype(premium_font, 19)
+    f.write(f'#define PREMIUM_FONT_COUNT {len(premium_chars)}\n')
+    f.write('static const unsigned short premium_font_code[]={'+
+            ','.join(str(ord(x)) for x in premium_chars)+'};\n')
+    for stem,face,cellw,cellh,baseline in (
+        ('title',title_font,36,40,29),
+        ('body',info_font,28,30,22)):
+        advances=[]
+        data=[]
+        for char in premium_chars:
+            img=Image.new('L',(cellw,cellh))
+            draw=ImageDraw.Draw(img)
+            # Consistent typographic baseline, including descenders.
+            draw.text((1,baseline),char,font=face,fill=255,anchor='ls')
+            advance=min(cellw,max(1,round(face.getlength(char))))
+            advances.append(advance)
+            data.append(img.tobytes())
+        f.write(f'static const unsigned char premium_{stem}_advance[]={{'+
+                ','.join(map(str,advances))+'};\n')
+        f.write(f'static const unsigned char premium_{stem}_bitmap[][{cellw*cellh}]={{\n')
+        for pix in data:
+            f.write('{'+','.join(map(str,pix))+'},\n')
+        f.write('};\n')
 print(f'font: {len(chars)} glyphs -> {out}')

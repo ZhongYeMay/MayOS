@@ -49,6 +49,37 @@ void serial(const char *s) {
         outb(0x3f8, *s++);
     }
 }
+/* A fatal CPU exception must leave a serial diagnosis, not silently triple-fault.
+ * This is not process isolation or exception recovery. */
+static void serial_hex64(u64 value) {
+    static const char digits[] = "0123456789abcdef";
+    char out[19];
+    out[0] = '0';
+    out[1] = 'x';
+    for (int i = 0; i < 16; i++)
+        out[i + 2] = digits[(value >> ((15 - i) * 4)) & 15];
+    out[18] = 0;
+    serial(out);
+}
+void kernel_exception(u64 vector, u64 error, u64 rip) {
+    char number_buf[12];
+    serial("MayOS: FATAL EXCEPTION vector=");
+    number(number_buf, (u32)vector);
+    serial(number_buf);
+    serial(" error=");
+    serial_hex64(error);
+    serial(" rip=");
+    serial_hex64(rip);
+    if (vector == 14) {
+        u64 fault_address;
+        __asm__ volatile("mov %%cr2, %0" : "=r"(fault_address));
+        serial(" cr2=");
+        serial_hex64(fault_address);
+    }
+    serial("\n");
+    for (;;)
+        __asm__ volatile("cli; hlt");
+}
 volatile u32 ticks;
 u32 memory_mb, free_pages;
 char cpu_name[64];
@@ -78,6 +109,94 @@ void page_free(void *p) {
         free_pages++;
     }
 }
+/* Bounded destructive-to-test-pages allocator stress, not a whole-RAM
+ * exhaustion test. Every allocated page is returned before exiting.
+ * No firmware-reserved or persistent disk memory is modified. */
+int page_stress_test(void) {
+    u32 initial = free_pages;
+    int ok = 1;
+    for (u32 round = 0; round < 16; round++) {
+        u32 *slots[128] = {0};
+        u32 *replacement[64] = {0};
+        for (u32 i = 0; i < 128; i++) {
+            slots[i] = page_alloc();
+            if (!slots[i]) { ok = 0; break; }
+            /* Allocator guarantees zero-filled fresh pages. */
+            if (slots[i][0] || slots[i][127] ||
+                slots[i][511] || slots[i][1023]) { ok = 0; break; }
+            slots[i][0] = 0x51000000u + (round << 8) + i;
+            slots[i][127] = 0xabcdef01u ^ (i + round);
+            slots[i][511] = ~slots[i][0];
+            slots[i][1023] = ~slots[i][127];
+        }
+        if (ok) {
+            for (u32 i = 0; i < 128; i++) {
+                if (slots[i][0] != 0x51000000u + (round << 8) + i ||
+                    slots[i][127] != (0xabcdef01u ^ (i + round)) ||
+                    slots[i][511] != ~slots[i][0] ||
+                    slots[i][1023] != ~slots[i][127])
+                    ok = 0;
+            }
+        }
+        /* Free alternating pages to force reuse under fragmentation. */
+        if (ok) {
+            for (u32 i = 1; i < 128; i += 2) {
+                page_free(slots[i]);
+                slots[i] = 0;
+            }
+            for (u32 i = 0; i < 64; i++) {
+                replacement[i] = page_alloc();
+                if (!replacement[i]) { ok = 0; break; }
+                if (replacement[i][0] || replacement[i][1023])
+                    ok = 0;
+                for (u32 j = 0; j < 128; j += 2)
+                    if (replacement[i] == slots[j])
+                        ok = 0;
+                for (u32 j = 0; j < i; j++)
+                    if (replacement[i] == replacement[j])
+                        ok = 0;
+                replacement[i][0] = 0xface0000u + i;
+                replacement[i][1023] = ~replacement[i][0];
+                if (!ok) break;
+            }
+            for (u32 i = 0; i < 128; i += 2)
+                if (slots[i] && (slots[i][0] != 0x51000000u + (round << 8) + i ||
+                                  slots[i][1023] != ~(0xabcdef01u ^ (i + round))))
+                    ok = 0;
+            for (u32 i = 0; i < 64; i++)
+                if (replacement[i] &&
+                    (replacement[i][0] != 0xface0000u + i ||
+                     replacement[i][1023] != ~(0xface0000u + i)))
+                    ok = 0;
+        }
+        /* Invalid unaligned pointer must not release an allocation. */
+        for (u32 i = 0; i < 128; i++) {
+            if (slots[i]) {
+                u32 before = free_pages;
+                page_free((void *)((uptr)slots[i] + 1));
+                if (free_pages != before) ok = 0;
+                break;
+            }
+        }
+        for (u32 i = 0; i < 128; i++)
+            if (slots[i]) {
+                void *p = slots[i];
+                page_free(p);
+                /* A double free must not increment free_pages twice. */
+                u32 before = free_pages;
+                page_free(p);
+                if (free_pages != before) ok = 0;
+            }
+        for (u32 i = 0; i < 64; i++)
+            if (replacement[i]) page_free(replacement[i]);
+        if (free_pages != initial) ok = 0;
+        if (!ok) break;
+    }
+    serial(ok ? "MayOS: memstress PASS (16 rounds, 128 pages, fragmentation, free guards)\n"
+              : "MayOS: memstress FAIL\n");
+    return ok;
+}
+
 static void memory_init(const u8 *m, u32 flags) {
     /* Multiboot mem_upper describes only the first contiguous range. EFI
        firmware commonly leaves a hole near 8 MiB, so use its full memory map.
@@ -170,11 +289,17 @@ struct Gate {
 } __attribute__((packed));
 static struct Gate idt[256];
 extern void timer_stub(void);
+extern void (*const mayos_exception_stubs[32])(void);
 void timer_interrupt(void) {
     ticks++;
     outb(0x20, 0x20);
 }
 static void timer_init(void) {
+    for (u32 vector = 0; vector < 32; vector++) {
+        uptr handler = (uptr)mayos_exception_stubs[vector];
+        idt[vector] = (struct Gate){(u16)handler, 8, 0, 0x8e,
+            (u16)(handler >> 16), (u32)(handler >> 32), 0};
+    }
     uptr a = (uptr)timer_stub;
     idt[32] = (struct Gate){(u16)a, 8, 0, 0x8e, (u16)(a >> 16), (u32)(a >> 32), 0};
     struct {
@@ -284,6 +409,10 @@ void hardware_init(u32 magic, u32 info) {
     cpu_name[48] = 0;
     ps2_init();
     timer_init();
+#ifdef MAYOS_EXCEPTION_SELFTEST
+    serial("MayOS: intentional invalid-opcode exception self-test\n");
+    __asm__ volatile("ud2");
+#endif
     serial("MayOS: framebuffer, memory, PIT and PS/2 ready\n");
 }
 void present(u32 *p) {

@@ -42,6 +42,9 @@ extern u32 memory_mb, free_pages;
 extern char cpu_name[64];
 void *page_alloc(void);
 void page_free(void *);
+#ifndef MAYOS_LINUX
+int page_stress_test(void);
+#endif
 void hardware_init(u32, u32);
 int input_poll(int *, int *, int *, int *);
 void poweroff(void);

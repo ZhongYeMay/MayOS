@@ -8,7 +8,8 @@
 #ifdef MAYOS_LINUX
 #include "explorer_history.h"
 #endif
-#define MAYOS_RELEASE "0.4.1-pre2"
+#include "version.h"
+#define MAYOS_RELEASE MAYOS_VERSION
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
 #define PLATFORM_BADGE "LINUX SESSION"
@@ -19,9 +20,9 @@
 #define PLATFORM_ARCH "x86_64 / 64-bit"
 #endif
 static u32 pixels[W * H];
-/* Exact grayscale-first UI contract from the user's 1024x768 reference image. */
-static u32 bg = 0x141218, panel = 0x211f26, ink = 0xe6e1e5, muted = 0xcac4d0, line = 0x49454f,
-           accent = 0xe2e2e7, surface_high = 0x2b2930, on_accent = 0x202124, selected_fill = 0x46474d;
+/* MayOS 0.5.0: approved pure-black/charcoal visual system. */
+static u32 bg = 0x050506, panel = 0x080809, ink = 0xf5f5f6, muted = 0xa1a1a5, line = 0x303033,
+           accent = 0xececef, surface_high = 0x18181b, on_accent = 0x111113, selected_fill = 0x29292d;
 static int dark = 1, accent_choice = 0;
 static int desktop_style = 0, pointer_size = 0, show_brand = 1, high_contrast = 0;
 /* 0 = black square, 1 = white square, 2 = custom Documents/Cursor.ppm. */
@@ -217,6 +218,41 @@ static u32 blend(u32 b, u32 f, u32 a) {
         v = (((b & 255) * (255 - a) + (f & 255) * a) / 255);
     return r << 16 | g << 8 | v;
 }
+/* Radius-aware antialiased native surfaces; same code path on MayKernel and Linux. */
+static void soft_roundrect(int x, int y, int w, int h, int radius, u32 c) {
+    if (w <= 0 || h <= 0) return;
+    int r = radius;
+    if (r > w / 2) r = w / 2;
+    if (r > h / 2) r = h / 2;
+    if (!r) { rect(x, y, w, h, c); return; }
+    rect(x + r, y, w - 2 * r, h, c);
+    rect(x, y + r, r, h - 2 * r, c);
+    rect(x + w - r, y + r, r, h - 2 * r, c);
+    for (int yy = 0; yy < r; yy++)
+        for (int xx = 0; xx < r; xx++) {
+            int dx = r - xx - 1, dy = r - yy - 1;
+            int samples = 0;
+            for (int sy = 0; sy < 2; sy++)
+                for (int sx = 0; sx < 2; sx++) {
+                    int u = dx * 2 + sx, v = dy * 2 + sy;
+                    if (u*u + v*v <= 4*r*r) samples++;
+                }
+            if (!samples) continue;
+            int xs[2] = {x + xx, x + w - 1 - xx};
+            int ys[2] = {y + yy, y + h - 1 - yy};
+            for (int j = 0; j < 2; j++)
+                for (int i = 0; i < 2; i++) {
+                    int px = xs[i], py = ys[j];
+                    if (px < 0 || py < 0 || px >= W || py >= H) continue;
+                    u32 *dst = &pixels[py * W + px];
+                    *dst = samples == 4 ? c : blend(*dst, c, (u32)samples * 255 / 4);
+                }
+        }
+}
+static void ui_card(int x, int y, int w, int h, int r, u32 fill) {
+    soft_roundrect(x, y, w, h, r, line);
+    soft_roundrect(x + 1, y + 1, w - 2, h - 2, r - 1, fill);
+}
 #ifndef MAYOS_LINUX
 /* Independently implemented software RGBA renderer for MayKernel game artwork.
    Pixel data is packed from the unchanged original WebP source at build time. */
@@ -281,6 +317,90 @@ static int large_text(int x, int y, const char *s, u32 color) {
         x += width * 2;
     }
     return x;
+}
+/* Smooth 3:2 text scaling for the monochrome UI's primary headings.
+ * Bilinear alpha interpolation, drawn into the native framebuffer. */
+static int heading_text(int x, int y, const char *s, u32 color) {
+    while (*s) {
+        int cp = utf(&s), g = glyph(cp);
+        int src_width = cp < 128 ? 8 : 16;
+        int out_width = src_width * 3 / 2;
+        for (int py = 0; py < 30; py++) {
+            int sy = py * 2 / 3, fy = (py * 2) % 3;
+            int sy1 = sy + 1 < 20 ? sy + 1 : sy;
+            for (int px = 0; px < out_width; px++) {
+                int sx = px * 2 / 3, fx = (px * 2) % 3;
+                int sx1 = sx + 1 < src_width ? sx + 1 : sx;
+                int a00 = font_bits[g][sy * 16 + sx];
+                int a10 = font_bits[g][sy * 16 + sx1];
+                int a01 = font_bits[g][sy1 * 16 + sx];
+                int a11 = font_bits[g][sy1 * 16 + sx1];
+                u32 a = (u32)(a00 * (3 - fx) * (3 - fy) +
+                              a10 * fx * (3 - fy) +
+                              a01 * (3 - fx) * fy +
+                              a11 * fx * fy) / 9;
+                int dx = x + px, dy = y + py;
+                if (a && dx >= 0 && dy >= 0 && dx < W && dy < H)
+                    pixels[dy * W + dx] = blend(pixels[dy * W + dx], color, a);
+            }
+        }
+        x += out_width;
+    }
+    return x;
+}
+/* Separate proportional Sans alpha atlas; generated from installed
+ * DejaVu Sans at BUILD TIME. No font engine or browser in MayKernel runtime.
+ * One fixed baseline for every glyph avoids uneven letter heights. */
+static int reference_font_glyph(int codepoint) {
+    int lo = 0, hi = PREMIUM_FONT_COUNT - 1;
+    while (lo <= hi) {
+        int middle = (lo + hi) / 2;
+        if (premium_font_code[middle] == codepoint) return middle;
+        if (premium_font_code[middle] < codepoint) lo = middle + 1;
+        else hi = middle - 1;
+    }
+    return -1;
+}
+static int reference_font_width(const char *s, int title) {
+    int total = 0;
+    while (*s) {
+        int codepoint = utf(&s), g = reference_font_glyph(codepoint);
+        total += g >= 0 ? (title ? premium_title_advance[g] :
+                                     premium_body_advance[g]) : 12;
+    }
+    return total;
+}
+static void reference_text(int x, int y, const char *s, u32 color, int title) {
+    int stride = title ? 36 : 28, height = title ? 40 : 30;
+    while (*s) {
+        int codepoint = utf(&s), g = reference_font_glyph(codepoint);
+        if (g < 0) { x += 12; continue; }
+        const u8 *bitmap = title ? premium_title_bitmap[g] : premium_body_bitmap[g];
+        int advance = title ? premium_title_advance[g] : premium_body_advance[g];
+        for (int yy = 0; yy < height; yy++) {
+            int py = y + yy;
+            if (py < 0 || py >= H) continue;
+            for (int xx = 0; xx < stride && xx < advance + 3; xx++) {
+                int px = x + xx;
+                if (px < 0 || px >= W) continue;
+                u8 alpha = bitmap[yy * stride + xx];
+                if (alpha)
+                    pixels[py * W + px] = blend(pixels[py * W + px], color, alpha);
+            }
+        }
+        x += advance;
+    }
+}
+static void reference_right_label(int right, int y, const char *label, u32 color) {
+    reference_text(right - reference_font_width(label, 0), y, label, color, 0);
+}
+static void reference_monitor_icon(int x, int y, u32 color, u32 background) {
+    /* A flat outlined monitor, matching the supplied reference instead
+       of an unrelated Settings gear icon. */
+    soft_roundrect(x, y, 25, 20, 4, color);
+    soft_roundrect(x + 2, y + 2, 21, 16, 2, background);
+    rect(x + 11, y + 20, 3, 3, color);
+    rect(x + 7, y + 23, 11, 2, color);
 }
 static void numtext(int x, int y, u32 n, u32 c) {
     char b[16];
@@ -414,11 +534,11 @@ static void symbol(int x, int y, int kind, int size, u32 c) {
     }
 }
 static void icon(int x, int y, int kind, int size) {
-    roundrect(x, y, size, size, surface_high);
-    symbol(x, y, kind, size, ink);
+    symbol(x + 4, y + 4, kind, size - 8, ink);
 }
 static void button(int x, int y, int w, const char *s, int primary) {
-    roundrect(x, y, w, 30, primary ? accent : surface_high);
+    if (primary) soft_roundrect(x, y, w, 30, 10, accent);
+    else ui_card(x, y, w, 30, 10, surface_high);
     text(x + 12, y + 4, s, primary ? on_accent : ink);
 }
 typedef struct {
@@ -605,7 +725,7 @@ static void shell(void) {
     if (!strcmp(c, "help")) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
-        emit("mv <path> <new-name>  rm <path>  save  memtest");
+        emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
         emit("theme light|dark  net status  reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
@@ -721,6 +841,12 @@ static void shell(void) {
 #else
         emit("Network: MayKernel has no native NIC / TCP/IP driver.");
         emit("Boot Linux for DHCP, DNS, IP diagnostics and HTTP preview.");
+#endif
+    } else if (!strcmp(c, "memstress")) {
+#ifndef MAYOS_LINUX
+        emit(page_stress_test() ? "memstress: PASS" : "memstress: FAIL");
+#else
+        emit("memstress: native MayKernel only");
 #endif
     } else if (!strcmp(c, "memtest")) {
         u32 before = free_pages;
@@ -850,23 +976,22 @@ static void accept_modal(void) {
     modal = 0;
 }
 static void palette(void) {
-    /* Neutral visual identity is the default. Other accent choices are opt-in. */
-    const u32 dark_primary[]  = {0xe2e2e7, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
-    const u32 light_primary[] = {0x414249, 0x006a64, 0x415f91, 0x904b40, 0x805700, 0x72518c};
-    bg = dark ? 0x141218 : 0xfffbfe;
-    panel = dark ? 0x211f26 : 0xfff7ff;
-    surface_high = dark ? 0x2b2930 : 0xf3edf7;
-    ink = dark ? 0xe6e1e5 : 0x1d1b20;
-    muted = dark ? 0xcac4d0 : 0x49454f;
-    line = dark ? 0x49454f : 0xcac4d0;
+    const u32 dark_primary[] = {0xececef, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
+    const u32 light_primary[] = {0x252529, 0x006a64, 0x415f91, 0x904b40, 0x805700, 0x72518c};
+    bg = dark ? 0x050506 : 0xf5f5f6;
+    panel = dark ? 0x080809 : 0xffffff;
+    surface_high = dark ? 0x18181b : 0xf0f0f2;
+    ink = dark ? 0xf5f5f6 : 0x19191c;
+    muted = dark ? 0xa1a1a5 : 0x626268;
+    line = dark ? 0x303033 : 0xd9d9dd;
     accent = dark ? dark_primary[accent_choice] : light_primary[accent_choice];
-    on_accent = dark ? 0x202124 : 0xffffff;
-    selected_fill = dark ? 0x46474d : 0xe0e1e5;
+    on_accent = dark ? 0x111113 : 0xffffff;
+    selected_fill = dark ? 0x29292d : 0xe4e4e8;
     if (high_contrast) {
-        ink = dark ? 0xffffff : 0x090909;
-        muted = dark ? 0xe7e5eb : 0x222222;
-        line = dark ? 0xa29cad : 0x5d5a61;
-        selected_fill = dark ? 0x505159 : 0xd0d1d5;
+        ink = dark ? 0xffffff : 0x08080a;
+        muted = dark ? 0xf1f1f3 : 0x222225;
+        line = dark ? 0x88888c : 0x66666a;
+        selected_fill = dark ? 0x404045 : 0xc7c7ca;
     }
 }
 /* Reference desktop: macOS-like top menu and dock, with existing MD3 windows.
@@ -886,161 +1011,126 @@ static void document_symbol(int x, int y, int size, u32 color) {
     stroke(x0 + 6, y0 + size / 2 + 7, x1 - 5, y0 + size / 2 + 7, 2, color);
 }
 static void desktop(void) {
-    /* Restored directly from the v0.4.0-pre3 visual design; retain newer
-       MayKernel64 desktop modes and settings rather than overwriting them. */
+    /* Pure-black monochrome with two thin silver arcs; native framebuffer only. */
     if (desktop_style == 0) {
-        for (int y = 0; y < H; y++) {
-            u32 top = dark ? 0x17181b : 0xf3f3f5;
-            u32 bottom = dark ? 0x292a2e : 0xdfe1e5;
-            rect(0, y, W, 1, blend(top, bottom, (u32)y * 140 / H));
+        for (int y = 0; y < H; y++)
+            rect(0, y, W, 1, blend(dark ? 0x030304 : 0xf9f9fb,
+                                   dark ? 0x151518 : 0xe7e7eb, (u32)y * 120 / H));
+        for (int x = 0; x < W; x++) {
+            int high = 105 + (x * x) / 2200 + x / 8;
+            int low = 655 - (x * (W - x)) / 1200;
+            if (high >= 43 && high < H - 90)
+                rect(x, high, 1, 2, dark ? 0x303033 : 0xceced1);
+            if (low > 43 && low < H - 85)
+                rect(x, low, 1, 2, dark ? 0x29292c : 0xd6d6d9);
         }
-        for (int i = 0; i < 5; i++)
-            rect(230 + i * 75, 155 + i * 38, 1, 336,
-                 dark ? 0x33343a : 0xd4d6da);
     } else if (desktop_style == 1) {
-        rect(0, 0, W, H, dark ? 0x17181b : 0xf3f3f5);
+        rect(0, 0, W, H, bg);
     } else {
-        rect(0, 0, W, H, dark ? 0x17181b : 0xf3f3f5);
-        for (int x = 0; x < W; x += 64)
-            rect(x, 42, 1, H - 42, dark ? 0x33343a : 0xd4d6da);
-        for (int y = 42; y < H; y += 64)
-            rect(0, y, W, 1, dark ? 0x33343a : 0xd4d6da);
+        rect(0, 0, W, H, bg);
+        for (int x = 0; x < W; x += 64) rect(x, 42, 1, H - 42, line);
+        for (int y = 42; y < H; y += 64) rect(0, y, W, 1, line);
     }
-    /* The original macOS-like top menu and independent Materials 3 windows. */
-    rect(0, 0, W, 42, dark ? 0x211f23 : 0xf6f6f8);
-    rect(0, 40, W, 1, dark ? 0x38393f : 0xd8d9dc);
-    rect(0, 41, W, 2, dark ? 0x111215 : 0xc8c9cd);
-    text(24, 10, "MayOS", ink);
+    rect(0, 0, W, 42, dark ? 0x050506 : 0xf9f9fb);
+    rect(0, 41, W, 1, line);
+    heading_text(24, 6, "MayOS", ink);
     text(126, 10, "文件", muted);
     text(200, 10, "窗口", muted);
     text(274, 10, "应用", muted);
     text(348, 10, "终端", muted);
-    /* The old desktop showed actual Documents files, not static mock icons. */
     int count = 0;
     for (int i = 4; i < FS_MAX && count < 15; i++) {
         if (!files[i].used || files[i].parent != 2) continue;
-        int x = 125 + (count % 5) * 124;
-        int y = 96 + (count / 5) * 100;
+        int x = 125 + (count % 5) * 124, y = 96 + (count / 5) * 100;
         int hover = inside(mx, my, x, y, 104, 90);
-        if (selected == i || hover || (desktop_note_selected && !strcmp(files[i].name, "Notes.txt")))
-            roundrect(x + 12, y - 3, 68, 79,
-                      selected == i || desktop_note_selected ?
-                      selected_fill : (dark ? 0x38393c : 0xe7e8ea));
+        if (selected == i || hover ||
+            (desktop_note_selected && !strcmp(files[i].name, "Notes.txt")))
+            ui_card(x + 12, y - 3, 68, 79, 17, selected_fill);
         icon(x + 21, y, files[i].dir ? 0 : 5, 50);
-        text(x, y + 58, files[i].name, dark ? 0xf3f2f4 : 0x27282b);
+        text(x, y + 58, files[i].name, ink);
         count++;
     }
-    /* Historical status order: clock, Wi-Fi, brightness, bell, power, gear.
-       Status indicators remain meaningful: MayKernel has no fake Wi-Fi switch. */
     const int status_icons[] = {10, 8, 9, 7, 12, 1};
     for (int i = 0; i < 6; i++)
         symbol(715 + i * 50, 9, status_icons[i], 24, muted);
 }
 static void frame(int id) {
     Window *w = &windows[id];
-    /* Restore the actual historical 0.4.0-pre3 MD3 frame: layered tonal
-       elevation, rounded title bar and proper icon-backed window controls. */
-    roundrect(w->x + 6, w->y + 9, w->w, w->h,
-              dark ? 0x0d0e10 : 0xc4c6cc);
-    roundrect(w->x + 2, w->y + 3, w->w, w->h,
-              dark ? 0x17181d : 0xd5d7db);
-    roundrect(w->x, w->y, w->w, w->h, panel);
-    roundrect(w->x + 1, w->y + 1, w->w - 2, 44, surface_high);
-    rect(w->x + 1, w->y + 34, w->w - 2, 10, surface_high);
-    rect(w->x + 1, w->y + 43, w->w - 2, 1, line);
-    symbol(w->x + 16, w->y + 11,
+    soft_roundrect(w->x + 8, w->y + 12, w->w, w->h, 25,
+                   dark ? 0x010102 : 0xcccdd1);
+    ui_card(w->x, w->y, w->w, w->h, 25, panel);
+    rect(w->x + 24, w->y + 43, w->w - 48, 1, line);
+    symbol(w->x + 18, w->y + 11,
            id == 0 ? 0 : id == 1 ? 1 : id == 4 ? 4 : id == 3 ? 5 : 2,
-           22, ink);
+           22, muted);
     text(w->x + 48, w->y + 11, w->title, focus == id ? ink : muted);
     int controls = w->x + w->w - 119;
     const int kinds[] = {15, 16, 14};
     for (int i = 0; i < 3; i++) {
         int xx = controls + i * 36 + 1;
         int hover = inside(mx, my, xx, w->y + 5, 33, 33);
-        roundrect(xx, w->y + 5, 33, 33,
-                  hover ? selected_fill : surface_high);
-        symbol(xx + 6, w->y + 11, kinds[i], 20,
-               hover ? ink : muted);
+        if (hover) soft_roundrect(xx, w->y + 5, 33, 33, 11, selected_fill);
+        symbol(xx + 6, w->y + 11, kinds[i], 20, hover ? ink : muted);
     }
     for (int i = 0; i < 3; i++)
         stroke(w->x + w->w - 8 - i * 5, w->y + w->h - 4,
                w->x + w->w - 4, w->y + w->h - 8 - i * 5, 1, muted);
-    /* Accessibility-only focus outline; original default appearance stays exact. */
     if (high_contrast)
-        border(w->x + 1, w->y + 1, w->w - 2, w->h - 2, line);
+        border(w->x + 2, w->y + 2, w->w - 4, w->h - 4, line);
 }
 static void settings(Window *w) {
     int x = w->x, y = w->y, cx = x + 204, cy = y + 65, cw = w->w - 234;
-    rect(x + 1, y + 43, 176, w->h - 44, bg);
-    rect(x + 176, y + 43, 1, w->h - 44, line);
-    text(x + 24, y + 64, "WORKSTATION", muted);
+    rect(x + 1, y + 44, 176, w->h - 46, dark ? 0x080809 : 0xf7f7f9);
+    rect(x + 176, y + 62, 1, w->h - 90, line);
+    heading_text(x + 22, y + 60, "Settings", ink);
     const char *tabs[] = {"关于系统", "外观设置", "存储空间", "开源组件", "桌面与指针"};
-    const char *marks[] = {"01", "02", "03", "04", "05"};
+    const int tab_icons[] = {1, 9, 0, 5, 10};
     for (int i = 0; i < 5; i++) {
         int yy = y + 106 + i * 46;
-        if (settings_tab == i) {
-            roundrect(x + 12, yy, 152, 36, selected_fill);
-            rect(x + 12, yy + 8, 2, 20, accent);
-        }
-        text(x + 25, yy + 7, marks[i], settings_tab == i ? accent : muted);
+        if (settings_tab == i)
+            soft_roundrect(x + 12, yy, 152, 36, 12, selected_fill);
+        symbol(x + 23, yy + 8, tab_icons[i], 19,
+               settings_tab == i ? ink : muted);
         text(x + 55, yy + 7, tabs[i], settings_tab == i ? ink : muted);
     }
     rect(x + 22, y + w->h - 126, 132, 1, line);
-    text(x + 24, y + w->h - 106, "帮助 / Help", accent);
+    text(x + 24, y + w->h - 106, "帮助 / Help", muted);
     text(x + 24, y + w->h - 62, MAYOS_RELEASE, muted);
     text(x + 24, y + w->h - 37, PLATFORM_ARCH, muted);
     if (settings_tab == 0) {
-        text(cx, cy, "SYSTEM / ABOUT", accent);
-        large_text(cx, cy + 23, "MayOS", ink);
-        roundrect(cx + 111, cy + 32, 161, 25, dark ? 0x26433f : 0xdeeeea);
-        text(cx + 124, cy + 35, MAYOS_RELEASE, accent);
-        text(cx, cy + 72, "系统 > 关于 / " PLATFORM_SHORT, muted);
-        roundrect(cx, cy + 105, cw, 90, bg);
-        icon(cx + 16, cy + 125, 1, 44);
-        text(cx + 78, cy + 117, device, ink);
-        text(cx + 78, cy + 146, platform_kernel(), accent);
-        text(cx + 78, cy + 170, PLATFORM_ARCH, muted);
+        heading_text(cx, cy - 8, "About MayOS", ink);
+        /*
+         * Supplied reference: 1320x580 card with black #000 interior,
+         * #292929 rounded outline, white monitor+name and muted gray version.
+         * Native 1024x768 settings area fits a 566x289 rendition, preserving
+         * the original side navigation and all input hotspot coordinates.
+         */
+        const int card_top = cy + 105, card_height = 289;
+        u32 card_bg = dark ? 0x000000 : 0xffffff;
+        ui_card(cx, card_top, cw, card_height, 24, card_bg);
+        /* Draw the monitor directly (no generic gear tile).
+         * Original Easter-egg click region at (220,190) is unchanged. */
+        reference_monitor_icon(cx + 18, card_top + 40, ink, card_bg);
+        reference_text(cx + 60, card_top + 16, "MayOS", ink, 1);
+        reference_text(cx + 60, card_top + 55, "Version " MAYOS_RELEASE, muted, 0);
+        rect(cx + 18, card_top + 115, cw - 36, 1, line);
+        /* The three rows intentionally have no icons, chips or secondary
+           descriptions: exact hierarchy of the approved reference. */
+        reference_text(cx + 18, card_top + 142, "Kernel", muted, 0);
 #ifdef MAYOS_LINUX
-        text(cx, cy + 217, "FASTFETCH / SYSTEM", ink);
-        rect(cx, cy + 243, cw, 1, line);
-        char fastfetch_lines[1152];
-        if (platform_fastfetch(fastfetch_lines, sizeof(fastfetch_lines))) {
-            char *start = fastfetch_lines;
-            for (int n = 0; n < 5 && *start; n++) {
-                char *end = start;
-                while (*end && *end != '\n')
-                    end++;
-                char terminator = *end;
-                *end = 0;
-                text(cx, cy + 254 + n * 20, start, ink);
-                if (!terminator)
-                    break;
-                start = end + 1;
-            }
-        } else {
-            text(cx, cy + 266, "Fastfetch not bundled in this Linux image.", muted);
-            text(cx, cy + 294, "Rebuild with --fastfetch /path/to/fastfetch.", muted);
-        }
+        reference_right_label(cx + cw - 18, card_top + 142, "Linux x86_64", ink);
 #else
-        text(cx, cy + 217, "硬件与运行环境", ink);
-        rect(cx, cy + 243, cw, 1, line);
-        char shortcpu[49];
-        copy(shortcpu, cpu_name, sizeof(shortcpu));
-        text(cx, cy + 254, "处理器", muted);
-        text(cx + 94, cy + 254, shortcpu, ink);
-        text(cx, cy + 284, "内存", muted);
-        numtext(cx + 94, cy + 284, memory_mb, ink);
-        text(cx + 143, cy + 284, "MiB / 实际检测", muted);
-        text(cx, cy + 314, "显示", muted);
-        text(cx + 94, cy + 314, "1024 × 768 / 32-bit", ink);
+        reference_right_label(cx + cw - 18, card_top + 142, "MayKernel x86_64", ink);
 #endif
-        rect(cx, cy + 346, cw, 1, line);
-        text(cx, cy + 357, "MayOS Team 2023 - 2026.", ink);
-        text(cx, cy + 383, "This version of MayOS is for test use only.", 0xd5b583);
-        text(cx, cy + 411, "第三方组件与许可证请查看“开源组件”。", muted);
+        reference_text(cx + 18, card_top + 178, "Build", muted, 0);
+        reference_right_label(cx + cw - 18, card_top + 178, "Development Preview", ink);
+        reference_text(cx + 18, card_top + 214, "Architecture", muted, 0);
+        reference_right_label(cx + cw - 18, card_top + 214, "64-bit", ink);
+        /* Device rename/Credits remain available beneath the card,
+           outside the screenshot-specific component. */
+        text(cx, cy + 412, "This version of MayOS is for test use only.", muted);
         button(cx, cy + 449, 126, "重命名设备", 0);
         button(cx + 140, cy + 449, 194, "开源组件 / Credits", 0);
-        text(cx, cy + 505, "Desktop session / experimental release", muted);
     } else if (settings_tab == 1) {
         text(cx, cy, "PERSONALIZATION", accent);
         large_text(cx, cy + 26, "外观设置", ink);
@@ -1048,12 +1138,12 @@ static void settings(Window *w) {
         text(cx, cy + 120, "窗口外观", ink);
         for (int i = 0; i < 2; i++) {
             int xx = cx + i * 236;
-            roundrect(xx, cy + 155, 216, 128, i ? 0x0e1b26 : 0xe3eaed);
-            roundrect(xx + 18, cy + 171, 180, 87, i ? 0x18232e : 0xffffff);
-            rect(xx + 18, cy + 171, 180, 19, i ? 0x2b3a46 : 0xd5e1e5);
-            rect(xx + 18, cy + 190, 40, 68, i ? 0x101924 : 0xf0f4f5);
-            rect(xx + 71, cy + 208, 90, 4, i ? 0x506978 : 0xc0d0d6);
-            rect(xx + 71, cy + 222, 111, 4, i ? 0x324b59 : 0xd8e2e6);
+            roundrect(xx, cy + 155, 216, 128, i ? 0x101013 : 0xededee);
+            roundrect(xx + 18, cy + 171, 180, 87, i ? 0x171719 : 0xffffff);
+            rect(xx + 18, cy + 171, 180, 19, i ? 0x242427 : 0xe4e4e6);
+            rect(xx + 18, cy + 190, 40, 68, i ? 0x0c0c0e : 0xf8f8f9);
+            rect(xx + 71, cy + 208, 90, 4, i ? 0x6c6c72 : 0xc0c0c7);
+            rect(xx + 71, cy + 222, 111, 4, i ? 0x404045 : 0xd8d8de);
             text(xx, cy + 297, i ? "深色 / Dark" : "浅色 / Light", ink);
             if (dark == i) {
                 circle(xx + 201, cy + 306, 8, accent);
@@ -1139,8 +1229,8 @@ static void settings(Window *w) {
             if (i == 0)
                 for (int j = 0; j < 58; j += 4)
                     rect(px + 11, cy + 152 + j, 138, 4,
-                         blend(dark ? 0x25212d : 0xe8e1ec,
-                               dark ? 0x3c304a : 0xd4cae0, (u32)j * 255 / 58));
+                         blend(dark ? 0x101013 : 0xf2f2f3,
+                               dark ? 0x35353a : 0xd4d4d9, (u32)j * 255 / 58));
             if (i == 2)
                 for (int j = 0; j < 138; j += 23)
                     rect(px + 11 + j, cy + 152, 1, 58, accent);
@@ -1247,7 +1337,7 @@ static void files_draw(Window *w) {
 }
 static void terminal_draw(Window *w) {
     int x = w->x + 1, y = w->y + 43;
-    rect(x, y, w->w - 2, w->h - 44, dark ? 0x19161f : 0x2b2930);
+    rect(x, y, w->w - 2, w->h - 44, dark ? 0x09090a : 0xf6f6f8);
     int rows = (w->h - 108) / 21;
     int end = out_count - scroll;
     if (end < 0)
@@ -1256,16 +1346,16 @@ static void terminal_draw(Window *w) {
     if (start < 0)
         start = 0;
     for (int i = start; i < end; i++)
-        text(x + 18, y + 12 + (i - start) * 21, output[i], 0xc4d5df);
+        text(x + 18, y + 12 + (i - start) * 21, output[i], ink);
     int py = w->y + w->h - 48;
     text(x + 18, py, "may@mayos", accent);
-    int xx = text(x + 98, py, ":~ $ ", 0x90abc8);
-    text(xx, py, command, 0xf1f6ff);
+    int xx = text(x + 98, py, ":~ $ ", muted);
+    text(xx, py, command, ink);
     if (ticks % 100 < 55)
         rect(xx + cmdlen * 8, py + 3, 7, 16, accent);
-    rect(x + 1, w->y + w->h - 29, w->w - 4, 1, 0x21313f);
-    text(x + 18, w->y + w->h - 24, "MayShell / " PLATFORM_SHORT, 0x678793);
-    text(x + w->w - 220, w->y + w->h - 24, "↑ 历史   ↓ 清空   F1 终端", 0x678793);
+    rect(x + 1, w->y + w->h - 29, w->w - 4, 1, line);
+    text(x + 18, w->y + w->h - 24, "MayShell / " PLATFORM_SHORT, muted);
+    text(x + w->w - 220, w->y + w->h - 24, "↑ 历史   ↓ 清空   F1 终端", muted);
 }
 static void editor_draw(Window *w) {
     int x = w->x, y = w->y;
@@ -1370,26 +1460,22 @@ static void explorer_draw(Window *w) {
 /* Centered macOS-like dock from the user's reference screenshot.
    Icons launch the same native MayOS windows and services. */
 static void taskbar(void) {
-    /* Exact floating Dock geometry of v0.4.0-pre3, with working MD3 icons. */
+    /* Six existing hit regions remain unchanged: apps, Files, Settings, Shell, Notes, Explorer. */
     int left = 210, top = H - 84;
-    roundrect(left + 3, top + 5, 604, 76,
-              dark ? 0x0f1012 : 0xc7c9cd);
-    roundrect(left, top, 604, 76, dark ? 0x242528 : 0xf4f4f6);
-    rect(left + 25, top + 1, 553, 1, dark ? 0x45464b : 0xffffff);
+    soft_roundrect(left + 5, top + 8, 604, 76, 28,
+                   dark ? 0x020203 : 0xc0c0c6);
+    ui_card(left, top, 604, 76, 27, dark ? 0x0a0a0c : 0xf7f7f9);
     for (int i = 0; i < 6; i++) {
-        int x = left + 16 + i * 98;
-        int id = i - 1;
+        int x = left + 16 + i * 98, id = i - 1;
         int active = i == 0 ? start_open :
-                     (id >= 0 && windows[id].open &&
-                      !windows[id].min && focus == id);
+                     (id >= 0 && windows[id].open && !windows[id].min && focus == id);
         int hover = inside(mx, my, x - 7, top + 4, 61, 65);
         if (active || hover)
-            roundrect(x - 5, top + 3, 54, 58,
-                      active ? selected_fill : surface_high);
+            soft_roundrect(x - 5, top + 4, 57, 59, 16,
+                           active ? selected_fill : surface_high);
         int kind = i == 0 ? 6 : id == 3 ? 5 : id;
-        icon(x, top + 8 - (hover ? 2 : 0), kind, 44);
-        if (active)
-            roundrect(x + 16, top + 66, 13, 3, accent);
+        symbol(x + 5, top + 14 - (hover ? 2 : 0), kind, 36, active ? ink : muted);
+        if (active) soft_roundrect(x + 16, top + 67, 13, 3, 1, accent);
     }
 }
 /* Functional, keyboard-dismissable popovers are deliberately invisible

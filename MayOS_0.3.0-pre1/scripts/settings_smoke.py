@@ -71,7 +71,7 @@ def main():
         vm.click(444, 716)             # reopen Settings after cold boot
         vm.click(295, 236)
         vm.shot('settings-persisted-light')
-        assert Image.open(BUILD / 'settings-persisted-light.png').getpixel((900, 500)) == (255, 247, 255)
+        assert Image.open(BUILD / 'settings-persisted-light.png').getpixel((900, 500)) == (255, 255, 255)
         vm.click(295, 380)
         vm.click(450, 645)             # defaults
         await_values(disk, DEFAULTS)

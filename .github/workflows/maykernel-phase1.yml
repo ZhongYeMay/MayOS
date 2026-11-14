@@ -1,0 +1,156 @@
+name: Phase 1 - MayKernel boot and regression baseline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "MayOS_0.3.0-pre1/kernel/**"
+      - "MayOS_0.3.0-pre1/scripts/**"
+      - "MayOS_0.3.0-pre1/Makefile"
+      - ".github/workflows/maykernel-phase1.yml"
+  pull_request:
+    paths:
+      - "MayOS_0.3.0-pre1/kernel/**"
+      - "MayOS_0.3.0-pre1/scripts/**"
+      - "MayOS_0.3.0-pre1/Makefile"
+      - ".github/workflows/maykernel-phase1.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: maykernel-phase1-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  custom-kernel:
+    name: x86_64 MayKernel ISO and QEMU smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: MayOS_0.3.0-pre1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install BIOS/UEFI ISO and QEMU test dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential gcc-multilib python3 python3-pil \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools dosfstools \
+            qemu-system-x86 ovmf fonts-noto-cjk fonts-dejavu-core
+      - name: Check toolchain
+        run: |
+          gcc --version | head -1
+          qemu-system-x86_64 --version | head -1
+          python3 --version
+      - name: Build custom x86_64 kernel and BIOS/UEFI ISO
+        run: make BOOT_FIRMWARE=hybrid all
+      - name: Check ELF architecture and ISO integrity
+        run: |
+          file build/mayos.elf
+          readelf -h build/mayos.elf | tee build/elf-header.txt
+          readelf -h build/mayos.elf | grep -q 'ELF64'
+          readelf -h build/mayos.elf | grep -q 'Advanced Micro Devices X86-64'
+          if strings build/mayos.elf | grep -q 'intentional invalid-opcode'; then
+            echo "ERROR: fault-injection flag enabled in the normal ISO" >&2
+            exit 1
+          fi
+          if strings build/mayos.elf | grep -q 'FS POWERLOSS DIAGNOSTIC'; then
+            echo "ERROR: destructive diagnostic hook enabled in production ISO" >&2
+            exit 1
+          fi
+          test -s build/mayos.iso
+          sha256sum build/mayos.elf build/mayos.iso | tee build/phase1-sha256.txt
+      - name: Run actual QEMU and desktop regression suite
+        run: make BOOT_FIRMWARE=hybrid test
+      - name: Boot OVMF x64 UEFI GRUB and verify persistence
+        run: |
+          test -f /usr/share/OVMF/OVMF_CODE_4M.fd
+          test -f /usr/share/OVMF/OVMF_VARS_4M.fd
+          python3 scripts/uefi_smoke.py --iso build/mayos.iso --custom-only
+      - name: Verify tested ISO identity and firmware coverage
+        run: |
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          build = Path('build')
+          iso = build / 'mayos.iso'
+          actual = hashlib.sha256(iso.read_bytes()).hexdigest()
+          boot = json.loads((build / 'mayos.iso.boot.json').read_text())
+          uefi = json.loads((build / 'uefi-custom-test-results.json').read_text())
+          assert boot['iso_sha256'] == actual, 'ISO differs from boot manifest'
+          assert uefi['iso_sha256'] == actual, 'UEFI tested a different ISO'
+          assert any('BIOS' in x for x in boot['platforms']), 'BIOS entry missing'
+          assert any('UEFI' in x for x in boot['platforms']), 'UEFI entry missing'
+          required = {'uefi_grub_custom', 'uefi_framebuffer', 'uefi_memory_map',
+                      'uefi_custom_allocator', 'uefi_ps2_keyboard',
+                      'uefi_mayfs_write', 'uefi_mayfs_cold_boot'}
+          assert required <= set(uefi['tests']), 'UEFI regression incomplete'
+          print('PASS: one ISO, both firmware catalogs, real OVMF boot and cold persistence')
+          PY
+      - name: Reboot BIOS and UEFI three times each, verify unchanged MayFS
+        run: python3 scripts/phase1_soak.py --iso build/mayos.iso --cycles 3
+      - name: Stress allocator and MayFS under real BIOS and OVMF guests
+        run: |
+          python3 scripts/phase1_memory_fs_stress.py \
+            --iso build/mayos.iso --writes 12 --mem-rounds 4 --idle-seconds 60
+      - name: Refuse and preserve corrupted MayFS without disk modifications
+        run: python3 scripts/phase1_corruption_smoke.py
+      - name: Test MayFS foreign backup and ATA disk capacity boundaries
+        run: python3 scripts/phase1_storage_bounds_smoke.py --iso build/mayos.iso
+      - name: Archive phase 1 evidence (also on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel-phase1-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            MayOS_0.3.0-pre1/build/phase1-sha256.txt
+            MayOS_0.3.0-pre1/build/elf-header.txt
+            MayOS_0.3.0-pre1/build/*.log
+            MayOS_0.3.0-pre1/build/*test*.json
+            MayOS_0.3.0-pre1/build/*.iso.boot.json
+            MayOS_0.3.0-pre1/build/test-uefi-*.png
+            MayOS_0.3.0-pre1/build/phase1-*.png
+            MayOS_0.3.0-pre1/build/phase1-memory-filesystem-results.json
+            MayOS_0.3.0-pre1/build/desktop.png
+            MayOS_0.3.0-pre1/build/mayos.iso
+      - name: Build isolated MayFS hard-power-cut diagnostic ISO and SIGKILL QEMU
+        run: |
+          mkdir -p build/phase1-normal
+          cp build/mayos.iso build/phase1-normal/mayos.iso
+          make clean
+          make BOOT_FIRMWARE=hybrid FS_POWERLOSS_SELFTEST=1 all
+          python3 -m py_compile scripts/phase1_powercut_smoke.py
+          python3 scripts/phase1_powercut_smoke.py \
+            --normal-iso build/phase1-normal/mayos.iso \
+            --diagnostic-iso build/mayos.iso
+      - name: Archive separate power-cut diagnostic evidence (no faulting ISO)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel-powercut-selftest-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            MayOS_0.3.0-pre1/build/phase1-powercut-test-results.json
+            MayOS_0.3.0-pre1/build/phase1-powercut*.log
+      - name: Build and boot isolated exception-diagnostic ISO (NOT for release)
+        run: |
+          make clean
+          make BOOT_FIRMWARE=hybrid EXCEPTION_SELFTEST=1 all
+          python3 scripts/exception_smoke.py
+      - name: Archive separate fatal exception self-test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel-exception-selftest-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            MayOS_0.3.0-pre1/build/exception-selftest.log
+            MayOS_0.3.0-pre1/build/exception-selftest-qemu.log
+            MayOS_0.3.0-pre1/build/phase1-exception-test-results.json
