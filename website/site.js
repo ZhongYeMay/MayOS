@@ -5,8 +5,7 @@ const menuButton = document.getElementById('menu');
 const nav = document.getElementById('nav');
 let storedTheme = null;
 try { storedTheme = localStorage.getItem('mayos-theme'); } catch (_) {}
-const preferredDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-const initial = storedTheme === 'dark' || storedTheme === 'light' ? storedTheme : (preferredDark ? 'dark' : 'light');
+const initial = storedTheme === 'dark' || storedTheme === 'light' ? storedTheme : 'dark';
 root.dataset.theme = initial;
 function setTheme(next) {
   root.dataset.theme = next;
