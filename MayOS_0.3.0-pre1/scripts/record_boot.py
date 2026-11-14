@@ -140,7 +140,7 @@ class Session:
         self.encoder = subprocess.Popen([
             'ffmpeg', '-hide_banner', '-loglevel', 'warning', '-y',
             '-f', 'image2pipe', '-vcodec', 'ppm', '-framerate', str(self.args.fps), '-i', 'pipe:0',
-            '-vf', 'scale=1024:768:force_original_aspect_ratio=decrease,pad=1024:768:(ow-iw)/2:(oh-ih)/2,setsar=1',
+            '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1',
             '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p',
             '-profile:v', 'baseline', '-level', '3.1',
             '-movflags', '+faststart', '-an', str(self.args.output)
