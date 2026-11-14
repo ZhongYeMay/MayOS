@@ -15,7 +15,7 @@ def main():
         assert desktop.size == (1024, 768)
         assert desktop.getpixel((10, 20)) == (5, 5, 6)
         assert desktop.getpixel((15, 760)) == (5, 5, 6)
-        assert desktop.getpixel((382, 680)) == (10, 10, 12)
+        assert desktop.getpixel((450, 700)) == (10, 10, 12)
 
         vm.click(50, 16)
         vm.shot('about-mayos-reference-050')
