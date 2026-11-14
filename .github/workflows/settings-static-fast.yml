@@ -5,6 +5,7 @@ on:
     paths:
       - 'MayOS_0.3.0-pre1/kernel/gui.c'
       - 'MayOS_0.3.0-pre1/scripts/font.py'
+      - 'MayOS_0.3.0-pre1/scripts/dock_icons.py'
       - 'MayOS_0.3.0-pre1/kernel/fs.c'
       - 'MayOS_0.3.0-pre1/kernel/core.h'
       - 'MayOS_0.3.0-pre1/scripts/settings_smoke.py'
@@ -48,6 +49,7 @@ jobs:
           printf '#define FONT_COUNT 1\nstatic const unsigned short font_code[1]={65};\nstatic const unsigned char font_bits[1][320]={{0}};\n#define PREMIUM_FONT_COUNT 1\nstatic const unsigned short premium_font_code[1]={65};\nstatic const unsigned char premium_title_advance[1]={12};\nstatic const unsigned char premium_body_advance[1]={8};\nstatic const unsigned char premium_title_bitmap[1][1440]={{0}};\nstatic const unsigned char premium_body_bitmap[1][840]={{0}};\nstatic const unsigned char premium_menu_advance[1]={8};\nstatic const unsigned char premium_menu_bitmap[1][624]={{0}};\n' > build/font.h
           printf '#define CAT_W 1\n#define CAT_H 1\nstatic const unsigned short cat_rgb565[1]={0};\n' > build/cat_image.h
           printf '#define MAYOS_MATERIAL_ICONS 0\n' > build/material_icons.h
+          printf 'static const unsigned char mayos_dock_alpha[4][2304]={{0}};\n' > build/dock_icons.h
           gcc -m64 -DMAYOS_X86_64 -std=gnu11 -O2 -Wall -Wextra -Werror \
             -ffreestanding -fno-builtin -mno-red-zone -mgeneral-regs-only \
             -Ibuild -Ikernel -fsyntax-only kernel/fs.c kernel/gui.c
