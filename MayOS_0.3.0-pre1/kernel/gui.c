@@ -1669,7 +1669,7 @@ static int search_match(int id) {
     return id >= 0 && id < 5 && contains(names[id], search);
 }
 static void start_draw(void) {
-    int x = 210, y = H - 500;
+    int x = (W - 326) / 2, y = H - 500;
     roundrect(x + 3, y + 4, 326, 410, dark ? 0x141218 : 0xd8d1df);
     roundrect(x, y, 326, 410, panel);
     text(x + 22, y + 19, "应用程序 / Applications", ink);
@@ -1710,7 +1710,7 @@ static void context_draw(void) {
         text(ctxx + 15, ctxy + 9 + i * 34, items[i], i == 7 ? 0xda7373 : ink);
 }
 static void modal_draw(void) {
-    int x = 308, y = 262;
+    int x = (W - 408) / 2, y = (H - 202) / 2;
     roundrect(x + 5, y + 6, 408, 202, dark ? 0x141218 : 0xd8d1df);
     roundrect(x, y, 408, 202, panel);
     const char *title = modal == 1   ? "新建文本文件"
@@ -1743,10 +1743,11 @@ static void modal_draw(void) {
 }
 /* Kept outside the normal window list: hidden until explicitly discovered. */
 static void easter_draw(void) {
-    roundrect(288, 72, 460, 626, dark ? 0x101a29 : 0xb9c8d7);
-    roundrect(282, 66, 460, 626, panel);
-    text(306, 85, "喵！你发现了一位小住客", ink);
-    text(710, 83, "×", muted);
+    const int left = (W - 460) / 2;
+    roundrect(left + 6, 72, 460, 626, dark ? 0x101a29 : 0xb9c8d7);
+    roundrect(left, 66, 460, 626, panel);
+    text(left + 24, 85, "喵！你发现了一位小住客", ink);
+    text(left + 428, 83, "×", muted);
     int px = (W - CAT_W) / 2, py = 124;
     for (int y = 0; y < CAT_H; y++)
         for (int x = 0; x < CAT_W; x++) {
@@ -1755,9 +1756,9 @@ static void easter_draw(void) {
             pixels[(py + y) * W + px + x] =
                 ((r << 3 | r >> 2) << 16) | ((g << 2 | g >> 4) << 8) | (b << 3 | b >> 2);
         }
-    text(306, 623, "喵，原来你在这里。", ink);
-    text(306, 653, "按 Esc 返回", muted);
-    button(610, 646, 108, "返回桌面", 1);
+    text(left + 24, 623, "喵，原来你在这里。", ink);
+    text(left + 24, 653, "按 Esc 返回", muted);
+    button(left + 328, 646, 108, "返回桌面", 1);
 }
 static void cursor(void) {
     int side = 12 + pointer_size * 6;
@@ -1942,7 +1943,8 @@ static void left_click(void) {
     if (maygame_active()) { maygame_click(mx,my); return; }
 #endif
     if (egg_open) {
-        if (inside(mx, my, 696, 76, 38, 34) || inside(mx, my, 610, 646, 108, 30))
+        if (inside(mx, my, (W - 460) / 2 + 414, 76, 38, 34) ||
+            inside(mx, my, (W - 460) / 2 + 328, 646, 108, 30))
             egg_open = 0;
         return;
     }
@@ -1951,9 +1953,9 @@ static void left_click(void) {
           inside(mx, my, about->x + 275, about->y + 162, 30, 30)))
         egg_clicks = 0;
     if (modal) {
-        if (inside(mx, my, 604, 413, 90, 30))
+        if (inside(mx, my, (W - 408) / 2 + 296, (H - 202) / 2 + 151, 90, 30))
             accept_modal();
-        else if (inside(mx, my, 512, 413, 80, 30))
+        else if (inside(mx, my, (W - 408) / 2 + 204, (H - 202) / 2 + 151, 80, 30))
             modal = 0;
         return;
     }
@@ -2031,7 +2033,7 @@ static void left_click(void) {
         return;
     }
     if (start_open) {
-        int x = 210, y = H - 500;
+        int x = (W - 326) / 2, y = H - 500;
         if (inside(mx, my, x, y, 326, 410)) {
             for (int i = 0; i < 5; i++)
                 if (search_match(i) && inside(mx, my, x + 16, y + 100 + i * 47, 294, 46)) {
