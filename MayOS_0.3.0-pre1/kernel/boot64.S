@@ -105,6 +105,236 @@ timer_stub:
     popq %rax
     iretq
 
+/* Fatal CPU exception entries. For vectors with CPU-pushed error codes,
+ * preserve that word. For other vectors synthesize a zero error code.
+ * At dispatch: [vector, error, RIP, CS, RFLAGS, ...].
+ * The handler logs details and halts; exception recovery is not implemented. */
+.global mayos_exc_0
+.type mayos_exc_0,@function
+mayos_exc_0:
+    pushq $0
+    pushq $0
+    jmp mayos_exception_entry
+
+.global mayos_exc_1
+.type mayos_exc_1,@function
+mayos_exc_1:
+    pushq $0
+    pushq $1
+    jmp mayos_exception_entry
+
+.global mayos_exc_2
+.type mayos_exc_2,@function
+mayos_exc_2:
+    pushq $0
+    pushq $2
+    jmp mayos_exception_entry
+
+.global mayos_exc_3
+.type mayos_exc_3,@function
+mayos_exc_3:
+    pushq $0
+    pushq $3
+    jmp mayos_exception_entry
+
+.global mayos_exc_4
+.type mayos_exc_4,@function
+mayos_exc_4:
+    pushq $0
+    pushq $4
+    jmp mayos_exception_entry
+
+.global mayos_exc_5
+.type mayos_exc_5,@function
+mayos_exc_5:
+    pushq $0
+    pushq $5
+    jmp mayos_exception_entry
+
+.global mayos_exc_6
+.type mayos_exc_6,@function
+mayos_exc_6:
+    pushq $0
+    pushq $6
+    jmp mayos_exception_entry
+
+.global mayos_exc_7
+.type mayos_exc_7,@function
+mayos_exc_7:
+    pushq $0
+    pushq $7
+    jmp mayos_exception_entry
+
+.global mayos_exc_8
+.type mayos_exc_8,@function
+mayos_exc_8:
+    pushq $8
+    jmp mayos_exception_entry
+
+.global mayos_exc_9
+.type mayos_exc_9,@function
+mayos_exc_9:
+    pushq $0
+    pushq $9
+    jmp mayos_exception_entry
+
+.global mayos_exc_10
+.type mayos_exc_10,@function
+mayos_exc_10:
+    pushq $10
+    jmp mayos_exception_entry
+
+.global mayos_exc_11
+.type mayos_exc_11,@function
+mayos_exc_11:
+    pushq $11
+    jmp mayos_exception_entry
+
+.global mayos_exc_12
+.type mayos_exc_12,@function
+mayos_exc_12:
+    pushq $12
+    jmp mayos_exception_entry
+
+.global mayos_exc_13
+.type mayos_exc_13,@function
+mayos_exc_13:
+    pushq $13
+    jmp mayos_exception_entry
+
+.global mayos_exc_14
+.type mayos_exc_14,@function
+mayos_exc_14:
+    pushq $14
+    jmp mayos_exception_entry
+
+.global mayos_exc_15
+.type mayos_exc_15,@function
+mayos_exc_15:
+    pushq $0
+    pushq $15
+    jmp mayos_exception_entry
+
+.global mayos_exc_16
+.type mayos_exc_16,@function
+mayos_exc_16:
+    pushq $0
+    pushq $16
+    jmp mayos_exception_entry
+
+.global mayos_exc_17
+.type mayos_exc_17,@function
+mayos_exc_17:
+    pushq $17
+    jmp mayos_exception_entry
+
+.global mayos_exc_18
+.type mayos_exc_18,@function
+mayos_exc_18:
+    pushq $0
+    pushq $18
+    jmp mayos_exception_entry
+
+.global mayos_exc_19
+.type mayos_exc_19,@function
+mayos_exc_19:
+    pushq $0
+    pushq $19
+    jmp mayos_exception_entry
+
+.global mayos_exc_20
+.type mayos_exc_20,@function
+mayos_exc_20:
+    pushq $0
+    pushq $20
+    jmp mayos_exception_entry
+
+.global mayos_exc_21
+.type mayos_exc_21,@function
+mayos_exc_21:
+    pushq $21
+    jmp mayos_exception_entry
+
+.global mayos_exc_22
+.type mayos_exc_22,@function
+mayos_exc_22:
+    pushq $0
+    pushq $22
+    jmp mayos_exception_entry
+
+.global mayos_exc_23
+.type mayos_exc_23,@function
+mayos_exc_23:
+    pushq $0
+    pushq $23
+    jmp mayos_exception_entry
+
+.global mayos_exc_24
+.type mayos_exc_24,@function
+mayos_exc_24:
+    pushq $0
+    pushq $24
+    jmp mayos_exception_entry
+
+.global mayos_exc_25
+.type mayos_exc_25,@function
+mayos_exc_25:
+    pushq $0
+    pushq $25
+    jmp mayos_exception_entry
+
+.global mayos_exc_26
+.type mayos_exc_26,@function
+mayos_exc_26:
+    pushq $0
+    pushq $26
+    jmp mayos_exception_entry
+
+.global mayos_exc_27
+.type mayos_exc_27,@function
+mayos_exc_27:
+    pushq $0
+    pushq $27
+    jmp mayos_exception_entry
+
+.global mayos_exc_28
+.type mayos_exc_28,@function
+mayos_exc_28:
+    pushq $0
+    pushq $28
+    jmp mayos_exception_entry
+
+.global mayos_exc_29
+.type mayos_exc_29,@function
+mayos_exc_29:
+    pushq $29
+    jmp mayos_exception_entry
+
+.global mayos_exc_30
+.type mayos_exc_30,@function
+mayos_exc_30:
+    pushq $30
+    jmp mayos_exception_entry
+
+.global mayos_exc_31
+.type mayos_exc_31,@function
+mayos_exc_31:
+    pushq $0
+    pushq $31
+    jmp mayos_exception_entry
+
+mayos_exception_entry:
+    cli
+    movq (%rsp), %rdi         /* vector */
+    movq 8(%rsp), %rsi        /* error code */
+    movq 16(%rsp), %rdx       /* saved instruction pointer */
+    andq $-16, %rsp
+    call kernel_exception
+.Lfatal_halt:
+    cli
+    hlt
+    jmp .Lfatal_halt
+
 .section .rodata
 .balign 8
 gdt64:
@@ -115,6 +345,43 @@ gdt64_end:
 gdt64_ptr:
     .word gdt64_end - gdt64 - 1
     .long gdt64
+
+.balign 8
+.global mayos_exception_stubs
+.type mayos_exception_stubs,@object
+mayos_exception_stubs:
+    .quad mayos_exc_0
+    .quad mayos_exc_1
+    .quad mayos_exc_2
+    .quad mayos_exc_3
+    .quad mayos_exc_4
+    .quad mayos_exc_5
+    .quad mayos_exc_6
+    .quad mayos_exc_7
+    .quad mayos_exc_8
+    .quad mayos_exc_9
+    .quad mayos_exc_10
+    .quad mayos_exc_11
+    .quad mayos_exc_12
+    .quad mayos_exc_13
+    .quad mayos_exc_14
+    .quad mayos_exc_15
+    .quad mayos_exc_16
+    .quad mayos_exc_17
+    .quad mayos_exc_18
+    .quad mayos_exc_19
+    .quad mayos_exc_20
+    .quad mayos_exc_21
+    .quad mayos_exc_22
+    .quad mayos_exc_23
+    .quad mayos_exc_24
+    .quad mayos_exc_25
+    .quad mayos_exc_26
+    .quad mayos_exc_27
+    .quad mayos_exc_28
+    .quad mayos_exc_29
+    .quad mayos_exc_30
+    .quad mayos_exc_31
 
 .section .bss
 .balign 4
