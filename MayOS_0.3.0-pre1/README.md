@@ -1,4 +1,8 @@
-# MayOS 0.3.0-pre2 — BIOS / UEFI 双内核工作台
+# MayOS 0.5.0-pre1-dev — BIOS / UEFI 开发预览（未发布）
+
+> **版本约定：** 当前开发分支为 `0.5.0-pre1-dev`，准备验收后才考虑发布 `0.5.0-pre1`。官网、下载页面和现有 `0.4.1-pre2` Release 均保持原有正式发布状态。代码目录名称仅为历史路径，不代表当前系统版本。
+
+> **当前开发验证：** 自研 MayKernel 已为 x86_64 ELF64；BIOS/OVMF UEFI 启动、原生桌面、MayFS 双快照、断电模拟恢复及磁盘容量边界均通过独立 QEMU 验证；Linux 双内核图形模式的完整验收仍有失败记录。见 [阶段一详细测试](docs/phase1-daily-use-baseline.md)。
 
 > 最新网络开发：Linux 模式已接入原生 HTTPS、TLS 1.2/1.3、HTTP/2 协商与 IPv6。
 > 当前实现、依赖打包和验证方式见 [现代网络支持](docs/modern-network.md)。
@@ -12,7 +16,7 @@
 
 > 源码、文档及许可通知保存在仓库；请到 [GitHub Releases](https://github.com/ZhongYeMay/MayOS/releases) 核对**实际存在**的附件，不要假设新版本已经发布。新版网页源码见 [website/](../website/)。
 
-MayOS 是实验性的双启动桌面操作系统原型。自研 MayKernel 为 x86 32 位；独立 Linux 图形模式为 x86_64。GRUB 负责 BIOS / UEFI x64 引导。最新源码的图形界面采用 Ubuntu 风格的深紫灰底色、橙色重点色、简洁顶栏、应用 Dock 和克制的窗口控件。
+MayOS 是实验性的双启动桌面操作系统原型。当前自研 MayKernel 已为 x86_64 64 位，独立 Linux 图形模式也为 x86_64。GRUB 负责 BIOS / UEFI x64 引导。图形界面保留此前已确认的类 macOS 桌面结构与 Google Material Design 3 黑灰阶风格。
 
 **MayOS Team 2023 - 2026.**
 
@@ -22,7 +26,7 @@ MayOS 是实验性的双启动桌面操作系统原型。自研 MayKernel 为 x8
 
 | 启动项 | 实际运行环境 | 文件保存方式 |
 | --- | --- | --- |
-| MayOS — custom kernel (desktop) | 自研 x86 32 位内核与桌面 | MayFS 专用 IDE 数据盘；支持冷启动读回 |
+| MayOS — custom kernel (desktop) | 自研 MayKernel x86_64 64 位内核与桌面 | MayFS 专用 IDE 数据盘；支持冷启动读回 |
 | Linux 7.3.1 — desktop (x86_64) | Linux 内核上的真实 `mayos-desktop` 用户态进程 | 桌面进程内 RAM 文件区；进程退出后清空 |
 | Linux 7.3.1 — rescue shell (x86_64) | BusyBox 文本救援环境 | Linux 临时根文件系统；关机后清空 |
 
