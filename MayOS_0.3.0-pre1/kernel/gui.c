@@ -927,88 +927,72 @@ static void document_symbol(int x, int y, int size, u32 color) {
     stroke(x0 + 6, y0 + size / 2 + 7, x1 - 5, y0 + size / 2 + 7, 2, color);
 }
 static void desktop(void) {
-    /* Restored directly from the v0.4.0-pre3 visual design; retain newer
-       MayKernel64 desktop modes and settings rather than overwriting them. */
+    /* Pure-black monochrome with two thin silver arcs; native framebuffer only. */
     if (desktop_style == 0) {
-        for (int y = 0; y < H; y++) {
-            u32 top = dark ? 0x17181b : 0xf3f3f5;
-            u32 bottom = dark ? 0x292a2e : 0xdfe1e5;
-            rect(0, y, W, 1, blend(top, bottom, (u32)y * 140 / H));
+        for (int y = 0; y < H; y++)
+            rect(0, y, W, 1, blend(dark ? 0x030304 : 0xf9f9fb,
+                                   dark ? 0x151518 : 0xe7e7eb, (u32)y * 120 / H));
+        for (int x = 0; x < W; x++) {
+            int high = 105 + (x * x) / 2200 + x / 8;
+            int low = 655 - (x * (W - x)) / 1200;
+            if (high >= 43 && high < H - 90)
+                rect(x, high, 1, 2, dark ? 0x303033 : 0xceced1);
+            if (low > 43 && low < H - 85)
+                rect(x, low, 1, 2, dark ? 0x29292c : 0xd6d6d9);
         }
-        for (int i = 0; i < 5; i++)
-            rect(230 + i * 75, 155 + i * 38, 1, 336,
-                 dark ? 0x33343a : 0xd4d6da);
     } else if (desktop_style == 1) {
-        rect(0, 0, W, H, dark ? 0x17181b : 0xf3f3f5);
+        rect(0, 0, W, H, bg);
     } else {
-        rect(0, 0, W, H, dark ? 0x17181b : 0xf3f3f5);
-        for (int x = 0; x < W; x += 64)
-            rect(x, 42, 1, H - 42, dark ? 0x33343a : 0xd4d6da);
-        for (int y = 42; y < H; y += 64)
-            rect(0, y, W, 1, dark ? 0x33343a : 0xd4d6da);
+        rect(0, 0, W, H, bg);
+        for (int x = 0; x < W; x += 64) rect(x, 42, 1, H - 42, line);
+        for (int y = 42; y < H; y += 64) rect(0, y, W, 1, line);
     }
-    /* The original macOS-like top menu and independent Materials 3 windows. */
-    rect(0, 0, W, 42, dark ? 0x211f23 : 0xf6f6f8);
-    rect(0, 40, W, 1, dark ? 0x38393f : 0xd8d9dc);
-    rect(0, 41, W, 2, dark ? 0x111215 : 0xc8c9cd);
+    rect(0, 0, W, 42, dark ? 0x050506 : 0xf9f9fb);
+    rect(0, 41, W, 1, line);
     text(24, 10, "MayOS", ink);
     text(126, 10, "文件", muted);
     text(200, 10, "窗口", muted);
     text(274, 10, "应用", muted);
     text(348, 10, "终端", muted);
-    /* The old desktop showed actual Documents files, not static mock icons. */
     int count = 0;
     for (int i = 4; i < FS_MAX && count < 15; i++) {
         if (!files[i].used || files[i].parent != 2) continue;
-        int x = 125 + (count % 5) * 124;
-        int y = 96 + (count / 5) * 100;
+        int x = 125 + (count % 5) * 124, y = 96 + (count / 5) * 100;
         int hover = inside(mx, my, x, y, 104, 90);
-        if (selected == i || hover || (desktop_note_selected && !strcmp(files[i].name, "Notes.txt")))
-            roundrect(x + 12, y - 3, 68, 79,
-                      selected == i || desktop_note_selected ?
-                      selected_fill : (dark ? 0x38393c : 0xe7e8ea));
+        if (selected == i || hover ||
+            (desktop_note_selected && !strcmp(files[i].name, "Notes.txt")))
+            ui_card(x + 12, y - 3, 68, 79, 17, selected_fill);
         icon(x + 21, y, files[i].dir ? 0 : 5, 50);
-        text(x, y + 58, files[i].name, dark ? 0xf3f2f4 : 0x27282b);
+        text(x, y + 58, files[i].name, ink);
         count++;
     }
-    /* Historical status order: clock, Wi-Fi, brightness, bell, power, gear.
-       Status indicators remain meaningful: MayKernel has no fake Wi-Fi switch. */
     const int status_icons[] = {10, 8, 9, 7, 12, 1};
     for (int i = 0; i < 6; i++)
         symbol(715 + i * 50, 9, status_icons[i], 24, muted);
 }
 static void frame(int id) {
     Window *w = &windows[id];
-    /* Restore the actual historical 0.4.0-pre3 MD3 frame: layered tonal
-       elevation, rounded title bar and proper icon-backed window controls. */
-    roundrect(w->x + 6, w->y + 9, w->w, w->h,
-              dark ? 0x0d0e10 : 0xc4c6cc);
-    roundrect(w->x + 2, w->y + 3, w->w, w->h,
-              dark ? 0x17181d : 0xd5d7db);
-    roundrect(w->x, w->y, w->w, w->h, panel);
-    roundrect(w->x + 1, w->y + 1, w->w - 2, 44, surface_high);
-    rect(w->x + 1, w->y + 34, w->w - 2, 10, surface_high);
-    rect(w->x + 1, w->y + 43, w->w - 2, 1, line);
-    symbol(w->x + 16, w->y + 11,
+    soft_roundrect(w->x + 8, w->y + 12, w->w, w->h, 25,
+                   dark ? 0x010102 : 0xcccdd1);
+    ui_card(w->x, w->y, w->w, w->h, 25, panel);
+    rect(w->x + 24, w->y + 43, w->w - 48, 1, line);
+    symbol(w->x + 18, w->y + 11,
            id == 0 ? 0 : id == 1 ? 1 : id == 4 ? 4 : id == 3 ? 5 : 2,
-           22, ink);
+           22, muted);
     text(w->x + 48, w->y + 11, w->title, focus == id ? ink : muted);
     int controls = w->x + w->w - 119;
     const int kinds[] = {15, 16, 14};
     for (int i = 0; i < 3; i++) {
         int xx = controls + i * 36 + 1;
         int hover = inside(mx, my, xx, w->y + 5, 33, 33);
-        roundrect(xx, w->y + 5, 33, 33,
-                  hover ? selected_fill : surface_high);
-        symbol(xx + 6, w->y + 11, kinds[i], 20,
-               hover ? ink : muted);
+        if (hover) soft_roundrect(xx, w->y + 5, 33, 33, 11, selected_fill);
+        symbol(xx + 6, w->y + 11, kinds[i], 20, hover ? ink : muted);
     }
     for (int i = 0; i < 3; i++)
         stroke(w->x + w->w - 8 - i * 5, w->y + w->h - 4,
                w->x + w->w - 4, w->y + w->h - 8 - i * 5, 1, muted);
-    /* Accessibility-only focus outline; original default appearance stays exact. */
     if (high_contrast)
-        border(w->x + 1, w->y + 1, w->w - 2, w->h - 2, line);
+        border(w->x + 2, w->y + 2, w->w - 4, w->h - 4, line);
 }
 static void settings(Window *w) {
     int x = w->x, y = w->y, cx = x + 204, cy = y + 65, cw = w->w - 234;
@@ -1411,26 +1395,22 @@ static void explorer_draw(Window *w) {
 /* Centered macOS-like dock from the user's reference screenshot.
    Icons launch the same native MayOS windows and services. */
 static void taskbar(void) {
-    /* Exact floating Dock geometry of v0.4.0-pre3, with working MD3 icons. */
+    /* Six existing hit regions remain unchanged: apps, Files, Settings, Shell, Notes, Explorer. */
     int left = 210, top = H - 84;
-    roundrect(left + 3, top + 5, 604, 76,
-              dark ? 0x0f1012 : 0xc7c9cd);
-    roundrect(left, top, 604, 76, dark ? 0x242528 : 0xf4f4f6);
-    rect(left + 25, top + 1, 553, 1, dark ? 0x45464b : 0xffffff);
+    soft_roundrect(left + 5, top + 8, 604, 76, 28,
+                   dark ? 0x020203 : 0xc0c0c6);
+    ui_card(left, top, 604, 76, 27, dark ? 0x0a0a0c : 0xf7f7f9);
     for (int i = 0; i < 6; i++) {
-        int x = left + 16 + i * 98;
-        int id = i - 1;
+        int x = left + 16 + i * 98, id = i - 1;
         int active = i == 0 ? start_open :
-                     (id >= 0 && windows[id].open &&
-                      !windows[id].min && focus == id);
+                     (id >= 0 && windows[id].open && !windows[id].min && focus == id);
         int hover = inside(mx, my, x - 7, top + 4, 61, 65);
         if (active || hover)
-            roundrect(x - 5, top + 3, 54, 58,
-                      active ? selected_fill : surface_high);
+            soft_roundrect(x - 5, top + 4, 57, 59, 16,
+                           active ? selected_fill : surface_high);
         int kind = i == 0 ? 6 : id == 3 ? 5 : id;
-        icon(x, top + 8 - (hover ? 2 : 0), kind, 44);
-        if (active)
-            roundrect(x + 16, top + 66, 13, 3, accent);
+        symbol(x + 5, top + 14 - (hover ? 2 : 0), kind, 36, active ? ink : muted);
+        if (active) soft_roundrect(x + 16, top + 67, 13, 3, 1, accent);
     }
 }
 /* Functional, keyboard-dismissable popovers are deliberately invisible
