@@ -16,6 +16,10 @@ on:
       - ".github/workflows/maykernel-phase1.yml"
   workflow_dispatch:
 
+concurrency:
+  group: maykernel-phase1-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
