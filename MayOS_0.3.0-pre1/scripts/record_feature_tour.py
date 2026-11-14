@@ -81,12 +81,12 @@ def record(args):
         actions.append("real_General_desktop_pointer_navigation")
 
         # Each reference sidebar label has its own meaningful page.
-        for y, name in ((290, "general"),
-                        (330, "display"),
-                        (370, "sound"),
-                        (410, "network"),
-                        (450, "privacy_security"),
-                        (490, "updates")):
+        for y, name in ((230, "general"),
+                        (270, "display"),
+                        (310, "sound"),
+                        (350, "network"),
+                        (390, "privacy_security"),
+                        (430, "updates")):
             vm.click(195, y)
             vm.hold(1.0)
             actions.append("settings_" + name)
