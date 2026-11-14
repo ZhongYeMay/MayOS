@@ -59,7 +59,7 @@ build/core.o: kernel/framebuffer.h kernel/boot64.S
 build/galgame.o: kernel/galgame.h
 build/boot64.o: kernel/boot64.S | build
 	$(CC) -m64 -c $< -o $@
-build/%.o: kernel/%.c kernel/core.h kernel/io.h build/font.h
+build/%.o: kernel/%.c kernel/core.h kernel/io.h kernel/version.h build/font.h
 	$(CC) $(CFLAGS) -c $< -o $@
 build/mayos.elf: $(OBJECTS) kernel/linker64.ld
 	$(LD) -m elf_x86_64 -T kernel/linker64.ld -o $@ $(OBJECTS)
