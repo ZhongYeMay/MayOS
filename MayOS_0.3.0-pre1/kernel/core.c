@@ -192,8 +192,8 @@ int page_stress_test(void) {
         if (free_pages != initial) ok = 0;
         if (!ok) break;
     }
-    serial(ok ? "MayOS: memstress PASS (16 rounds, 128 pages, fragmentation, free guards)\\n"
-              : "MayOS: memstress FAIL\\n");
+    serial(ok ? "MayOS: memstress PASS (16 rounds, 128 pages, fragmentation, free guards)\n"
+              : "MayOS: memstress FAIL\n");
     return ok;
 }
 
