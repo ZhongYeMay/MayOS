@@ -2,7 +2,8 @@
 #define MAYOS_FRAMEBUFFER_H
 #include "core.h"
 /* Standard firmware framebuffer adapter, shared by both kernels.
- * The desktop keeps logical 1024x768 coordinates; no GPU driver is required. */
+ * Native logical framebuffer is 1280x720 (16:9), with aspect-safe scaling
+ * on fallback firmware modes rather than stretched desktop pixels. */
 typedef struct {
     u8 *data;
     u32 width, height, pitch, bpp, xoffset, yoffset;

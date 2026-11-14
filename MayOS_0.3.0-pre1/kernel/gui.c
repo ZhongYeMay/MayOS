@@ -525,7 +525,7 @@ typedef struct {
 } Window;
 #define WINDOW_COUNT 5
 static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "Files"},
-                            {100, 120, 824, 480, 0, 0, 0, 0, 0, 0, 0, "Settings"},
+                            {(W - 824) / 2, 110, 824, 480, 0, 0, 0, 0, 0, 0, 0, "Settings"},
                             {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
                             {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
                             {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
@@ -1077,11 +1077,11 @@ static void desktop(void) {
     const int locations[] = {132, 214, 261, 306, 354, 429};
     for (int i = 0; i < 6; i++)
         reference_text(locations[i], 5, menus[i], muted, 2);
-    reference_search_icon(704, 6, ink);
-    symbol(746, 7, 8, 20, ink);
-    reference_speaker_icon(788, 5, ink);
-    reference_battery_icon(820, 5, ink);
-    text(863, 7, "Tue Jan 28 10:24", muted);
+    reference_search_icon(W - 320, 6, ink);
+    symbol(W - 278, 7, 8, 20, ink);
+    reference_speaker_icon(W - 236, 5, ink);
+    reference_battery_icon(W - 204, 5, ink);
+    text(W - 161, 7, "Tue Jan 28 10:24", muted);
     /* The reference has a clean workspace when its Settings window is open.
        Desktop files remain accessible when Settings is closed. */
     if (!windows[1].open || windows[1].min) {
@@ -1149,9 +1149,9 @@ static void settings_fit_window(Window *w) {
        Both use identical mouse offsets derived from the same window rect. */
     w->max = 0;
     if (settings_tab == 6) {
-        w->x = 100; w->y = 120; w->w = 824; w->h = 480;
+        w->x = (W - 824) / 2; w->y = 110; w->w = 824; w->h = 480;
     } else {
-        w->x = 100; w->y = 58; w->w = 824; w->h = 630;
+        w->x = (W - 824) / 2; w->y = 48; w->w = 824; w->h = H - 145;
     }
 }
 static void settings(Window *w) {
@@ -1589,7 +1589,7 @@ static void explorer_draw(Window *w) {
    Icons launch the same native MayOS windows and services. */
 static void taskbar(void) {
     /* The reference Dock intentionally has only Files, Settings, Terminal and Trash. */
-    int left = 382, top = H - 92;
+    int left = (W - 244) / 2, top = H - 92;
     soft_roundrect(left + 5, top + 8, 244, 70, 25,
                    dark ? 0x020203 : 0xc0c0c6);
     ui_card(left, top, 244, 70, 24, dark ? 0x0a0a0c : 0xf7f7f9);
@@ -1609,7 +1609,7 @@ static void taskbar(void) {
    until the user clicks the corresponding screenshot-matched status glyph. */
 static void status_panel_draw(void) {
     if (!top_panel) return;
-    int x = 690, y = 51, w = 318, h = 235;
+    int x = W - 334, y = 51, w = 318, h = 235;
     roundrect(x + 4, y + 5, w, h, dark ? 0x111115 : 0xd4d2d7);
     roundrect(x, y, w, h, panel);
     rect(x + 18, y + 50, w - 36, 1, line);
@@ -1968,26 +1968,26 @@ static void left_click(void) {
     if (top_panel && my >= 42) {
         int id = top_panel;
         top_panel = 0;
-        if (inside(mx, my, 690, 51, 318, 235)) {
-            if (id == 1 && inside(mx, my, 709, 244, 145, 34)) {
+        if (inside(mx, my, W - 334, 51, 318, 235)) {
+            if (id == 1 && inside(mx, my, W - 315, 244, 145, 34)) {
                 raise_window(1);
-            } else if (id == 2 && inside(mx, my, 709, 244, 164, 34)) {
+            } else if (id == 2 && inside(mx, my, W - 315, 244, 164, 34)) {
                 raise_window(4);
             } else if (id == 3) {
-                if (inside(mx, my, 709, 159, 126, 34)) {
+                if (inside(mx, my, W - 315, 159, 126, 34)) {
                     dark = 1; preferences_save();
-                } else if (inside(mx, my, 851, 159, 126, 34)) {
+                } else if (inside(mx, my, W - 173, 159, 126, 34)) {
                     dark = 0; preferences_save();
-                } else if (inside(mx, my, 709, 244, 164, 34)) {
+                } else if (inside(mx, my, W - 315, 244, 164, 34)) {
                     raise_window(1);
                 }
-            } else if (id == 4 && inside(mx, my, 709, 244, 145, 34)) {
+            } else if (id == 4 && inside(mx, my, W - 315, 244, 145, 34)) {
                 notice_until = 0;
                 notice[0] = 0;
             } else if (id == 5) {
-                if (inside(mx, my, 709, 168, 126, 34)) {
+                if (inside(mx, my, W - 315, 168, 126, 34)) {
                     fs_sync(); reboot();
-                } else if (inside(mx, my, 851, 168, 126, 34)) {
+                } else if (inside(mx, my, W - 173, 168, 126, 34)) {
                     fs_sync(); poweroff();
                 }
             }
@@ -1999,9 +1999,9 @@ static void left_click(void) {
         if (mx < 96) {
             top_panel = 0;
             raise_window(1);
-        } else if (mx >= 770 && mx < 930) {
-            int id = (mx - 770) / 39 + 2;
-            if (id > 5) id = 5;
+        } else if (mx >= W - 335) {
+            int id = mx < W - 286 ? 1 : mx < W - 244 ? 2 :
+                     mx < W - 202 ? 3 : mx < W - 166 ? 5 : 4;
             top_panel = top_panel == id ? 0 : id;
             start_open = 0;
         }
@@ -2009,7 +2009,8 @@ static void left_click(void) {
     }
     /* Reference Dock: Files, Settings, Terminal, Trash. */
     if (my >= H - 92) {
-        const int centers[] = {403, 460, 517, 574};
+        const int first = (W - 244) / 2 + 21;
+        const int centers[] = {first, first + 57, first + 114, first + 171};
         for (int i = 0; i < 4; i++) {
             if (!inside(mx, my, centers[i] - 24, H - 88, 52, 60))
                 continue;
