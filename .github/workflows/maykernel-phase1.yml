@@ -49,6 +49,10 @@ jobs:
           readelf -h build/mayos.elf | tee build/elf-header.txt
           readelf -h build/mayos.elf | grep -q 'ELF64'
           readelf -h build/mayos.elf | grep -q 'Advanced Micro Devices X86-64'
+          if strings build/mayos.elf | grep -q 'intentional invalid-opcode'; then
+            echo "ERROR: fault-injection flag enabled in the normal ISO" >&2
+            exit 1
+          fi
           test -s build/mayos.iso
           sha256sum build/mayos.elf build/mayos.iso | tee build/phase1-sha256.txt
       - name: Run actual QEMU and desktop regression suite
@@ -97,3 +101,19 @@ jobs:
             MayOS_0.3.0-pre1/build/phase1-*.png
             MayOS_0.3.0-pre1/build/desktop.png
             MayOS_0.3.0-pre1/build/mayos.iso
+      - name: Build and boot isolated exception-diagnostic ISO (NOT for release)
+        run: |
+          make clean
+          make BOOT_FIRMWARE=hybrid EXCEPTION_SELFTEST=1 all
+          python3 scripts/exception_smoke.py
+      - name: Archive separate fatal exception self-test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel-exception-selftest-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            MayOS_0.3.0-pre1/build/exception-selftest.log
+            MayOS_0.3.0-pre1/build/exception-selftest-qemu.log
+            MayOS_0.3.0-pre1/build/phase1-exception-test-results.json
