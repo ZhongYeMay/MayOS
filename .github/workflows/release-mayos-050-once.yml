@@ -1,0 +1,168 @@
+name: Release verified MayOS 0.5.0-pre1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-mayos-050-once.yml'
+
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: release-mayos-050-pre1-once
+  cancel-in-progress: false
+
+jobs:
+  prerelease:
+    if: github.repository == 'ZhongYeMay/MayOS' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      VERSION: 0.5.0-pre1
+      SOURCE_SHA: e97059179c57051d4976923565339b2d91873603
+      FAST_RUN: '43582391969'
+      NATIVE_RUN: '43582392065'
+      MATRIX_RUN: '43582392089'
+      PHASE_RUN: '43582391967'
+      VIDEO_RUN: '43582391966'
+      GH_TOKEN: ${{ github.token }}
+      GH_PROMPT_DISABLED: '1'
+    steps:
+      - name: Check out exact source revision
+        uses: actions/checkout@v4
+        with:
+          ref: e97059179c57051d4976923565339b2d91873603
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate version, identity and no existing release
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(cat MayOS_0.3.0-pre1/VERSION)" = "$VERSION"
+          grep -Fqx "#define MAYOS_VERSION \"$VERSION\"" MayOS_0.3.0-pre1/kernel/version.h
+          python3 MayOS_0.3.0-pre1/scripts/test_ui_style_contract.py
+          test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/12" --jq '.head.sha')" = "$SOURCE_SHA"
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "Existing release detected; refusing to overwrite" >&2
+            exit 1
+          fi
+      - name: Require five successful CI jobs before release
+        run: |
+          set -euo pipefail
+          complete=0
+          for attempt in $(seq 1 240); do
+            complete=1
+            for id in "$FAST_RUN" "$NATIVE_RUN" "$MATRIX_RUN" "$PHASE_RUN" "$VIDEO_RUN"; do
+              result="$(gh run view "$id" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '[.status, (.conclusion // "")] | join(" ")')"
+              echo "Run $id: $result"
+              case "$result" in
+                "completed success") ;;
+                *failure*|*cancelled*|*timed_out*|*action_required*)
+                  echo "Required CI failed, refusing to release" >&2
+                  exit 1 ;;
+                *) complete=0 ;;
+              esac
+            done
+            if [ "$complete" -eq 1 ]; then break; fi
+            sleep 15
+          done
+          test "$complete" -eq 1
+      - name: Download both tested ISO files and real QEMU recordings
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/verified"
+          gh run download "$VIDEO_RUN" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'MayOS-all-features-QEMU-*' \
+            --dir "$RUNNER_TEMP/verified"
+          test -s "$RUNNER_TEMP/verified/mayos.iso"
+          test -s "$RUNNER_TEMP/verified/mayos-dual.iso"
+          test -s "$RUNNER_TEMP/verified/recordings/MayKernel64-All-Functions.mp4"
+          test -s "$RUNNER_TEMP/verified/recordings/Linux64-All-Functions.mp4"
+          ls -lh "$RUNNER_TEMP/verified/"*.iso
+      - name: Compare ISO and video SHA256 against original QEMU metadata
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/verified"
+          for kernel in MayKernel64 Linux64; do
+            meta="recordings/$kernel-All-Functions.json"
+            movie="recordings/$kernel-All-Functions.mp4"
+            jq -e --arg v "$VERSION" '.release_source_version == $v' "$meta"
+            test "$(sha256sum "$movie" | cut -d' ' -f1)" = "$(jq -r .video_sha256 "$meta")"
+            if [ "$kernel" = MayKernel64 ]; then iso=mayos.iso; else iso=mayos-dual.iso; fi
+            test "$(sha256sum "$iso" | cut -d' ' -f1)" = "$(jq -r .iso_sha256 "$meta")"
+          done
+      - name: Package validated original and iPhone-compatible QEMU videos
+        run: |
+          set -euo pipefail
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
+          fi
+          src="$RUNNER_TEMP/verified"
+          mkdir dist
+          cp "$src/mayos.iso" "dist/MayOS-$VERSION-MayKernel-x86_64.iso"
+          cp "$src/mayos-dual.iso" "dist/MayOS-$VERSION-dual-boot-x86_64.iso"
+          for kernel in MayKernel64 Linux64; do
+            cp "$src/recordings/$kernel-All-Functions.mp4" \
+               "dist/MayOS-$VERSION-$kernel-QEMU-original.mp4"
+            cp "$src/recordings/$kernel-All-Functions.json" \
+               "dist/MayOS-$VERSION-$kernel-QEMU.json"
+            ffmpeg -hide_banner -loglevel error -y \
+              -i "$src/recordings/$kernel-All-Functions.mp4" \
+              -vf 'fps=15,format=yuv420p' -an -c:v libx264 \
+              -preset veryfast -crf 21 -profile:v baseline -level 3.1 \
+              -movflags +faststart "dist/MayOS-$VERSION-$kernel-iPhone.mp4"
+            ffmpeg -hide_banner -loglevel error \
+              -i "dist/MayOS-$VERSION-$kernel-iPhone.mp4" -f null -
+          done
+          ffmpeg -hide_banner -loglevel error -y -ss 6 \
+            -i "$src/recordings/MayKernel64-All-Functions.mp4" \
+            -frames:v 1 "dist/MayOS-$VERSION-About-real-QEMU.png"
+          git archive --format=zip "$SOURCE_SHA" \
+            -o "dist/MayOS-$VERSION-source.zip"
+          cat > dist/RELEASE_NOTES.md <<'NOTES'
+          # MayOS 0.5.0-pre1 — verified premium monochrome UI
+
+          Experimental QEMU-tested preview, not a stable daily-use OS.
+
+          - New native black/charcoal desktop, thin-outline windows, floating
+            Dock, antialiased rounded cards and redesigned About MayOS.
+          - Native 64-bit MayKernel and Linux 7.3.1 dual-boot via BIOS/UEFI GRUB.
+          - MayFS dual snapshots, cold-boot recovery, simulated QEMU power-cut
+            durability tests and disk-capacity protection.
+          - Two genuine QEMU walkthroughs with iPhone-compatible H.264 Baseline
+            MP4 copies for easier streaming. Original recordings and their
+            SHA256 metadata are also retained.
+          - Exactly built and validated ISO files, genuine screenshot, source
+            archive and SHA256SUMS for independent verification.
+
+          QEMU testing does not mean physical-PC support or complete USB, GPU,
+          NVMe, Wi-Fi, networking, Secure Boot or production filesystem safety.
+          Only use isolated test disks. Historical releases are not replaced.
+          NOTES
+          (cd dist && sha256sum *.iso *.mp4 *.png *.json *.zip > SHA256SUMS.txt)
+          (cd dist && sha256sum -c SHA256SUMS.txt)
+      - name: Archive the exact release package even on publish failure
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-0.5.0-pre1-verifiable-Release
+          retention-days: 30
+          path: dist/
+      - name: Publish one verified immutable prerelease and all assets
+        run: |
+          set -euo pipefail
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "Existing Release; refusing overwrite" >&2
+            exit 1
+          fi
+          gh release create "v$VERSION" \
+            dist/*.iso dist/*.mp4 dist/*.png dist/*.json dist/*.zip \
+            dist/SHA256SUMS.txt \
+            --target "$SOURCE_SHA" --prerelease --latest=false \
+            --title "MayOS $VERSION — premium monochrome UI, MayKernel64 + Linux64" \
+            --notes-file dist/RELEASE_NOTES.md
+          gh release view "v$VERSION" --json assets --jq '.assets[].name' \
+            | grep -Fqx "MayOS-$VERSION-dual-boot-x86_64.iso"
+          gh release view "v$VERSION" --json assets --jq '.assets[].name' \
+            | grep -Fqx "MayOS-$VERSION-MayKernel64-iPhone.mp4"
