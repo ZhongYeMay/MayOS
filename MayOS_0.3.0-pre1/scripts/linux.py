@@ -55,6 +55,7 @@ INPUT_FILES = {
     "framebuffer_adapter_sha256": ROOT / "kernel/framebuffer.h",
     "font_core_source_sha256": ROOT / "kernel/core.c",
     "font_generator_sha256": ROOT / "scripts/font.py",
+    "dock_icon_generator_sha256": ROOT / "scripts/dock_icons.py",
     "photo_generator_sha256": ROOT / "scripts/photo.py",
     "photo_sha256": ROOT / "assets/easter-cat.jpg",
     "linux_readme_sha256": ROOT / "linux/README.md",
@@ -470,6 +471,7 @@ def build(args: argparse.Namespace) -> dict:
         run(make + [f"INSTALL_HDR_PATH={OUT / 'headers'}", "headers_install"])
         run([sys.executable, str(ROOT / "scripts/font.py")])
         run([sys.executable, str(ROOT / "scripts/photo.py")])
+        run([sys.executable, str(ROOT / "scripts/dock_icons.py")])
         run([desktop_compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
              "-DMAYOS_LINUX", "-fno-pie", "-no-pie", "-static",
              "-I" + str(ROOT / "kernel"), "-I" + str(ROOT / "build"),
