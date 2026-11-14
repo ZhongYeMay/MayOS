@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Prevent unapproved visual redesigns of the original MayOS Material workspace.
+"""Verify the newly approved MayOS 0.5.0 monochrome design without losing function.
 
-The eight drawing/widget functions below are approved as they appeared on
-the original accepted user screenshot and historical 0.4.0-pre3 design. No external dependencies or network are needed.
-This is a static style guard only; actual screenshot/QEMU acceptance also runs.
+This contract supersedes the earlier historical 0.4.0-pre3 visual pixels, not
+its fixed click zones and native file/setting behavior. Real QEMU acceptance
+and screenshot verification run separately.
 """
 from pathlib import Path
 
@@ -16,8 +16,6 @@ function_hashes = {
     "static void circle(": 0x0217F223,
     "static int text(": 0x36BDBD85,
     "static int large_text(": 0x8849B15F,
-    "static void button(": 0xE967CA53,
-    "static void frame(": 0x45BADF57,
 }
 
 
@@ -48,9 +46,17 @@ for signature, expected in function_hashes.items():
 assert "static int dark = 1, accent_choice = 0;" in source
 assert "static int desktop_style = 0, pointer_size = 0, show_brand = 1, high_contrast = 0;" in source
 assert "static int cursor_style = 0;" in source
-assert "bg = dark ? 0x141218 : 0xfffbfe;" in source
-assert "panel = dark ? 0x211f26 : 0xfff7ff;" in source
-assert "surface_high = dark ? 0x2b2930 : 0xf3edf7;" in source
+assert "bg = dark ? 0x050506 : 0xf5f5f6;" in source
+assert "panel = dark ? 0x080809 : 0xffffff;" in source
+assert "surface_high = dark ? 0x18181b : 0xf0f0f2;" in source
+assert "line = dark ? 0x303033 : 0xd9d9dd;" in source
+assert "static void soft_roundrect(" in source
+assert "static void ui_card(" in source
+assert "ui_card(w->x, w->y, w->w, w->h, 25, panel);" in source
+assert "ui_card(cx, cy + 105, cw, 289, 22, panel);" in source
+assert "text(cx + 78, cy + 152, \"Version \" MAYOS_RELEASE, muted);" in source
+assert "text(cx + 280, cy + 250, \"Development Preview\", ink);" in source
+assert "ui_card(left, top, 604, 76, 27," in source
 assert "set gfxmode" not in source  # no graphics firmware tweaks via GUI
 assert "static void cursor(void)" in source
 assert "#include \"material_icons.h\"" in source
@@ -62,7 +68,7 @@ version_header = (GUI.parent / "version.h").read_text(encoding="utf-8")
 assert '#define MAYOS_VERSION "0.5.0-pre1-dev"' in version_header
 assert '#include "version.h"' in source
 assert '#define MAYOS_RELEASE MAYOS_VERSION' in source
-assert 'text(cx + 124, cy + 35, MAYOS_RELEASE, accent);' in source
+assert 'text(cx + 78, cy + 152, "Version " MAYOS_RELEASE, muted);' in source
 assert 'emit("OS: MayOS " MAYOS_RELEASE);' in source
 assert 'const char *shapes[] = {"■ 黑色方块", "□ 白色方块", "自定义图片"};' in source
 assert "roundrect(14, 60, 76, 508, panel);" not in source
@@ -73,7 +79,7 @@ assert 'text(200, 10, "窗口", muted);' in source
 assert 'text(274, 10, "应用", muted);' in source
 assert 'text(348, 10, "终端", muted);' in source
 assert "int left = 210, top = H - 84;" in source
-assert "rect(230 + i * 75, 155 + i * 38, 1, 336," in source
+assert "int high = 105 + (x * x) / 2200 + x / 8;" in source
 assert 'fs_find(2, "Notes.txt")' in source
 assert '{186, 74, 800, 620, 0, 0, 0, 0, 0, 0, 0, "系统设置 / System Settings"}' in source
-print("PASS: user's macOS top menu / centered Dock / Notes icon, original MD3 widgets and default clean desktop")
+print("PASS: approved 0.5 premium monochrome visual contract, AA cards, About layout, macOS menu, dock geometry and input hotspots")
