@@ -20,19 +20,19 @@ jobs:
     timeout-minutes: 90
     env:
       VERSION: 0.5.0-pre1
-      SOURCE_SHA: e97059179c57051d4976923565339b2d91873603
-      FAST_RUN: '43582391969'
-      NATIVE_RUN: '43582392065'
-      MATRIX_RUN: '43582392089'
-      PHASE_RUN: '43582391967'
-      VIDEO_RUN: '43582391966'
+      SOURCE_SHA: 8592eb65612abcae715732ffd30709f2ccadbee8
+      FAST_RUN: '43583634912'
+      NATIVE_RUN: '43583634884'
+      MATRIX_RUN: '43583634890'
+      PHASE_RUN: '43583634896'
+      VIDEO_RUN: '43583634903'
       GH_TOKEN: ${{ github.token }}
       GH_PROMPT_DISABLED: '1'
     steps:
       - name: Check out exact source revision
         uses: actions/checkout@v4
         with:
-          ref: e97059179c57051d4976923565339b2d91873603
+          ref: 8592eb65612abcae715732ffd30709f2ccadbee8
           fetch-depth: 0
           persist-credentials: false
       - name: Validate version, identity and no existing release
