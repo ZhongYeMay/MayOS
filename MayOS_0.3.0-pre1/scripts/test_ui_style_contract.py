@@ -51,6 +51,11 @@ assert "panel = dark ? 0x080809 : 0xffffff;" in source
 assert "surface_high = dark ? 0x18181b : 0xf0f0f2;" in source
 assert "line = dark ? 0x303033 : 0xd9d9dd;" in source
 assert "static void soft_roundrect(" in source
+assert "static int heading_text(" in source
+assert 'heading_text(24, 6, "MayOS", ink);' in source
+assert 'heading_text(x + 22, y + 60, "Settings", ink);' in source
+assert 'heading_text(cx, cy - 8, "About MayOS", ink);' in source
+assert 'heading_text(cx + 78, cy + 118, "MayOS", ink);' in source
 assert "static void ui_card(" in source
 assert "ui_card(w->x, w->y, w->w, w->h, 25, panel);" in source
 assert "ui_card(cx, cy + 105, cw, 289, 22, panel);" in source
