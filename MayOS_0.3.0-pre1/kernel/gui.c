@@ -1018,57 +1018,113 @@ static void document_symbol(int x, int y, int size, u32 color) {
     stroke(x0 + 6, y0 + size / 2, x1 - 5, y0 + size / 2, 2, color);
     stroke(x0 + 6, y0 + size / 2 + 7, x1 - 5, y0 + size / 2 + 7, 2, color);
 }
+/* Lightweight vector status glyphs, no raster asset or embedded screenshot. */
+static void reference_search_icon(int x, int y, u32 color) {
+    ring(x + 8, y + 8, 6, 2, color);
+    stroke(x + 13, y + 13, x + 19, y + 19, 2, color);
+}
+static void reference_speaker_icon(int x, int y, u32 color) {
+    rect(x + 1, y + 7, 5, 7, color);
+    stroke(x + 6, y + 7, x + 12, y + 2, 2, color);
+    stroke(x + 12, y + 2, x + 12, y + 19, 2, color);
+    stroke(x + 12, y + 19, x + 6, y + 14, 2, color);
+    stroke(x + 16, y + 5, x + 19, y + 11, 1, color);
+    stroke(x + 19, y + 11, x + 16, y + 17, 1, color);
+}
+static void reference_battery_icon(int x, int y, u32 color) {
+    border(x + 1, y + 5, 22, 12, color);
+    rect(x + 23, y + 9, 3, 4, color);
+    rect(x + 4, y + 8, 16, 6, color);
+}
+static void reference_nav_icon(int x, int y, int tab, u32 color) {
+    if (tab == 0) {
+        symbol(x, y, 1, 22, color);
+    } else if (tab == 1) {
+        reference_monitor_icon(x, y + 1, color, panel);
+    } else if (tab == 2) {
+        reference_speaker_icon(x, y, color);
+    } else if (tab == 3) {
+        symbol(x, y, 8, 22, color);
+    } else if (tab == 4) {
+        ring(x + 12, y + 8, 6, 2, color);
+        ui_card(x + 5, y + 10, 15, 12, 3, color);
+        rect(x + 7, y + 12, 11, 8, panel);
+    } else if (tab == 5) {
+        ring(x + 12, y + 11, 9, 2, color);
+        stroke(x + 19, y + 3, x + 22, y + 9, 2, color);
+        stroke(x + 22, y + 9, x + 15, y + 9, 2, color);
+    } else {
+        ring(x + 12, y + 12, 10, 2, color);
+        circle(x + 12, y + 7, 2, color);
+        rect(x + 11, y + 11, 3, 9, color);
+    }
+}
+static int settings_nav_y(const Window *w, int tab) {
+    return tab == 6 ? w->h - 70 : 154 + tab * 40;
+}
 static void desktop(void) {
-    /* Pure-black monochrome with two thin silver arcs; native framebuffer only. */
+    /* Screenshot-independent, procedurally rendered silver-wave wallpaper.
+       Two broad anti-aliased charcoal curves replace the old 1px arcs. */
     if (desktop_style == 0) {
         for (int y = 0; y < H; y++)
-            rect(0, y, W, 1, blend(dark ? 0x030304 : 0xf9f9fb,
-                                   dark ? 0x151518 : 0xe7e7eb, (u32)y * 120 / H));
+            rect(0, y, W, 1, blend(dark ? 0x020203 : 0xfbfbfc,
+                                   dark ? 0x111113 : 0xececef, (u32)y * 105 / H));
         for (int x = 0; x < W; x++) {
-            /* Two broad, softly shaded waves matching the reference wallpaper. */
-            int upper = 128 - x / 3 + (x * x) / 4200;
-            int lower = 692 - x / 4 - ((W - x) * (W - x)) / 5000;
-            for (int d = -8; d <= 8; d++) {
-                u32 a = (u32)(8 - (d < 0 ? -d : d)) * 17;
-                if (upper + d > 31 && upper + d < H)
-                    rect(x, upper + d, 1, 1, blend(0x050506, 0x56565a, a));
-                if (lower + d > 31 && lower + d < H)
-                    rect(x, lower + d, 1, 1, blend(0x050506, 0x414145, a));
+            int upper = 330 - x * 2 / 3 + x * x / 4500;
+            int lower = 820 - (x - 450) * (x - 450) / 1150;
+            for (int dy = -43; dy <= 43; dy++) {
+                int d = dy < 0 ? -dy : dy;
+                u32 strength = (u32)(43 - d) * 3;
+                int uy = upper + dy;
+                if (uy > 32 && uy < H) {
+                    u32 color = dark ? (dy > 0 ? 0x636367 : 0x39393d) : 0xb5b5bc;
+                    pixels[uy * W + x] = blend(pixels[uy * W + x], color, strength);
+                }
+                int ly = lower + dy;
+                if (x > 275 && ly > 32 && ly < H) {
+                    u32 color = dark ? (dy > 0 ? 0x28282d : 0x737378) : 0xaaaab2;
+                    pixels[ly * W + x] = blend(pixels[ly * W + x], color,
+                                               strength * 3 / 4);
+                }
             }
         }
     } else if (desktop_style == 1) {
         rect(0, 0, W, H, bg);
     } else {
         rect(0, 0, W, H, bg);
-        for (int x = 0; x < W; x += 64) rect(x, 42, 1, H - 42, line);
-        for (int y = 42; y < H; y += 64) rect(0, y, W, 1, line);
+        for (int x = 0; x < W; x += 64) rect(x, 33, 1, H - 33, line);
+        for (int y = 33; y < H; y += 64) rect(0, y, W, 1, line);
     }
-    rect(0, 0, W, 32, dark ? 0x050506 : 0xf9f9fb);
-    rect(0, 31, W, 1, dark ? 0x171719 : line);
-    symbol(17, 7, 11, 17, ink);
-    heading_text(42, 4, "MayOS", ink);
-    text(101, 8, "Settings", muted);
-    text(164, 8, "File", muted);
-    text(205, 8, "Edit", muted);
-    text(244, 8, "View", muted);
-    text(286, 8, "Window", muted);
-    text(348, 8, "Help", muted);
-    int count = 0;
-    for (int i = 4; i < FS_MAX && count < 15; i++) {
-        if (!files[i].used || files[i].parent != 2) continue;
-        int x = 125 + (count % 5) * 124, y = 96 + (count / 5) * 100;
-        int hover = inside(mx, my, x, y, 104, 90);
-        if (selected == i || hover ||
-            (desktop_note_selected && !strcmp(files[i].name, "Notes.txt")))
-            ui_card(x + 12, y - 3, 68, 79, 17, selected_fill);
-        icon(x + 21, y, files[i].dir ? 0 : 5, 50);
-        text(x, y + 58, files[i].name, ink);
-        count++;
+    /* Top bar matches the reference's English menu order and icon density. */
+    rect(0, 0, W, 33, dark ? 0x030304 : 0xf9f9fb);
+    rect(0, 32, W, 1, dark ? 0x17171a : line);
+    reference_monitor_icon(17, 4, ink, dark ? 0x030304 : 0xf9f9fb);
+    reference_text(52, 2, "MayOS", ink, 0);
+    const char *menus[] = {"Settings", "File", "Edit", "View", "Window", "Help"};
+    const int locations[] = {132, 214, 261, 306, 354, 429};
+    for (int i = 0; i < 6; i++)
+        reference_text(locations[i], 5, menus[i], muted, 2);
+    reference_search_icon(704, 6, ink);
+    symbol(746, 7, 8, 20, ink);
+    reference_speaker_icon(788, 5, ink);
+    reference_battery_icon(820, 5, ink);
+    text(863, 7, "Tue Jan 28 10:24", muted);
+    /* The reference has a clean workspace when its Settings window is open.
+       Desktop files remain accessible when Settings is closed. */
+    if (!windows[1].open || windows[1].min) {
+        int count = 0;
+        for (int i = 4; i < FS_MAX && count < 15; i++) {
+            if (!files[i].used || files[i].parent != 2) continue;
+            int x = 125 + (count % 5) * 124, y = 96 + (count / 5) * 100;
+            int hover = inside(mx, my, x, y, 104, 90);
+            if (selected == i || hover ||
+                (desktop_note_selected && !strcmp(files[i].name, "Notes.txt")))
+                ui_card(x + 12, y - 3, 68, 79, 17, selected_fill);
+            icon(x + 21, y, files[i].dir ? 0 : 5, 50);
+            text(x, y + 58, files[i].name, ink);
+            count++;
+        }
     }
-    const int status_icons[] = {4, 8, 7, 12};
-    for (int i = 0; i < 4; i++)
-        symbol(777 + i * 39, 7, status_icons[i], 18, muted);
-    text(907, 8, "Tue Jan 28  10:24", muted);
 }
 static void frame(int id) {
     Window *w = &windows[id];
