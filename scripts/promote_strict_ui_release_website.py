@@ -20,6 +20,23 @@ ASSETS = {
 }
 
 
+
+# CI may run after the already published preview has been staged. A repeated
+# dry run must not require OLD text or rewrite the user's existing website.
+# website/check_site.py still runs separately and verifies the actual links.
+already_staged = (
+    VERSION in (SITE / "index.html").read_text()
+    and VERSION in (SITE / "download.html").read_text()
+    and f'{BASE}/{PREFIX}-desktop.png' in (SITE / "index.html").read_text()
+    and ASSETS["maykernel_video"] in (SITE / "demos.html").read_text()
+    and ASSETS["linux_video"] in (SITE / "demos.html").read_text()
+    and f'CURRENT = "{VERSION}"' in (SITE / "check_site.py").read_text()
+)
+if already_staged:
+    print(f"PASS: website already staged for {VERSION}; no changes made")
+    raise SystemExit(0)
+
+
 def swap(text, previous, new, source):
     if previous not in text:
         raise RuntimeError(f"{source}: expected text missing: {previous[:90]}")
