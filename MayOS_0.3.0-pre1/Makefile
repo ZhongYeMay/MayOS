@@ -14,6 +14,11 @@ BOOT_FIRMWARE ?= hybrid
 OVMF_CODE ?= /usr/share/OVMF/OVMF_CODE_4M.fd
 OVMF_VARS ?= /usr/share/OVMF/OVMF_VARS_4M.fd
 CFLAGS := -m64 -DMAYOS_X86_64 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie -fno-pic -fno-stack-protector -fno-builtin -fno-strict-aliasing -fno-asynchronous-unwind-tables -mno-red-zone -mgeneral-regs-only -Ibuild -Ikernel
+# Only used for the isolated CI fault-injection build; NEVER enable for releases.
+EXCEPTION_SELFTEST ?= 0
+ifeq ($(EXCEPTION_SELFTEST),1)
+CFLAGS += -DMAYOS_EXCEPTION_SELFTEST
+endif
 OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
