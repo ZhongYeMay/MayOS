@@ -32,7 +32,7 @@ with out.open('w') as f:
     # than the 13px monospace system bitmap. Rasterize only our UI Latin glyphs
     # to a separate source-specific alpha atlas. The final OS uses no font files.
     premium_chars = ''.join(sorted(set(
-        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .-_/')))
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 &.-_/')))
     premium_font = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
     title_font = ImageFont.truetype(premium_font, 26)
     info_font = ImageFont.truetype(premium_font, 19)
