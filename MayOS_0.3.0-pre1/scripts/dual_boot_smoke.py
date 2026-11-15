@@ -199,10 +199,10 @@ class BootVM:
         return BUILD / f'{name}.png'
 
     def menu_shot(self, name, timeout=4.5):
-        # Serial menu labels can arrive before QEMU refreshes the VGA text
-        # surface. SeaBIOS leaves the lower half black; GRUB draws a menu border
-        # and keyboard instructions there. Wait for that draw instead of saving
-        # a misleading firmware screenshot. Serial checks still verify labels.
+        # Serial menu labels can arrive before the actual GRUB video redraw.
+        # The branded graphical menu may be 1280x720, while the fallback GRUB
+        # console may be 640x480. Require visible menu content in the lower
+        # half without assuming one fixed firmware framebuffer resolution.
         deadline = time.monotonic() + timeout
         while True:
             path = self.shot(name)
@@ -210,7 +210,7 @@ class BootVM:
                 width, height = screenshot.size
                 lower_half = screenshot.convert('L').crop((0, height // 2, width, height))
                 lit_pixels = sum(lower_half.histogram()[65:])
-                if width <= 800 and height <= 600 and lit_pixels > 500:
+                if 640 <= width <= 1920 and 480 <= height <= 1080 and lit_pixels > 500:
                     # Complete the last text-cell redraw before saving the
                     # user-facing screenshot (the menu is already visible).
                     time.sleep(.4)
