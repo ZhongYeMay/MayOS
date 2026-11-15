@@ -549,12 +549,12 @@ typedef struct {
 #define WINDOW_COUNT 8
 static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "Files"},
                             {177, 133, 640, 450, 0, 0, 0, 0, 0, 0, 0, "Settings"},
-                            {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
-                            {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
-                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"},
-                            {287, 125, 450, 510, 0, 0, 0, 0, 0, 0, 0, "MayDOS Calculator"},
-                            {122, 88, 780, 590, 0, 0, 0, 0, 0, 0, 0, "MayDOS Minesweeper"},
-                            {222, 144, 590, 504, 0, 0, 0, 0, 0, 0, 0, "MayDOS Extensions"}};
+                            {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "Terminal"},
+                            {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "Editor"},
+                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "Explorer"},
+                            {287, 125, 450, 510, 0, 0, 0, 0, 0, 0, 0, "Calculator"},
+                            {122, 88, 780, 590, 0, 0, 0, 0, 0, 0, 0, "Minesweeper"},
+                            {222, 144, 590, 504, 0, 0, 0, 0, 0, 0, 0, "Extensions"}};
 static int order[WINDOW_COUNT] = {0, 2, 3, 4, 5, 6, 7, 1}, focus = 1, dirty = 1;
 static int mx = 530, my = 390, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
@@ -1175,33 +1175,33 @@ static void desktop(void) {
         symbol(777 + i * 39, 7, status_icons[i], 18, muted);
     text(907, 8, "Tue Jan 28  10:24", muted);
 }
+/* One MayOS title bar shared across all native windows.  The title has a
+   reserved width, so controls cannot collide with labels or app glyphs. */
+static int window_icon(int id) {
+    const int kinds[WINDOW_COUNT] = {0, 1, 2, 5, 4, 10, 6, 5};
+    return kinds[id];
+}
 static void frame(int id) {
     Window *w = &windows[id];
     soft_roundrect(w->x + 8, w->y + 12, w->w, w->h, 25,
                    dark ? 0x010102 : 0xcccdd1);
     ui_card(w->x, w->y, w->w, w->h, 25, panel);
-    if (id == 1) {
-        circle(w->x + 21, w->y + 22, 6, 0x2b2b2e);
-        circle(w->x + 41, w->y + 22, 6, 0x2b2b2e);
-        circle(w->x + 61, w->y + 22, 6, 0x2b2b2e);
-        return;
-    }
-    rect(w->x + 24, w->y + 43, w->w - 48, 1, line);
-    symbol(w->x + 18, w->y + 11,
-           id == 0 ? 0 : id == 1 ? 1 : id == 4 ? 4 : id == 3 ? 5 : 2,
-           22, muted);
-    text(w->x + 48, w->y + 11, w->title, focus == id ? ink : muted);
+    /* Unified 44px title bar, 22px glyph, and 36px controls. */
+    rect(w->x + 22, w->y + 43, w->w - 44, 1, line);
+    symbol(w->x + 22, w->y + 12, window_icon(id), 20,
+           focus == id ? ink : muted);
+    /* This is intentionally a short, single-line name.  Max title width
+       leaves 138px reserved on the right for the three buttons. */
+    text(w->x + 54, w->y + 11, w->title, focus == id ? ink : muted);
+    const int kinds[] = {15, 16, 14};  /* minimize / maximize / close */
     int controls = w->x + w->w - 119;
-    const int kinds[] = {15, 16, 14};
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 3; ++i) {
         int xx = controls + i * 36 + 1;
         int hover = inside(mx, my, xx, w->y + 5, 33, 33);
-        if (hover) soft_roundrect(xx, w->y + 5, 33, 33, 11, selected_fill);
-        symbol(xx + 6, w->y + 11, kinds[i], 20, hover ? ink : muted);
+        if (hover)
+            soft_roundrect(xx, w->y + 5, 33, 33, 11, selected_fill);
+        symbol(xx + 7, w->y + 12, kinds[i], 18, hover ? ink : muted);
     }
-    for (int i = 0; i < 3; i++)
-        stroke(w->x + w->w - 8 - i * 5, w->y + w->h - 4,
-               w->x + w->w - 4, w->y + w->h - 8 - i * 5, 1, muted);
     if (high_contrast)
         border(w->x + 2, w->y + 2, w->w - 4, w->h - 4, line);
 }
@@ -1581,24 +1581,69 @@ static void explorer_draw(Window *w) {
     text(x + 100, y + 417, "请选择 Linux 启动项使用 HTTP 文本预览。", muted);
 #endif
 }
-/* Centered macOS-like dock from the user's reference screenshot.
-   Icons launch the same native MayOS windows and services. */
+/* Real MayOS Dock, computed from the open-window model on every redraw.
+   Pinned apps stay visible; non-pinned running apps enter/leave automatically.
+   A minimized window remains running and therefore retains its indicator. */
+#define DOCK_PINNED 3
+#define DOCK_MAX (WINDOW_COUNT + 1)
+static void dock_items(int ids[DOCK_MAX], int *count) {
+    int n = 0;
+    ids[n++] = 0; /* Files */
+    ids[n++] = 1; /* Settings */
+    ids[n++] = 2; /* Terminal */
+    /* Transient app icons keep their launch/order position, not focus order. */
+    for (int i = 3; i < WINDOW_COUNT; i++)
+        if (windows[i].open) ids[n++] = i;
+    ids[n++] = -1; /* Trash is a target, not an Editor shortcut. */
+    *count = n;
+}
+static int dock_left(int count) {
+    return (W - (count * 57 + 16)) / 2;
+}
+static void dock_activate(int id) {
+    if (id == -1) {
+        folder = 3;
+        file_scroll = 0;
+        selected = -1;
+        raise_window(0);
+        return;
+    }
+    if (windows[id].open && !windows[id].min && focus == id) {
+        windows[id].min = 1;
+        /* Focus the foremost remaining visible window, if any. */
+        focus = -1;
+        for (int k = WINDOW_COUNT - 1; k >= 0; --k) {
+            int other = order[k];
+            if (windows[other].open && !windows[other].min) {
+                focus = other;
+                break;
+            }
+        }
+        dirty = 1;
+    } else
+        raise_window(id);
+}
 static void taskbar(void) {
-    /* The reference Dock intentionally has only Files, Settings, Terminal and Trash. */
-    int left = 382, top = H - 92;
-    soft_roundrect(left + 5, top + 8, 244, 70, 25,
+    int ids[DOCK_MAX], count;
+    dock_items(ids, &count);
+    int width = count * 57 + 16, left = dock_left(count), top = H - 92;
+    soft_roundrect(left + 5, top + 8, width, 70, 25,
                    dark ? 0x020203 : 0xc0c0c6);
-    ui_card(left, top, 244, 70, 24, dark ? 0x0a0a0c : 0xf7f7f9);
-    const int ids[] = {0, 1, 2, 3};
-    for (int i = 0; i < 4; i++) {
-        int x = left + 21 + i * 57, id = ids[i];
-        int active = windows[id].open && !windows[id].min && focus == id;
-        int hover = inside(mx, my, x - 7, top + 4, 50, 57);
+    ui_card(left, top, width, 70, 24, dark ? 0x0a0a0c : 0xf7f7f9);
+    for (int i = 0; i < count; ++i) {
+        int id = ids[i], x = left + 18 + i * 57;
+        int running = id >= 0 && windows[id].open;
+        int active = running && !windows[id].min && focus == id;
+        int hover = inside(mx, my, x - 5, top + 5, 47, 58);
         if (active || hover)
-            soft_roundrect(x - 5, top + 5, 48, 54, 15,
+            soft_roundrect(x - 5, top + 5, 47, 54, 15,
                            active ? selected_fill : surface_high);
-        int kind = id == 3 ? 3 : id;
-        symbol(x + 4, top + 15 - (hover ? 2 : 0), kind, 34, active ? ink : muted);
+        int kind = id == -1 ? 3 : window_icon(id);
+        symbol(x + 5, top + 13 - (hover ? 2 : 0), kind, 32,
+               active ? ink : muted);
+        /* macOS-style running dot, including minimized applications. */
+        if (running)
+            circle(x + 21, top + 62, 2, active ? ink : muted);
     }
 }
 /* Functional, keyboard-dismissable popovers are deliberately invisible
@@ -2012,25 +2057,17 @@ static void left_click(void) {
         }
         return;
     }
-    /* Reference Dock: Files, Settings, Terminal, Trash. */
+    /* Dock hit targets follow the exact same calculated geometry as draw. */
     if (my >= H - 92) {
-        const int centers[] = {403, 460, 517, 574};
-        for (int i = 0; i < 4; i++) {
-            if (!inside(mx, my, centers[i] - 24, H - 88, 52, 60))
-                continue;
-            if (i == 0) {
-                raise_window(0);
-            } else if (i == 1) {
-                raise_window(1);
-            } else if (i == 2) {
-                raise_window(2);
-            } else {
-                folder = 3;
-                file_scroll = 0;
-                selected = -1;
-                raise_window(0);
+        int ids[DOCK_MAX], count;
+        dock_items(ids, &count);
+        int left = dock_left(count), top = H - 92;
+        for (int i = 0; i < count; ++i) {
+            int x = left + 18 + i * 57;
+            if (inside(mx, my, x - 5, top + 5, 47, 58)) {
+                dock_activate(ids[i]);
+                return;
             }
-            return;
         }
         return;
     }
@@ -2083,6 +2120,14 @@ static void left_click(void) {
                     return;
                 }
                 w->open = 0;
+                focus = -1;
+                for (int k = WINDOW_COUNT - 1; k >= 0; --k) {
+                    int other = order[k];
+                    if (windows[other].open && !windows[other].min) {
+                        focus = other;
+                        break;
+                    }
+                }
                 return;
             }
             if (rx > w->w - 82) {
