@@ -21,8 +21,15 @@ SCENES = ("calculator", "minesweeper", "maynote", "extensions")
 
 
 def command(vm, value, confirmation):
+    # HMP sendkey needs symbolic names for shifted arithmetic punctuation.
+    names = {' ': 'spc', '/': 'slash', '.': 'dot',
+             '-': 'minus', '_': 'shift-minus', ':': 'shift-semicolon',
+             '+': 'shift-equal', '*': 'shift-8',
+             '(': 'shift-9', ')': 'shift-0'}
     previous = len(vm.text())
-    vm.command(value)
+    for ch in value:
+        vm.key(names.get(ch, ('shift-' + ch.lower()) if ch.isupper() else ch))
+    vm.key('ret')
     vm.wait(confirmation, timeout=30, offset=previous)
 
 
@@ -74,10 +81,10 @@ def act(vm, scene):
         command(vm, "minesweeper easy", "MayDOS Minesweeper ready")
         vm.hold(1.5)
         # 9x9 board: native window (122,88), grid origin (350,265).
-        vm.click(367, 282)
+        right_click(vm, 640, 553)  # flag before first click: guaranteed hidden
+        vm.hold(1.4)
+        vm.click(367, 282)         # guaranteed safe on the first reveal
         vm.hold(2.1)
-        right_click(vm, 640, 553)  # bottom-right hidden cell
-        vm.hold(1.6)
         # Reset, then switch difficulty via native buttons.
         vm.click(302, 155)  # medium
         vm.hold(1.4)
