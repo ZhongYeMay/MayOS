@@ -39,6 +39,9 @@ jobs:
             grub-efi-amd64-bin xorriso mtools qemu-system-x86 ovmf python3-pil \
             fonts-noto-cjk fonts-dejavu-core musl-tools flex bison bc libelf-dev \
             libssl-dev xz-utils busybox-static rsync libcurl4-openssl-dev pkg-config ca-certificates
+      - name: Check branded GRUB menu before QEMU boot tests
+        working-directory: MayOS_0.3.0-pre1
+        run: python3 scripts/test_grub_theme.py
       - name: Test Linux UEFI desktop readiness regression
         working-directory: MayOS_0.3.0-pre1
         run: |
