@@ -64,7 +64,7 @@ build/%.o: kernel/%.c kernel/core.h kernel/io.h kernel/version.h build/font.h
 build/mayos.elf: $(OBJECTS) kernel/linker64.ld
 	$(LD) -m elf_x86_64 -T kernel/linker64.ld -o $@ $(OBJECTS)
 	$(GRUB_FILE) --is-x86-multiboot $@
-build/mayos.iso: build/mayos.elf boot/grub/grub.cfg scripts/dual_iso.py
+build/mayos.iso: build/mayos.elf boot/grub/grub.cfg boot/grub/themes/mayos/theme.txt assets/limine-mayos-brand.png scripts/dual_iso.py
 	$(PYTHON) scripts/dual_iso.py --custom-only --firmware "$(BOOT_FIRMWARE)" --grub-mkrescue '$(GRUB_MKRESCUE)'
 build/mayos-disk.img: | build
 	truncate -s 8M $@
