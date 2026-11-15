@@ -9,6 +9,7 @@
 #include "explorer_history.h"
 #endif
 #include "version.h"
+#include "maydos_tools.h"
 #define MAYOS_RELEASE MAYOS_VERSION
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
@@ -545,13 +546,16 @@ typedef struct {
     int x, y, w, h, open, min, max, ox, oy, ow, oh;
     const char *title;
 } Window;
-#define WINDOW_COUNT 5
+#define WINDOW_COUNT 8
 static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "Files"},
                             {177, 133, 640, 450, 0, 0, 0, 0, 0, 0, 0, "Settings"},
                             {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
                             {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
-                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
-static int order[WINDOW_COUNT] = {0, 2, 3, 4, 1}, focus = 1, dirty = 1;
+                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"},
+                            {287, 125, 450, 510, 0, 0, 0, 0, 0, 0, 0, "MayDOS Calculator"},
+                            {122, 88, 780, 590, 0, 0, 0, 0, 0, 0, 0, "MayDOS Minesweeper"},
+                            {222, 144, 590, 504, 0, 0, 0, 0, 0, 0, 0, "MayDOS Extensions"}};
+static int order[WINDOW_COUNT] = {0, 2, 3, 4, 5, 6, 7, 1}, focus = 1, dirty = 1;
 static int mx = 530, my = 390, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
            cut = 0, settings_tab = 6;
@@ -695,6 +699,18 @@ static int sync_notice(void) {
 #endif
     return ok;
 }
+/* Native GUI and legacy DOS utility adapters; shared in both boot modes. */
+#include "maydos_ui.inc"
+static void open_file(int i);
+static int md_parse_int(const char *p) {
+    int n = 0;
+    if (!p || !*p) return -1;
+    while (*p) {
+        if (*p < '0' || *p > '9' || n > 10000) return -1;
+        n = n * 10 + *p++ - '0';
+    }
+    return n;
+}
 static void shell(void) {
     char full[200] = "may@mayos:~ $ ";
     copy(full + 14, command, 186);
@@ -722,14 +738,91 @@ static void shell(void) {
         return;
     char *c = argv[0];
     int target = argc > 1 ? resolve(argv[1], cwd) : -1;
-    if (!strcmp(c, "help")) {
+    if (!strcmp(c, "help") || !strcmp(c, "usebook")) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
         emit("theme light|dark  net status  reboot  shutdown");
+        emit("MayDOS: calc [expression]  minesweeper [easy|medium|expert]");
+        emit("mine <row> <col>  flag <row> <col>  notepad [dos|gui]");
+        emit("usebook  sysver  cls  apps  add [file]  list  del <file>  shut confirm");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
-    } else if (!strcmp(c, "clear"))
+    } else if (!strcmp(c, "clear") || !strcmp(c, "cls"))
         out_count = 0;
+    else if (!strcmp(c, "sysver")) {
+        emit("MayDOS 1.0.0 compatibility tools / MayOS " MAYOS_RELEASE);
+        emit("MayDOS Team 2023 / native x86_64 implementation");
+    } else if (!strcmp(c, "calc")) {
+        if (!command[4]) { raise_window(5); }
+        else {
+            char result[64];
+            if (md_calc_eval(command + 4, result, sizeof(result))) {
+                emit("Result:"); emit(result);
+            } else { emit("Calculator error:"); emit(result); }
+        }
+    } else if (!strcmp(c, "notepad")) {
+        if (argc >= 2 && !strcmp(argv[1], "dos")) {
+            emit("MayDOS Notepad DOS: cat <file>, write <file> <text>, ls, save");
+        } else {
+            int note = argc >= 3 && !strcmp(argv[1], "gui") ? resolve(argv[2], cwd) :
+                       argc >= 2 && strcmp(argv[1], "gui") ? target : fs_find(2, "Notes.txt");
+            if (note >= 0 && !files[note].dir) open_file(note);
+            else emit("notepad: file not found; create it with touch <file>");
+        }
+    } else if (!strcmp(c, "minesweeper")) {
+        int mode = 0, rows = 0, cols = 0, mines = 0;
+        if (argc < 2 || !strcmp(argv[1], "easy") || !strcmp(argv[1], "beginner")) mode = 1;
+        else if (!strcmp(argv[1], "medium") || !strcmp(argv[1], "intermediate")) mode = 2;
+        else if (!strcmp(argv[1], "expert")) mode = 3;
+        else if (!strcmp(argv[1], "custom") && argc == 5) {
+            mode = 4; rows = md_parse_int(argv[2]); cols = md_parse_int(argv[3]);
+            mines = md_parse_int(argv[4]);
+        }
+        if (mode && md_mines_new(&md_game, mode, rows, cols, mines, ticks + 0x4387u)) {
+            md_game_mode = mode;
+            raise_window(6);
+            emit("MayDOS Minesweeper ready: left click/reveal, right click/flag.");
+        } else emit("Usage: minesweeper easy|medium|expert|custom ROW COL MINES (15-25%)");
+    } else if (!strcmp(c, "mine") || !strcmp(c, "flag")) {
+        if (argc != 3 || !md_game.rows) emit("Usage: mine|flag ROW COL (zero-based)");
+        else {
+            int row = md_parse_int(argv[1]), col = md_parse_int(argv[2]);
+            if (row < 0 || col < 0 || row >= md_game.rows || col >= md_game.cols)
+                emit("mine: invalid coordinates");
+            else if (!strcmp(c, "flag")) {
+                emit(md_mines_flag(&md_game, row, col) ? "Flag updated" : "Flag ignored");
+            } else {
+                int result = md_mines_reveal(&md_game, row, col, ticks);
+                emit(result == -1 ? "Mine hit; game over" : result == 2 ? "Minesweeper: won" :
+                     result == 1 ? "Cell revealed" : "Cell unchanged");
+            }
+        }
+    } else if (!strcmp(c, "apps")) {
+        raise_window(7);
+    } else if (!strcmp(c, "add")) {
+        int added = argc >= 2 ? md_import_one(argv[1]) : md_import_all();
+        emit(added ? "MayDOS: imported into Documents/ThirdPartyFile" :
+                     "MayDOS: no eligible new data in Documents/AddFiles");
+    } else if (!strcmp(c, "list")) {
+        int dst = md_directory("ThirdPartyFile", 0), found = 0;
+        if (dst >= 0)
+            for (int i = 4; i < FS_MAX; ++i)
+                if (files[i].used && !files[i].dir && files[i].parent == (u32)dst) {
+                    emit(files[i].name); ++found;
+                }
+        if (!found) emit("MayDOS: no imported data files");
+    } else if (!strcmp(c, "del")) {
+        int dir = md_directory("ThirdPartyFile", 0);
+        int file = argc >= 2 && dir >= 0 ? fs_find(dir, argv[1]) : -1;
+        if (file < 4 || files[file].dir || !fs_move(file, 3))
+            emit("del: file not found, already removed, or Trash name conflict");
+        else { sync_notice(); emit("MayDOS: moved extension data to Trash"); }
+    } else if (!strcmp(c, "shut")) {
+        if (argc > 1 && !strcmp(argv[1], "confirm")) { fs_sync(); poweroff(); }
+        else emit("Type shut confirm to power off MayOS");
+    } else if (!strcmp(c, "exit")) {
+        windows[2].open = 0;
+    }
     else if (!strcmp(c, "pwd"))
         pwd();
     else if (!strcmp(c, "ls")) {
@@ -1679,8 +1772,14 @@ static void render(void) {
             terminal_draw(w);
         else if (i == 3)
             editor_draw(w);
-        else
+        else if (i == 4)
             explorer_draw(w);
+        else if (i == 5)
+            md_calc_draw(w);
+        else if (i == 6)
+            md_mines_draw(w);
+        else
+            md_library_draw(w);
     }
     taskbar();
     status_panel_draw();
@@ -2012,6 +2111,9 @@ static void left_click(void) {
 #endif
             return;
         }
+        if (id == 5) { md_calc_click(rx, ry); return; }
+        if (id == 6) { md_mines_click(w, mx, my, 0); return; }
+        if (id == 7) { md_library_click(w, rx, ry); return; }
         if (id == 1) {
             if (settings_tab == 6 && inside(rx, ry, 223, 265, 30, 30)) {
                 if (ticks - egg_last_click > 150)
@@ -2136,6 +2238,12 @@ static void left_click(void) {
     desktop_note_selected = 0;
 }
 static void right_click(void) {
+    Window *mine = &windows[6];
+    if (mine->open && !mine->min && inside(mx, my, mine->x, mine->y, mine->w, mine->h)) {
+        raise_window(6);
+        md_mines_click(mine, mx, my, 1);
+        return;
+    }
 #ifndef MAYOS_LINUX
     if (maygame_active()) return;
 #endif
@@ -2223,6 +2331,19 @@ static void key_event(int k) {
                     break;
                 }
         }
+        return;
+    }
+    if (focus == 5 && windows[5].open && !windows[5].min) {
+        if (k == '') md_calc_key('B');
+        else if (k == '
+') md_calc_key('=');
+        else if (k == 27) md_calc_key('C');
+        else if (k >= 32 && k < 127) md_calc_key((char)k);
+        return;
+    }
+    if (focus == 6 && windows[6].open && !windows[6].min) {
+        if (k == '1' || k == '2' || k == '3') md_mines_start(k - '0', 0, 0, 0);
+        if (k == 'r') md_mines_start(md_game_mode, md_game.rows, md_game.cols, md_game.mines);
         return;
     }
     if (focus == 4 && windows[4].open && !windows[4].min) {
@@ -2323,6 +2444,7 @@ void kernel_main(u32 magic, u32 info) {
     fs_init();
     preferences_load();
     terminal_init();
+    md_mines_start(1, 0, 0, 0);
     serial("MayOS: desktop ready\n");
     u32 last = 0;
     for (;;) {
