@@ -154,6 +154,7 @@ static void md_library_draw(Window *w) {
     text(x + 30, y + w->h - 36, "单个文件上限 4095 bytes · MayFS / RAM", muted);
 }
 static void md_library_click(Window *w, int rx, int ry) {
+    (void)w;
     if (ry >= 130 && ry < 160) {
         if (rx >= 28 && rx < 168) {
             int src = md_directory("AddFiles", 1);
