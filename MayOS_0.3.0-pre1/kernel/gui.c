@@ -588,6 +588,9 @@ static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0,
                             {122, 88, 780, 590, 0, 0, 0, 0, 0, 0, 0, "Minesweeper"},
                             {222, 144, 590, 504, 0, 0, 0, 0, 0, 0, 0, "Extensions"}};
 static int order[WINDOW_COUNT] = {0, 2, 3, 4, 5, 6, 7, 1}, focus = 1, dirty = 1;
+/* A monotonically increasing launch sequence gives the Dock true app-open order.
+ * It is independent of Z-order, which changes every time a window is focused. */
+static u32 dock_launch[WINDOW_COUNT], dock_next_launch;
 static int mx = 530, my = 390, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
            cut = 0, settings_tab = 6;
@@ -617,10 +620,38 @@ static void notify(const char *s) {
     notice_until = ticks + 350;
     dirty = 1;
 }
+static void focus_visible_window(void) {
+    focus = -1;
+    for (int k = WINDOW_COUNT - 1; k >= 0; --k) {
+        int id = order[k];
+        if (windows[id].open && !windows[id].min) {
+            focus = id;
+            break;
+        }
+    }
+}
+static void minimize_window(int id) {
+    if (id < 0 || id >= WINDOW_COUNT || !windows[id].open) return;
+    windows[id].min = 1;
+    focus_visible_window();
+    dirty = 1;
+}
+static void close_window(int id) {
+    if (id < 0 || id >= WINDOW_COUNT) return;
+    windows[id].open = 0;
+    windows[id].min = 0;
+    dock_launch[id] = 0;  /* closed transient apps disappear automatically */
+    focus_visible_window();
+    dirty = 1;
+}
 static void raise_window(int id) {
+    if (id < 0 || id >= WINDOW_COUNT) return;
+    if (!windows[id].open && id >= 3)
+        dock_launch[id] = ++dock_next_launch;
     int at = 0;
     for (; at < WINDOW_COUNT && order[at] != id; at++)
         ;
+    if (at == WINDOW_COUNT) return; /* never corrupt stacking order */
     for (int i = at; i < WINDOW_COUNT - 1; i++)
         order[i] = order[i + 1];
     order[WINDOW_COUNT - 1] = id;
@@ -856,7 +887,7 @@ static void shell(void) {
         if (argc > 1 && !strcmp(argv[1], "confirm")) { fs_sync(); poweroff(); }
         else emit("Type shut confirm to power off MayOS");
     } else if (!strcmp(c, "exit")) {
-        windows[2].open = 0;
+        close_window(2);
     }
     else if (!strcmp(c, "pwd"))
         pwd();
@@ -1184,13 +1215,12 @@ static void desktop(void) {
     rect(0, 31, W, 1, dark ? 0x171719 : line);
     symbol(17, 7, 11, 17, ink);
     heading_text(42, 4, "MayOS", ink);
-    /* Separate the brand from menus; no overlapping glyph advances. */
-    text(163, 8, "Settings", muted);
-    text(251, 8, "File", muted);
-    text(313, 8, "Edit", muted);
-    text(371, 8, "View", muted);
-    text(432, 8, "Window", muted);
-    text(524, 8, "Help", muted);
+    /* Only real interaction is advertised. The legacy fake File/Edit/View
+     * labels were not menus, and crowded the macOS-inspired system bar. */
+    rect(147, 9, 1, 14, line);
+    const char *active_app = focus >= 0 && windows[focus].open &&
+                             !windows[focus].min ? windows[focus].title : "Desktop";
+    text(163, 8, active_app, ink);
     int count = 0;
     for (int i = 4; i < FS_MAX && count < 15; i++) {
         if (!files[i].used || files[i].parent != 2) continue;
@@ -1215,26 +1245,61 @@ static int window_icon(int id) {
     const int kinds[WINDOW_COUNT] = {0, 1, 2, 5, 4, 23, 24, 25};
     return kinds[id];
 }
+#define TITLEBAR_H 44
+#define TITLEBAR_CONTROL_START 132
+#define TITLEBAR_CONTROL_STEP 40
+/* Returns 1=minimize, 2=maximize, 3=close. Used by both drawing and
+ * interaction so a visible control always has the matching hit target. */
+static int titlebar_button(const Window *w, int rx, int ry) {
+    if (ry < 4 || ry >= TITLEBAR_H) return 0;
+    int start = w->w - TITLEBAR_CONTROL_START;
+    for (int i = 0; i < 3; ++i)
+        if (rx >= start + i * TITLEBAR_CONTROL_STEP &&
+            rx < start + i * TITLEBAR_CONTROL_STEP + 34)
+            return i + 1;
+    return 0;
+}
+static void titlebar_text(int x, int y, const char *label, int max_width, u32 color) {
+    /* No title can intrude into the window buttons, including long file names. */
+    char shown[64];
+    int limit = max_width / 8;
+    int length = (int)strlen(label);
+    if (limit <= 0) return;
+    if (limit >= (int)sizeof(shown)) limit = (int)sizeof(shown) - 1;
+    if (length <= limit) {
+        text(x, y, label, color);
+        return;
+    }
+    memcpy(shown, label, (u32)limit);
+    if (limit > 3) shown[limit - 3] = shown[limit - 2] = shown[limit - 1] = '.';
+    shown[limit] = 0;
+    text(x, y, shown, color);
+}
 static void frame(int id) {
     Window *w = &windows[id];
+    int active = focus == id;
     soft_roundrect(w->x + 8, w->y + 12, w->w, w->h, 25,
                    dark ? 0x010102 : 0xcccdd1);
     ui_card(w->x, w->y, w->w, w->h, 25, panel);
-    /* Unified 44px title bar, 22px glyph, and 36px controls. */
-    rect(w->x + 22, w->y + 43, w->w - 44, 1, line);
-    symbol(w->x + 22, w->y + 12, window_icon(id), 20,
-           focus == id ? ink : muted);
-    /* This is intentionally a short, single-line name.  Max title width
-       leaves 138px reserved on the right for the three buttons. */
-    text(w->x + 54, w->y + 11, w->title, focus == id ? ink : muted);
-    const int kinds[] = {15, 16, 14};  /* minimize / maximize / close */
-    int controls = w->x + w->w - 119;
+    /* Fixed 44px chrome does not push the existing application contents. */
+    rect(w->x + 18, w->y + TITLEBAR_H - 1, w->w - 36, 1, line);
+    ui_card(w->x + 14, w->y + 7, 30, 30, 10,
+            active ? selected_fill : surface_high);
+    symbol(w->x + 20, w->y + 13, window_icon(id), 18,
+           active ? ink : muted);
+    titlebar_text(w->x + 55, w->y + 12, w->title, w->w - 207,
+                  active ? ink : muted);
+    /* Compact, right-aligned native controls share exact click geometry. */
+    const int kinds[] = {15, 16, 14};
+    int controls = w->x + w->w - TITLEBAR_CONTROL_START;
+    ui_card(controls - 5, w->y + 5, 120, 34, 12, surface_high);
     for (int i = 0; i < 3; ++i) {
-        int xx = controls + i * 36 + 1;
-        int hover = inside(mx, my, xx, w->y + 5, 33, 33);
+        int xx = controls + i * TITLEBAR_CONTROL_STEP;
+        int hover = inside(mx, my, xx, w->y + 5, 34, 34);
         if (hover)
-            soft_roundrect(xx, w->y + 5, 33, 33, 11, selected_fill);
-        symbol(xx + 7, w->y + 12, kinds[i], 18, hover ? ink : muted);
+            soft_roundrect(xx, w->y + 5, 34, 34, 10, selected_fill);
+        symbol(xx + 8, w->y + 13, kinds[i], 18,
+               hover || (active && i == 2) ? ink : muted);
     }
     if (high_contrast)
         border(w->x + 2, w->y + 2, w->w - 4, w->h - 4, line);
@@ -1615,9 +1680,9 @@ static void explorer_draw(Window *w) {
     text(x + 100, y + 417, "请选择 Linux 启动项使用 HTTP 文本预览。", muted);
 #endif
 }
-/* Real MayOS Dock, computed from the open-window model on every redraw.
-   Pinned apps stay visible; non-pinned running apps enter/leave automatically.
-   A minimized window remains running and therefore retains its indicator. */
+/* MayOS Dock: pinned shortcuts + transient apps in true launch order.
+ * Focusing/minimizing never reorders the Dock; closing removes transient
+ * entries. The same item array is used by drawing and mouse hit-testing. */
 #define DOCK_PINNED 3
 #define DOCK_MAX (WINDOW_COUNT + 1)
 static void dock_items(int ids[DOCK_MAX], int *count) {
@@ -1625,10 +1690,18 @@ static void dock_items(int ids[DOCK_MAX], int *count) {
     ids[n++] = 0; /* Files */
     ids[n++] = 1; /* Settings */
     ids[n++] = 2; /* Terminal */
-    /* Transient app icons keep their launch/order position, not focus order. */
-    for (int i = 3; i < WINDOW_COUNT; i++)
-        if (windows[i].open) ids[n++] = i;
-    ids[n++] = -1; /* Trash is a target, not an Editor shortcut. */
+    u32 after = 0;
+    for (;;) {
+        int next = -1;
+        for (int id = 3; id < WINDOW_COUNT; ++id)
+            if (windows[id].open && dock_launch[id] > after &&
+                (next < 0 || dock_launch[id] < dock_launch[next]))
+                next = id;
+        if (next < 0) break;
+        ids[n++] = next;
+        after = dock_launch[next];
+    }
+    ids[n++] = -1; /* Trash is not a running application. */
     *count = n;
 }
 static int dock_left(int count) {
@@ -1642,19 +1715,9 @@ static void dock_activate(int id) {
         raise_window(0);
         return;
     }
-    if (windows[id].open && !windows[id].min && focus == id) {
-        windows[id].min = 1;
-        /* Focus the foremost remaining visible window, if any. */
-        focus = -1;
-        for (int k = WINDOW_COUNT - 1; k >= 0; --k) {
-            int other = order[k];
-            if (windows[other].open && !windows[other].min) {
-                focus = other;
-                break;
-            }
-        }
-        dirty = 1;
-    } else
+    if (windows[id].open && !windows[id].min && focus == id)
+        minimize_window(id);
+    else
         raise_window(id);
 }
 static void taskbar(void) {
@@ -1664,20 +1727,35 @@ static void taskbar(void) {
     soft_roundrect(left + 5, top + 8, width, 70, 25,
                    dark ? 0x020203 : 0xc0c0c6);
     ui_card(left, top, width, 70, 24, dark ? 0x0a0a0c : 0xf7f7f9);
+    int tooltip = -2;
     for (int i = 0; i < count; ++i) {
         int id = ids[i], x = left + 18 + i * 57;
         int running = id >= 0 && windows[id].open;
         int active = running && !windows[id].min && focus == id;
         int hover = inside(mx, my, x - 5, top + 5, 47, 58);
+        if (i == DOCK_PINNED || i == count - 1)
+            rect(x - 10, top + 18, 1, 33, line);
         if (active || hover)
             soft_roundrect(x - 5, top + 5, 47, 54, 15,
                            active ? selected_fill : surface_high);
         int kind = id == -1 ? 3 : window_icon(id);
         symbol(x + 5, top + 13 - (hover ? 2 : 0), kind, 32,
                active ? ink : muted);
-        /* macOS-style running dot, including minimized applications. */
+        /* An inactive/minimized app is still running: retain its dot. */
         if (running)
-            circle(x + 21, top + 62, 2, active ? ink : muted);
+            circle(x + 21, top + 62, 3, active ? ink : muted);
+        if (hover) tooltip = id;
+    }
+    /* A short hover label identifies a temporary app instead of decorating
+     * the desktop with permanent captions that clutter the Dock. */
+    if (tooltip != -2) {
+        const char *name = tooltip < 0 ? "Trash" : windows[tooltip].title;
+        int ww = (int)strlen(name) * 8 + 22;
+        int center = mx;
+        if (center < ww / 2 + 6) center = ww / 2 + 6;
+        if (center > W - ww / 2 - 6) center = W - ww / 2 - 6;
+        ui_card(center - ww / 2, top - 38, ww, 30, 10, panel);
+        text(center - ww / 2 + 11, top - 31, name, ink);
     }
 }
 /* Functional, keyboard-dismissable popovers are deliberately invisible
@@ -2147,31 +2225,26 @@ static void left_click(void) {
             continue;
         raise_window(id);
         int rx = mx - w->x, ry = my - w->y;
-        if (ry < 42) {
-            if (rx > w->w - 46) {
+        if (ry < TITLEBAR_H) {
+            int action = titlebar_button(w, rx, ry);
+            if (action == 3) {
                 if (id == 3 && editor_changed) {
                     notify("请先保存修改，再关闭编辑器");
                     return;
                 }
-                w->open = 0;
-                focus = -1;
-                for (int k = WINDOW_COUNT - 1; k >= 0; --k) {
-                    int other = order[k];
-                    if (windows[other].open && !windows[other].min) {
-                        focus = other;
-                        break;
-                    }
-                }
+                close_window(id);
                 return;
             }
-            if (rx > w->w - 82) {
+            if (action == 2) {
                 toggle_max(id);
                 return;
             }
-            if (rx > w->w - 119) {
-                w->min = 1;
+            if (action == 1) {
+                minimize_window(id);
                 return;
             }
+            /* Keep the padding between the controls non-draggable. */
+            if (rx >= w->w - TITLEBAR_CONTROL_START) return;
             if (!w->max) {
                 drag = id;
                 dragx = rx;
