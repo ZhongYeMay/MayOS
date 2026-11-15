@@ -29,7 +29,7 @@ static void md_calc_draw(Window *w) {
         int px = x + 22 + i % 5 * 81, py = y + 184 + i / 5 * 66;
         button(px, py, 72, keys[i], i == 18);
     }
-    text(x + 24, y + w->h - 43, "MayDOS Calculator  /  + - * / ( )", muted);
+    text(x + 24, y + w->h - 43, "MayOS Calculator  ·  +  -  *  /  ( )", muted);
 }
 static void md_calc_click(int rx, int ry) {
     if (ry < 184) return;
@@ -84,7 +84,7 @@ static void md_mines_draw(Window *w) {
                 }
             }
         }
-    text(x + 26, y + w->h - 31, "MayDOS 1.0 / first click safe / shell: mine, flag", muted);
+    text(x + 26, y + w->h - 31, "MayOS Minesweeper  /  first click safe", muted);
 }
 static void md_mines_click(Window *w, int mouse_x, int mouse_y, int right) {
     int rx = mouse_x - w->x, ry = mouse_y - w->y;
@@ -135,7 +135,7 @@ static int md_import_all(void) {
 }
 static void md_library_draw(Window *w) {
     int x = w->x, y = w->y;
-    text(x + 28, y + 58, "MayDOS / Extension Library", ink);
+    text(x + 28, y + 58, "Extensions", ink);
     text(x + 28, y + 89, "数据文件导入 · 不执行 Windows / Python 程序", muted);
     button(x + 28, y + 130, 140, "打开导入目录", 0);
     button(x + 182, y + 130, 116, "导入全部", 1);
