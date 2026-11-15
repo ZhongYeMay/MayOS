@@ -24,7 +24,7 @@ FS_POWERLOSS_SELFTEST ?= 0
 ifeq ($(FS_POWERLOSS_SELFTEST),1)
 CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
 endif
-OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o
+OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/maydos_tools.o
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
@@ -54,9 +54,10 @@ build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 # No external font or browser runtime is required in the finished ISO.
 build/material_icons.h: assets/material_symbols.py | build
 	$(PYTHON) assets/material_symbols.py
-build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h
+build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/maydos_tools.h kernel/maydos_ui.inc
 build/core.o: kernel/framebuffer.h kernel/boot64.S
 build/galgame.o: kernel/galgame.h
+build/maydos_tools.o: kernel/maydos_tools.h
 build/boot64.o: kernel/boot64.S | build
 	$(CC) -m64 -c $< -o $@
 build/%.o: kernel/%.c kernel/core.h kernel/io.h kernel/version.h build/font.h
@@ -71,6 +72,7 @@ build/mayos-disk.img: | build
 run: all
 	$(QEMU) -cpu max $(if $(QEMU_DATA_DIR),-L $(QEMU_DATA_DIR)) -m 128 -vga std -cdrom build/mayos.iso -drive file=build/mayos-disk.img,format=raw,if=ide,index=0 -boot d -serial file:build/serial.log -no-reboot
 test: all
+	$(PYTHON) scripts/test_maydos_tools.py
 	$(PYTHON) scripts/smoke.py
 	$(PYTHON) scripts/ui_smoke.py
 	$(PYTHON) scripts/settings_smoke.py
