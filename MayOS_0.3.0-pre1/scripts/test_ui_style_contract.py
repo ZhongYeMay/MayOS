@@ -53,13 +53,13 @@ assert "line = dark ? 0x303033 : 0xd9d9dd;" in source
 assert "static void soft_roundrect(" in source
 assert "static int heading_text(" in source
 assert 'heading_text(42, 4, "MayOS", ink);' in source
-assert 'text(101, 8, "Settings", muted);' in source
-assert 'text(164, 8, "File", muted);' in source
-assert 'text(205, 8, "Edit", muted);' in source
-assert 'text(244, 8, "View", muted);' in source
-assert 'text(286, 8, "Window", muted);' in source
-assert 'text(348, 8, "Help", muted);' in source
-assert 'text(907, 8, "Tue Jan 28  10:24", muted);' in source
+assert 'text(163, 8, "Settings", muted);' in source
+assert 'text(251, 8, "File", muted);' in source
+assert 'text(313, 8, "Edit", muted);' in source
+assert 'text(371, 8, "View", muted);' in source
+assert 'text(432, 8, "Window", muted);' in source
+assert 'text(524, 8, "Help", muted);' in source
+assert 'text(935, 8, "SESSION", muted);' in source
 assert 'heading_text(x + 20, y + 49, "Settings", ink);' in source
 assert '"Privacy & Security", "Updates", "About MayOS"' in source
 assert 'heading_text(cx, cy - 8, "About MayOS", ink);' in source
@@ -88,6 +88,8 @@ assert "if (windows[i].open) ids[n++] = i;" in source
 assert "if (running)" in source
 assert "windows[id].min = 1;" in source
 assert "static int window_icon(int id)" in source
+assert "0, 1, 2, 5, 4, 23, 24, 25" in source
+assert "kind == 23" in source and "kind == 24" in source and "kind == 25" in source
 assert "static void frame(int id)" in source
 assert '"MayDOS Calculator"' not in source
 assert '"MayDOS Minesweeper"' not in source
