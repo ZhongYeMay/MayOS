@@ -49,6 +49,9 @@ INPUT_FILES = {
     "desktop_session_sha256": ROOT / "linux/desktop-session",
     "desktop_backend_sha256": ROOT / "linux/desktop.c",
     "desktop_gui_sha256": ROOT / "kernel/gui.c",
+    "maydos_ui_sha256": ROOT / "kernel/maydos_ui.inc",
+    "maydos_tools_header_sha256": ROOT / "kernel/maydos_tools.h",
+    "maydos_tools_source_sha256": ROOT / "kernel/maydos_tools.c",
     "explorer_history_sha256": ROOT / "kernel/explorer_history.h",
     "desktop_fs_sha256": ROOT / "kernel/fs.c",
     "desktop_core_header_sha256": ROOT / "kernel/core.h",
@@ -475,7 +478,8 @@ def build(args: argparse.Namespace) -> dict:
              "-I" + str(ROOT / "kernel"), "-I" + str(ROOT / "build"),
              "-isystem", str(OUT / "headers/include"),
              str(ROOT / "linux/desktop.c"), str(ROOT / "kernel/fs.c"),
-             str(ROOT / "kernel/gui.c"), "-o", str(OUT / "mayos-desktop")])
+             str(ROOT / "kernel/gui.c"), str(ROOT / "kernel/maydos_tools.c"),
+             "-o", str(OUT / "mayos-desktop")])
         validate_static_elf(OUT / "mayos-desktop")
     kernel = output / "arch/x86/boot/bzImage"
     release = (output / "include/config/kernel.release").read_text().strip()
