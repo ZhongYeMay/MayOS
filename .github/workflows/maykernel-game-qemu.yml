@@ -1,6 +1,12 @@
 name: MayKernel native game QEMU evidence
 
 on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/kernel/**'
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - 'MayOS_0.3.0-pre1/scripts/record_galgame.py'
+      - '.github/workflows/maykernel-game-qemu.yml'
   push:
     branches: [main]
     paths:

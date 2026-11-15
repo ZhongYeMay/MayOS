@@ -62,8 +62,8 @@ if "--dual32" in sys.argv:
                 memory=128, timeout=60, cpu="pentium3")
     try:
         vm.wait("MayOS requires an x86_64 CPU")
-        assert "MayOS - custom x86_64 kernel" not in vm.text, "64-bit MayKernel offered on a 32-bit CPU"
-        assert "Linux 7.3.1 - desktop" not in vm.text, "64-bit Linux offered on a 32-bit CPU"
+        assert "MayOS: CPU long mode active" not in vm.text, "64-bit MayKernel unexpectedly started on a 32-bit CPU"
+        assert "MayOS: desktop ready" not in vm.text, "64-bit MayKernel desktop unexpectedly started on a 32-bit CPU"
         records.append({"case": "dual-iso-32bit-cpu", "native64_hidden": True,
                         "linux_hidden": True, "unsupported_cpu_reported": True})
     finally: vm.stop()

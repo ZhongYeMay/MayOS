@@ -7,11 +7,11 @@ insmod all_video
 insmod cpuid
 insmod gfxterm
 insmod png
+serial --unit=0 --speed=115200
 terminal_output gfxterm serial
 set theme=/boot/grub/themes/mayos/theme.txt
 export theme
 
-serial --unit=0 --speed=115200
 terminal_input console serial
 
 if cpuid -l; then
@@ -44,7 +44,10 @@ menuentry "Linux @LINUX_VERSION@ - compatibility rescue (x86_64)" --id linux-saf
     boot
 }
 else
-menuentry "MayOS requires an x86_64 CPU" {
+# A named 64-bit default must not trap 32-bit firmware in the menu.
+set default=0
+menuentry "MayOS requires an x86_64 CPU" --id unsupported {
+ echo "MayOS requires an x86_64 CPU"
  echo "Both MayKernel and MayOS Linux require x86_64 long mode."
  sleep 10
 }
