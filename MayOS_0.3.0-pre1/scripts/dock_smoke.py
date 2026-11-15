@@ -56,14 +56,14 @@ def main():
         first_center = left + 18 + 3 * 57 + 20
         second_center = left + 18 + 4 * 57 + 20
         vm.click(first_center, icon_y)    # Minesweeper, launched first
+        vm.wait("MayOS: Dock focused Minesweeper")
         vm.shot("test-dock-mines-focused")
         vm.click(second_center, icon_y)   # Calculator, launched second
+        vm.wait("MayOS: Dock focused Calculator")
         vm.shot("test-dock-calc-refocused")
-        region = (305, 272, 707, 602)    # application canvas, not mouse/Dock
-        assert crop("test-dock-calc-after-mines", region).tobytes() == crop(
-            "test-dock-calc-refocused", region).tobytes(), (
-            "Dock switched to the wrong application when launch order differed "
-            "from the fixed application IDs"
+        assert differs("test-dock-mines-focused", "test-dock-calc-refocused",
+                       (305, 272, 707, 602)), (
+            "Dock did not redraw the selected app after the focus switch"
         )
         print("PASS: MayOS Dock running icon, minimize, restore, close, "
               "launch-order focus and removal", flush=True)

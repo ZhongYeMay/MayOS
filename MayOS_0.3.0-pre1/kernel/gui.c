@@ -1709,16 +1709,24 @@ static int dock_left(int count) {
 }
 static void dock_activate(int id) {
     if (id == -1) {
+        serial("MayOS: Dock opened Trash\n");
         folder = 3;
         file_scroll = 0;
         selected = -1;
         raise_window(0);
         return;
     }
-    if (windows[id].open && !windows[id].min && focus == id)
+    if (windows[id].open && !windows[id].min && focus == id) {
+        serial("MayOS: Dock minimized ");
+        serial(windows[id].title);
+        serial("\n");
         minimize_window(id);
-    else
+    } else {
+        serial("MayOS: Dock focused ");
+        serial(windows[id].title);
+        serial("\n");
         raise_window(id);
+    }
 }
 static void taskbar(void) {
     int ids[DOCK_MAX], count;
