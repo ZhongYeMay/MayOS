@@ -41,11 +41,12 @@ def main():
         session.start_recording()
         session.wait("MayOS: desktop ready",timeout=120)
         session.hold(2)
-        # The old left rail was removed in favor of the user-specified Dock.
-        # Open the real Applications menu and then the native game entry.
-        session.click(248,716)
-        session.hold(.5)
-        session.click(270,567)
+        # The four-icon Dock has no Applications button. Open the native
+        # Applications menu with the actual Super key, filter the game entry,
+        # and activate it through keyboard input (also works with 16:9 video).
+        session.key("meta_l")
+        session.hold(.6)
+        session.command("game")
         session.wait("native Summer game launched",timeout=20)
         session.hold(2)
         session.command("HELLO FROM MAYKERNEL")
@@ -70,7 +71,7 @@ def main():
       "duration_seconds":session.frames/options.fps,
       "guest":"MayKernel native x86_64 freestanding game UI",
       "capture":"QEMU framebuffer via QMP; no simulated or synthesized gameplay frames",
-      "proof":["GRUB boot","native MayKernel desktop","native game UI opened through the real Dock Applications menu",
+      "proof":["GRUB boot","native MayKernel desktop","native game UI opened through the real keyboard Applications menu",
                "free text entry","draft save key","native heroine selection"],
       "limitations":["MayKernel TLS and DeepSeek runtime not implemented",
                      "original WebP artwork not decoded in MayKernel",
