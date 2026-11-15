@@ -3,17 +3,20 @@
 from smoke import VM,BUILD
 from PIL import Image,ImageOps
 from pathlib import Path
+from reference_pixels import reference_pixel, verify_letterboxing
 import time
 
 def check_photo(path):
     actual=Image.open(path).convert('RGB')
+    verify_letterboxing(actual)
     with Image.open(Path(__file__).resolve().parents[1]/'assets/easter-cat.jpg') as im:
         expected=ImageOps.exif_transpose(im).convert('RGB')
         expected.thumbnail((360,480),Image.Resampling.LANCZOS)
     for x,y in [(20,20),(130,50),(270,100),(130,210),(240,280),(80,390),(330,450)]:
         r,g,b=expected.getpixel((x,y));r>>=3;g>>=2;b>>=3
         rgb=((r<<3)|(r>>2),(g<<2)|(g>>4),(b<<3)|(b>>2))
-        assert actual.getpixel((332+x,124+y))==rgb,(x,y,actual.getpixel((332+x,124+y)),rgb)
+        sampled=reference_pixel(actual,332+x,124+y)
+        assert sampled==rgb,(x,y,sampled,rgb)
 
 def main():
     disk=BUILD/'test-easter.img'
