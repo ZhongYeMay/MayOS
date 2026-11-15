@@ -70,7 +70,7 @@ def act(vm, scene):
         vm.hold(1.6)
         # Actual native 5-column keypad in the centered Calculator window.
         # 7 + 8 = 15; no direct modification of the guest's memory.
-        for x, y in ((345, 324), (581, 522), (426, 324), (581, 522)):
+        for x, y in ((345, 324), (507, 522), (426, 324), (581, 522)):
             vm.click(x, y)
             vm.hold(0.65)
         vm.hold(2.2)
