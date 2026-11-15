@@ -1,6 +1,6 @@
-# MayOS 0.5.0-pre1 — BIOS / UEFI 预览版
+# MayOS 0.5.0-pre2-dev — Limine migration preview
 
-> **版本约定：** 当前开发分支为 `0.5.0-pre1-dev`，准备验收后才考虑发布 `0.5.0-pre1`。官网、下载页面和现有 `0.4.1-pre2` Release 均保持原有正式发布状态。代码目录名称仅为历史路径，不代表当前系统版本。
+> **版本约定：** 当前开发分支为 `0.5.0-pre2-dev`，完成 Limine BIOS/UEFI 双启动验证后才发布 `0.5.0-pre2`。现有 `0.5.0-pre1` Release 保持不变。代码目录名称仅为历史路径，不代表当前系统版本。
 
 > **当前开发验证：** 自研 MayKernel 已为 x86_64 ELF64；BIOS/OVMF UEFI 启动、原生桌面、MayFS 双快照、断电模拟恢复及磁盘容量边界均通过独立 QEMU 验证；Linux 双内核图形模式的完整验收仍有失败记录。见 [阶段一详细测试](docs/phase1-daily-use-baseline.md)。
 

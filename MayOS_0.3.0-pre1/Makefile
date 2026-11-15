@@ -42,7 +42,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: all clean run test linux linux-update dual run-dual test-dual run-uefi test-uefi
+.PHONY: all clean run test linux linux-update dual limine run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
 	mkdir -p build
@@ -83,6 +83,9 @@ linux-update: | build
 	$(PYTHON) scripts/linux.py build --version latest --jobs "$(LINUX_JOBS)" $(if $(BUSYBOX),--busybox "$(BUSYBOX)") $(if $(FASTFETCH),--fastfetch "$(FASTFETCH)")
 dual: build/mayos.elf build/mayos-disk.img
 	$(PYTHON) scripts/dual_iso.py --version "$(LINUX_VERSION)" --jobs "$(LINUX_JOBS)" --firmware "$(BOOT_FIRMWARE)" $(if $(BUSYBOX),--busybox "$(BUSYBOX)") $(if $(FASTFETCH),--fastfetch "$(FASTFETCH)") --grub-mkrescue '$(GRUB_MKRESCUE)'
+limine: build/mayos.elf
+	@test -n "$(LIMINE_DIR)" || (echo "Set LIMINE_DIR to a Limine release directory" >&2; exit 2)
+	$(PYTHON) scripts/limine_iso.py --limine-dir "$(LIMINE_DIR)" --output build/mayos-limine.iso
 run-dual: dual
 	$(QEMU64) $(if $(QEMU_DATA_DIR),-L "$(QEMU_DATA_DIR)") -machine pc -accel tcg -cpu max -m 512 -vga std -cdrom build/mayos-dual.iso -drive file=build/mayos-disk.img,format=raw,if=ide,index=0 -boot d -serial stdio -no-reboot
 test-dual: dual
