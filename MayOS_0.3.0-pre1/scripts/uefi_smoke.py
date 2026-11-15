@@ -78,7 +78,7 @@ def main():
     vm = start('test-uefi-custom')
     try:
         if not args.custom_only:
-            vm.wait('custom x86_64 kernel')
+            vm.wait('Start MayKernel64')
             vm.key('home')  # stop the countdown and select the first entry
             time.sleep(.5)
             vm.shot('test-uefi-menu')
@@ -123,7 +123,7 @@ def main():
             raise ValueError('invalid kernel release in manifest')
         vm = start('test-uefi-linux')
         try:
-            vm.wait('desktop (x86_64)')
+            vm.wait('Start Linux64')
             vm.key('home')
             vm.key('down')
             vm.key('ret')
