@@ -183,3 +183,51 @@ int md_mines_reveal(MayDosMines *g, int r, int c, unsigned ticks) {
     if (g->opened == g->rows * g->cols - g->mines) { g->finished = 1; g->won = 1; return 2; }
     return 1;
 }
+
+/* Legacy Notepad_GUI .MayNote is Base64-encoded UTF-8 text, not encryption. */
+int md_note_encode(const char *text, int length, char *out, int cap) {
+    static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    if (!text || !out || length < 0 || cap <= (length + 2) / 3 * 4) return -1;
+    int at = 0;
+    for (int i = 0; i < length; i += 3) {
+        unsigned a = (unsigned char)text[i];
+        unsigned b = i + 1 < length ? (unsigned char)text[i + 1] : 0;
+        unsigned c = i + 2 < length ? (unsigned char)text[i + 2] : 0;
+        out[at++] = alphabet[a >> 2];
+        out[at++] = alphabet[(a & 3) << 4 | b >> 4];
+        out[at++] = i + 1 < length ? alphabet[(b & 15) << 2 | c >> 6] : '=';
+        out[at++] = i + 2 < length ? alphabet[c & 63] : '=';
+    }
+    out[at] = 0;
+    return at;
+}
+static int b64value(char c) {
+    if (c >= 'A' && c <= 'Z') return c - 'A';
+    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+    if (c >= '0' && c <= '9') return c - '0' + 52;
+    if (c == '+') return 62;
+    if (c == '/') return 63;
+    return -1;
+}
+int md_note_decode(const char *in, int length, char *out, int cap) {
+    if (!in || !out || length < 0 || (length % 4) || cap < 1) return -1;
+    int at = 0;
+    for (int i = 0; i < length; i += 4) {
+        int a = b64value(in[i]), b = b64value(in[i + 1]);
+        int pad2 = in[i + 2] == '=', pad3 = in[i + 3] == '=';
+        int c = pad2 ? 0 : b64value(in[i + 2]);
+        int d = pad3 ? 0 : b64value(in[i + 3]);
+        if (a < 0 || b < 0 || c < 0 || d < 0 || (pad2 && !pad3) ||
+            ((pad2 || pad3) && i + 4 != length)) return -1;
+        unsigned bits = (unsigned)a << 18 | (unsigned)b << 12 | (unsigned)c << 6 | (unsigned)d;
+        int bytes = pad2 ? 1 : pad3 ? 2 : 3;
+        if (at + bytes >= cap) return -1;
+        for (int j = 0; j < bytes; ++j) {
+            char ch = (char)(bits >> (16 - 8 * j));
+            if (!ch) return -1;
+            out[at++] = ch;
+        }
+    }
+    out[at] = 0;
+    return at;
+}
