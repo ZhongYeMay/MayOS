@@ -183,6 +183,9 @@ def main():
         (stage / "boot/grub").mkdir(parents=True)
         shutil.copy2(BUILD / "mayos.elf", stage / "boot/mayos.elf")
         shutil.copy2(ROOT / "boot/grub/grub.cfg", stage / "boot/grub/grub.cfg")
+        shutil.copytree(ROOT / "boot/grub/themes", stage / "boot/grub/themes")
+        shutil.copy2(ROOT / "assets/limine-mayos-brand.png",
+                     stage / "boot/grub/themes/mayos/mayos-brand.png")
         bootable_iso(stage, BUILD / "mayos.iso", args)
         return
 
@@ -223,6 +226,9 @@ def main():
     if "@LINUX_VERSION@" not in template:
         raise ValueError("GRUB template must have a Linux version placeholder")
     (boot / "grub/grub.cfg").write_text(template.replace("@LINUX_VERSION@", version))
+    shutil.copytree(ROOT / "boot/grub/themes", boot / "grub/themes")
+    shutil.copy2(ROOT / "assets/limine-mayos-brand.png",
+                 boot / "grub/themes/mayos/mayos-brand.png")
     output = BUILD / "mayos-dual.iso"
     bootable_iso(stage, output, args)
     print(f"MayOS custom desktop + Linux {version} x86_64 desktop / rescue shell")

@@ -1,0 +1,23 @@
+# MayOS 0.5.0-pre2-dev GRUB visual boot theme.
+# The copyright logo is the supplied MayOS brand art; the menu remains native
+# GRUB so it is usable in both BIOS and x86_64 UEFI before the OS starts.
+desktop-image: "mayos-brand.png"
+desktop-color: "#000000"
+title-text: "MayOS Boot Manager"
+title-font: "Unifont Regular 20"
+title-color: "#ffffff"
+message-font: "Unifont Regular 14"
+message-color: "#a1a1a5"
+
++ boot_menu {
+  left = 34%
+  top = 64%
+  width = 32%
+  height = 24%
+  item_font = "Unifont Regular 18"
+  item_color = "#dedee2"
+  selected_item_color = "#ffffff"
+  item_height = 42
+  item_padding = 16
+  item_spacing = 8
+}

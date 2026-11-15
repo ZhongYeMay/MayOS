@@ -2,16 +2,20 @@
 set timeout_style=menu
 set timeout=5
 set default=mayos
-set gfxmode=1024x768x32,1024x768,800x600x32,800x600,640x480x32,640x480,auto
+set gfxmode=1280x720x32,1024x768x32,1024x768,800x600x32,800x600,640x480x32,640x480,auto
 insmod all_video
 insmod cpuid
+insmod gfxterm
+insmod png
+terminal_output gfxterm serial
+set theme=/boot/grub/themes/mayos/theme.txt
+export theme
 
 serial --unit=0 --speed=115200
 terminal_input console serial
-terminal_output console serial
 
 if cpuid -l; then
-menuentry "MayOS - custom x86_64 kernel (desktop)" --id mayos {
+menuentry "Start MayKernel64" --id mayos {
     set gfxpayload=$gfxmode
     multiboot /boot/mayos.elf
     # Loading Multiboot resets gfxpayload, so override only after that command.
@@ -19,7 +23,7 @@ menuentry "MayOS - custom x86_64 kernel (desktop)" --id mayos {
     boot
 }
 
-menuentry "Linux @LINUX_VERSION@ - desktop (x86_64)" --id linux {
+menuentry "Start Linux64" --id linux {
     set gfxpayload=$gfxmode
     linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=1 panic=10
     initrd /boot/linux/initramfs.cpio.gz
