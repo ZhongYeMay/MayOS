@@ -278,8 +278,8 @@ def main():
 
     vm = BootVM(tag='test-dual-mayos', **options)
     try:
-        vm.wait('custom x86_64 kernel', timeout=20)
-        vm.wait(f'Linux {release} - desktop', timeout=5)
+        vm.wait('Start MayKernel64', timeout=20)
+        vm.wait('Start Linux64', timeout=5)
         vm.menu_shot('test-dual-menu')
         # No keypress: exercise the configured default and its visible countdown.
         vm.wait('MayOS: desktop ready', timeout=30)
@@ -312,7 +312,7 @@ def main():
     before = hashlib.sha256(disk.read_bytes()).hexdigest()
     vm = BootVM(tag='test-dual-linux', **options)
     try:
-        vm.wait(f'Linux {release} - desktop', timeout=20)
+        vm.wait('Start Linux64', timeout=20)
         vm.key('down')
         vm.menu_shot('test-dual-linux-selected', timeout=10)
         vm.key('ret')
