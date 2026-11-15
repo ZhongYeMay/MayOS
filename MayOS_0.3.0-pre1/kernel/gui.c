@@ -2064,7 +2064,7 @@ static void left_click(void) {
         int left = dock_left(count), top = H - 92;
         for (int i = 0; i < count; ++i) {
             int x = left + 18 + i * 57;
-            if (inside(mx, my, x - 5, top + 5, 47, 58)) {
+            if (inside(mx, my, x - 12, top + 5, 54, 58)) {
                 dock_activate(ids[i]);
                 return;
             }
