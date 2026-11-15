@@ -532,6 +532,38 @@ static void symbol(int x, int y, int kind, int size, u32 c) {
         rect(cx - 3, cy - size / 3 - 1, 6, size / 4,
              dark ? 0x211f23 : 0xf6f6f8);
         stroke(cx, cy - size / 3 - 2, cx, cy, 2, c);
+    } else if (kind == 23) {
+        /* Calculator: native outline, no incorrect clock glyph. */
+        int lx = x + size / 5, ly = y + size / 8;
+        int ww = size * 3 / 5, hh = size * 3 / 4;
+        stroke(lx, ly, lx + ww, ly, thick, c);
+        stroke(lx, ly, lx, ly + hh, thick, c);
+        stroke(lx + ww, ly, lx + ww, ly + hh, thick, c);
+        stroke(lx, ly + hh, lx + ww, ly + hh, thick, c);
+        rect(lx + 4, ly + 5, ww - 8, 3, c);
+        for (int row = 0; row < 2; ++row)
+            for (int col = 0; col < 2; ++col)
+                rect(lx + 5 + col * (ww / 2 - 2),
+                     ly + hh / 2 + row * 7, 4, 4, c);
+    } else if (kind == 24) {
+        /* Minesweeper: gridded playfield and one marked square. */
+        int x0 = x + size / 6, y0 = y + size / 6, cell = size / 5;
+        for (int row = 0; row < 3; ++row)
+            for (int col = 0; col < 3; ++col) {
+                int px = x0 + col * (cell + 2);
+                int py = y0 + row * (cell + 2);
+                stroke(px, py, px + cell, py, 1, c);
+                stroke(px, py, px, py + cell, 1, c);
+                stroke(px + cell, py, px + cell, py + cell, 1, c);
+                stroke(px, py + cell, px + cell, py + cell, 1, c);
+                if (row == 1 && col == 1)
+                    circle(px + cell / 2, py + cell / 2, 2, c);
+            }
+    } else if (kind == 25) {
+        /* Extensions: a file tile with a simple addition mark. */
+        document_symbol(x, y, size, c);
+        stroke(cx - 6, cy + 1, cx + 6, cy + 1, 2, c);
+        stroke(cx, cy - 5, cx, cy + 7, 2, c);
     }
 }
 static void icon(int x, int y, int kind, int size) {
@@ -1152,12 +1184,13 @@ static void desktop(void) {
     rect(0, 31, W, 1, dark ? 0x171719 : line);
     symbol(17, 7, 11, 17, ink);
     heading_text(42, 4, "MayOS", ink);
-    text(101, 8, "Settings", muted);
-    text(164, 8, "File", muted);
-    text(205, 8, "Edit", muted);
-    text(244, 8, "View", muted);
-    text(286, 8, "Window", muted);
-    text(348, 8, "Help", muted);
+    /* Separate the brand from menus; no overlapping glyph advances. */
+    text(163, 8, "Settings", muted);
+    text(251, 8, "File", muted);
+    text(313, 8, "Edit", muted);
+    text(371, 8, "View", muted);
+    text(432, 8, "Window", muted);
+    text(524, 8, "Help", muted);
     int count = 0;
     for (int i = 4; i < FS_MAX && count < 15; i++) {
         if (!files[i].used || files[i].parent != 2) continue;
@@ -1173,12 +1206,13 @@ static void desktop(void) {
     const int status_icons[] = {4, 8, 7, 12};
     for (int i = 0; i < 4; i++)
         symbol(777 + i * 39, 7, status_icons[i], 18, muted);
-    text(907, 8, "Tue Jan 28  10:24", muted);
+    /* Real session label instead of a clipped, hardcoded fake date/time. */
+    text(935, 8, "SESSION", muted);
 }
 /* One MayOS title bar shared across all native windows.  The title has a
    reserved width, so controls cannot collide with labels or app glyphs. */
 static int window_icon(int id) {
-    const int kinds[WINDOW_COUNT] = {0, 1, 2, 5, 4, 10, 6, 5};
+    const int kinds[WINDOW_COUNT] = {0, 1, 2, 5, 4, 23, 24, 25};
     return kinds[id];
 }
 static void frame(int id) {
