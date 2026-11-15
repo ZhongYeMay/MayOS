@@ -78,6 +78,7 @@ test: all
 	$(PYTHON) scripts/settings_smoke.py
 	$(PYTHON) scripts/easter_smoke.py
 	$(PYTHON) scripts/maydos_smoke.py
+	$(PYTHON) scripts/dock_smoke.py
 # An explicit Linux build resolves latest stable at kernel.org. `dual` reuses
 # verified local payloads; run `linux-update` when a newer stable is wanted.
 linux: | build
