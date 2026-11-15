@@ -46,7 +46,7 @@ endif
 all: build/mayos.iso build/mayos-disk.img
 build:
 	mkdir -p build
-build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
+build/font.h: scripts/font.py $(wildcard kernel/*.c) $(wildcard kernel/*.inc) | build
 	$(PYTHON) scripts/font.py
 build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 	$(PYTHON) scripts/photo.py
