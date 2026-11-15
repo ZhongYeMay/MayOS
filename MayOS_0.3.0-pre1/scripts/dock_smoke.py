@@ -44,7 +44,29 @@ def main():
         vm.shot("test-dock-calculator-closed")
         assert differs("test-dock-calculator-running", "test-dock-calculator-closed",
                        (290, 670, 745, 752)), "transient icon did not leave Dock"
-        print("PASS: QEMU running-app Dock icon, minimize, restore, close and removal", flush=True)
+
+        # Reversed launch order must survive focus changes. Historically Dock
+        # sorted these by hardcoded app ID rather than the time they opened.
+        vm.key("f1")
+        vm.cmd("minesweeper easy")
+        vm.key("f1")
+        vm.cmd("calc")
+        vm.shot("test-dock-calc-after-mines")
+        left = (1024 - (6 * 57 + 16)) // 2
+        first_center = left + 18 + 3 * 57 + 20
+        second_center = left + 18 + 4 * 57 + 20
+        vm.click(first_center, icon_y)    # Minesweeper, launched first
+        vm.shot("test-dock-mines-focused")
+        vm.click(second_center, icon_y)   # Calculator, launched second
+        vm.shot("test-dock-calc-refocused")
+        region = (305, 272, 707, 602)    # application canvas, not mouse/Dock
+        assert crop("test-dock-calc-after-mines", region).tobytes() == crop(
+            "test-dock-calc-refocused", region).tobytes(), (
+            "Dock switched to the wrong application when launch order differed "
+            "from the fixed application IDs"
+        )
+        print("PASS: MayOS Dock running icon, minimize, restore, close, "
+              "launch-order focus and removal", flush=True)
     finally:
         vm.stop()
 
