@@ -1,4 +1,4 @@
-name: Record MayDOS native feature demos (real QEMU)
+name: Record MayOS legacy app demos (real QEMU)
 
 on:
   pull_request:
@@ -47,20 +47,20 @@ jobs:
         run: |
           set -eu
           for name in calculator minesweeper maynote extensions; do
-            file="build/recordings/maydos/MayDOS-$name-real-QEMU.mp4"
+            file="build/recordings/maydos/MayOS-legacy-$name-real-QEMU.mp4"
             test -s "$file"
             ffprobe -v error -select_streams v:0 \
               -show_entries stream=codec_name,width,height \
               -of csv=p=0 "$file" | grep -Fx 'h264,1024,768'
-            test -s "build/recordings/maydos/MayDOS-$name-real-QEMU.json"
+            test -s "build/recordings/maydos/MayOS-legacy-$name-real-QEMU.json"
           done
-          test -s build/recordings/maydos/MayDOS-all-four-real-QEMU.mp4
-          test -s build/recordings/maydos/MayDOS-all-four-real-QEMU.json
+          test -s build/recordings/maydos/MayOS-legacy-all-four-real-QEMU.mp4
+          test -s build/recordings/maydos/MayOS-legacy-all-four-real-QEMU.json
       - name: Upload raw QEMU MayDOS MP4s, evidence and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: MayDOS-native-four-functions-real-QEMU
+          name: MayOS-legacy-four-functions-real-QEMU
           retention-days: 30
           if-no-files-found: warn
           path: |

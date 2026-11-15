@@ -16,9 +16,9 @@ def main():
     try:
         vm.key("f1")
         vm.cmd("usebook")
-        vm.wait("MayDOS: calc [expression]")
+        vm.wait("MayOS legacy commands (MayDOS): calc [expression]")
         vm.cmd("sysver")
-        vm.wait("MayDOS 1.0.0 compatibility tools")
+        vm.wait("Legacy tools: MayDOS 1.0.0 compatibility")
         vm.cmd("calc 1+2*3")
         vm.wait("Result:\n7\n")
         vm.cmd("calc (1.5+2.5)/2")
@@ -32,7 +32,7 @@ def main():
         changed("test-maydos-calc-before", "test-maydos-calculator")
         vm.key("f1")
         vm.cmd("minesweeper easy")
-        vm.wait("MayDOS Minesweeper ready")
+        vm.wait("MayOS Minesweeper ready")
         vm.shot("test-maydos-minesweeper")
         vm.key("f1")
         vm.cmd("flag 8 8")
@@ -43,7 +43,7 @@ def main():
         vm.wait("no eligible new data")
         vm.cmd("write Documents/AddFiles/demo.txt HELLO-MAYDOS")
         vm.cmd("add demo.txt")
-        vm.wait("MayDOS: imported into Documents/ThirdPartyFile")
+        vm.wait("MayOS: imported into Documents/ThirdPartyFile")
         vm.cmd("list")
         vm.wait("\ndemo.txt\n")
         vm.cmd("apps")
@@ -61,7 +61,7 @@ def main():
         data = entries(disk)
         assert data["legacy.MayNote"][3] == "SGVsbG8K"
         assert data["demo.txt"][2] == 3  # safely moved to Trash
-        print("PASS: MayDOS GUI, calc CLI, mines, extensions, Base64 notepad and MayFS persistence", flush=True)
+        print("PASS: MayOS legacy GUI, calc CLI, mines, extensions, Base64 notepad and MayFS persistence", flush=True)
     finally:
         vm.stop()
 

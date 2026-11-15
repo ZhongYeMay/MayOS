@@ -63,7 +63,7 @@ def act(vm, scene):
     vm.hold(0.6)
 
     if scene == "calculator":
-        command(vm, "sysver", "MayDOS 1.0.0 compatibility tools")
+        command(vm, "sysver", "Legacy tools: MayDOS 1.0.0 compatibility")
         command(vm, "calc 1+2*3", "Result:\n7\n")
         command(vm, "calc 10/0", "Division by zero")
         command(vm, "calc", "may@mayos:~ $ calc")
@@ -78,7 +78,7 @@ def act(vm, scene):
                 "Calculator GUI", "real mouse clicks"]
 
     if scene == "minesweeper":
-        command(vm, "minesweeper easy", "MayDOS Minesweeper ready")
+        command(vm, "minesweeper easy", "MayOS Minesweeper ready")
         vm.hold(1.5)
         # 9x9 board: native window (122,88), grid origin (350,265).
         right_click(vm, 640, 553)  # flag before first click: guaranteed hidden
@@ -114,7 +114,7 @@ def act(vm, scene):
         command(vm, "add", "no eligible new data")
         command(vm, "write Documents/AddFiles/demo.txt HELLO-MAYDOS", "OK")
         command(vm, "add demo.txt",
-                "MayDOS: imported into Documents/ThirdPartyFile")
+                "MayOS: imported into Documents/ThirdPartyFile")
         command(vm, "list", "\ndemo.txt\n")
         command(vm, "apps", "may@mayos:~ $ apps")
         vm.hold(1.8)
@@ -123,7 +123,7 @@ def act(vm, scene):
         vm.click(567, 286)   # move selection to Trash (not permanent delete)
         vm.hold(1.5)
         vm.key("f1")
-        command(vm, "list", "MayDOS: no imported data files")
+        command(vm, "list", "MayOS: no imported data files")
         vm.hold(1.6)
         return ["MayFS staging file", "ADD", "LIST", "Extensions GUI",
                 "select file", "move to Trash", "verify no imported data"]
@@ -132,7 +132,7 @@ def act(vm, scene):
 
 
 def record(scene, args):
-    output = args.output_dir / ("MayDOS-" + scene + "-real-QEMU.mp4")
+    output = args.output_dir / ("MayOS-legacy-" + scene + "-real-QEMU.mp4")
     output.parent.mkdir(parents=True, exist_ok=True)
     args.output = output
     args.kernel = "custom"
@@ -201,7 +201,7 @@ def main():
     for scene in SCENES:
         clips.append(record(scene, args))
         assert sha(args.iso) == args.iso_hash, "ISO changed during recording"
-    concat = args.output_dir / "MayDOS-all-four-real-QEMU.mp4"
+    concat = args.output_dir / "MayOS-legacy-all-four-real-QEMU.mp4"
     entries = args.output_dir / "concat.txt"
     entries.write_text("".join("file '" + str(clip) + "'\n" for clip in clips))
     subprocess.run([
@@ -211,7 +211,7 @@ def main():
         "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(concat)
     ], check=True)
     assert concat.stat().st_size > 50000
-    (args.output_dir / "MayDOS-all-four-real-QEMU.json").write_text(
+    (args.output_dir / "MayOS-legacy-all-four-real-QEMU.json").write_text(
         json.dumps({"source_commit": args.source_commit,
                     "ISO_sha256": args.iso_hash,
                     "clips": [p.name for p in clips],

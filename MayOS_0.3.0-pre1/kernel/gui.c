@@ -809,15 +809,15 @@ static void shell(void) {
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
         emit("theme light|dark  net status  reboot  shutdown");
-        emit("MayDOS: calc [expression]  minesweeper [easy|medium|expert]");
+        emit("MayOS legacy commands (MayDOS): calc [expression]  minesweeper [easy|medium|expert]");
         emit("mine <row> <col>  flag <row> <col>  notepad [dos|gui]");
         emit("usebook  sysver  cls  apps  add [file]  list  del <file>  shut confirm");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear") || !strcmp(c, "cls"))
         out_count = 0;
     else if (!strcmp(c, "sysver")) {
-        emit("MayDOS 1.0.0 compatibility tools / MayOS " MAYOS_RELEASE);
-        emit("MayDOS Team 2023 / native x86_64 implementation");
+        emit("MayOS " MAYOS_RELEASE " / " PLATFORM_SHORT);
+        emit("Legacy tools: MayDOS 1.0.0 compatibility / native x86_64");
     } else if (!strcmp(c, "calc")) {
         if (!command[4]) { raise_window(5); }
         else {
@@ -828,7 +828,7 @@ static void shell(void) {
         }
     } else if (!strcmp(c, "notepad")) {
         if (argc >= 2 && !strcmp(argv[1], "dos")) {
-            emit("MayDOS Notepad DOS: cat <file>, write <file> <text>, ls, save");
+            emit("MayOS Notes CLI: cat <file>, write <file> <text>, ls, save");
         } else {
             int note = argc >= 3 && !strcmp(argv[1], "gui") ? resolve(argv[2], cwd) :
                        argc >= 2 && strcmp(argv[1], "gui") ? target : fs_find(2, "Notes.txt");
@@ -847,7 +847,7 @@ static void shell(void) {
         if (mode && md_mines_new(&md_game, mode, rows, cols, mines, ticks + 0x4387u)) {
             md_game_mode = mode;
             raise_window(6);
-            emit("MayDOS Minesweeper ready: left click/reveal, right click/flag.");
+            emit("MayOS Minesweeper ready: left click/reveal, right click/flag.");
         } else emit("Usage: minesweeper easy|medium|expert|custom ROW COL MINES (15-25%)");
     } else if (!strcmp(c, "mine") || !strcmp(c, "flag")) {
         if (argc != 3 || !md_game.rows) emit("Usage: mine|flag ROW COL (zero-based)");
@@ -867,8 +867,8 @@ static void shell(void) {
         raise_window(7);
     } else if (!strcmp(c, "add")) {
         int added = argc >= 2 ? md_import_one(argv[1]) : md_import_all();
-        emit(added ? "MayDOS: imported into Documents/ThirdPartyFile" :
-                     "MayDOS: no eligible new data in Documents/AddFiles");
+        emit(added ? "MayOS: imported into Documents/ThirdPartyFile" :
+                     "MayOS: no eligible new data in Documents/AddFiles");
     } else if (!strcmp(c, "list")) {
         int dst = md_directory("ThirdPartyFile", 0), found = 0;
         if (dst >= 0)
@@ -876,13 +876,13 @@ static void shell(void) {
                 if (files[i].used && !files[i].dir && files[i].parent == (u32)dst) {
                     emit(files[i].name); ++found;
                 }
-        if (!found) emit("MayDOS: no imported data files");
+        if (!found) emit("MayOS: no imported data files");
     } else if (!strcmp(c, "del")) {
         int dir = md_directory("ThirdPartyFile", 0);
         int file = argc >= 2 && dir >= 0 ? fs_find(dir, argv[1]) : -1;
         if (file < 4 || files[file].dir || !fs_move(file, 3))
             emit("del: file not found, already removed, or Trash name conflict");
-        else { sync_notice(); emit("MayDOS: moved extension data to Trash"); }
+        else { sync_notice(); emit("MayOS: moved extension data to Trash"); }
     } else if (!strcmp(c, "shut")) {
         if (argc > 1 && !strcmp(argv[1], "confirm")) { fs_sync(); poweroff(); }
         else emit("Type shut confirm to power off MayOS");

@@ -53,12 +53,10 @@ assert "line = dark ? 0x303033 : 0xd9d9dd;" in source
 assert "static void soft_roundrect(" in source
 assert "static int heading_text(" in source
 assert 'heading_text(42, 4, "MayOS", ink);' in source
-assert 'text(163, 8, "Settings", muted);' in source
-assert 'text(251, 8, "File", muted);' in source
-assert 'text(313, 8, "Edit", muted);' in source
-assert 'text(371, 8, "View", muted);' in source
-assert 'text(432, 8, "Window", muted);' in source
-assert 'text(524, 8, "Help", muted);' in source
+assert 'const char *active_app = focus >= 0' in source
+assert 'text(163, 8, active_app, ink);' in source
+assert 'rect(147, 9, 1, 14, line);' in source
+assert 'text(251, 8, "File", muted);' not in source
 assert 'text(935, 8, "SESSION", muted);' in source
 assert 'heading_text(x + 20, y + 49, "Settings", ink);' in source
 assert '"Privacy & Security", "Updates", "About MayOS"' in source
@@ -84,7 +82,11 @@ assert "ui_card(left, top, width, 70, 24," in source
 assert "int width = count * 57 + 16" in source
 assert "static void dock_items(" in source
 assert "static void dock_activate(" in source
-assert "if (windows[i].open) ids[n++] = i;" in source
+assert "dock_launch[id] > after" in source
+assert "dock_launch[id] = ++dock_next_launch;" in source
+assert "static int titlebar_button(const Window *w, int rx, int ry)" in source
+assert "int action = titlebar_button(w, rx, ry);" in source
+assert "static void focus_visible_window(void)" in source
 assert "if (running)" in source
 assert "windows[id].min = 1;" in source
 assert "static int window_icon(int id)" in source
