@@ -973,6 +973,10 @@ static void shell(void) {
     } else
         emit("Unknown command. Type help.");
 }
+static int md_note_file(const char *name) {
+    int n = (int)strlen(name);
+    return n >= 8 && !strcmp(name + n - 8, ".MayNote");
+}
 static void open_file(int i) {
     if (i < 0)
         return;
@@ -986,8 +990,14 @@ static void open_file(int i) {
         notify("请先保存编辑器中的修改");
         return;
     }
+    if (md_note_file(files[i].name)) {
+        if (md_note_decode((const char *)files[i].data, (int)files[i].size,
+                           editor_buf, FILE_CAP) < 0) {
+            notify("MayNote 格式无效，未修改原文件");
+            return;
+        }
+    } else copy(editor_buf, (char *)files[i].data, FILE_CAP);
     editor_file = i;
-    copy(editor_buf, (char *)files[i].data, FILE_CAP);
     editor_changed = 0;
     raise_window(3);
 }
@@ -996,8 +1006,15 @@ static void save_editor(void) {
         notify("文件已不存在");
         return;
     }
-    copy((char *)files[editor_file].data, editor_buf, FILE_CAP);
-    files[editor_file].size = strlen(editor_buf);
+    if (md_note_file(files[editor_file].name)) {
+        int encoded = md_note_encode(editor_buf, (int)strlen(editor_buf),
+                                     (char *)files[editor_file].data, FILE_CAP);
+        if (encoded < 0) { notify("MayNote 容量不足；原文件未修改"); return; }
+        files[editor_file].size = (u32)encoded;
+    } else {
+        copy((char *)files[editor_file].data, editor_buf, FILE_CAP);
+        files[editor_file].size = strlen(editor_buf);
+    }
     int ok = fs_sync();
     editor_changed = disk_ready && !ok;
 #ifdef MAYOS_LINUX
