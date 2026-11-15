@@ -737,6 +737,9 @@ static void shell(void) {
     if (!argc)
         return;
     char *c = argv[0];
+    /* MayDOS 1.0 commands were case-insensitive; normalize the command only. */
+    for (char *p = c; *p; ++p)
+        if (*p >= 'A' && *p <= 'Z') *p = (char)(*p - 'A' + 'a');
     int target = argc > 1 ? resolve(argv[1], cwd) : -1;
     if (!strcmp(c, "help") || !strcmp(c, "usebook")) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
