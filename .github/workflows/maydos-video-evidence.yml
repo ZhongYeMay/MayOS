@@ -1,4 +1,4 @@
-name: Record MayOS legacy app demos (real QEMU)
+name: Record MayOS desktop and legacy app demos (real QEMU)
 
 on:
   pull_request:
@@ -6,6 +6,7 @@ on:
       - 'MayOS_0.3.0-pre1/kernel/maydos_**'
       - 'MayOS_0.3.0-pre1/kernel/gui.c'
       - 'MayOS_0.3.0-pre1/scripts/record_maydos_suite.py'
+      - 'MayOS_0.3.0-pre1/scripts/record_dock.py'
       - '.github/workflows/maydos-video-evidence.yml'
   workflow_dispatch:
 
@@ -42,6 +43,21 @@ jobs:
             --iso build/mayos.iso \
             --output-dir build/recordings/maydos \
             --source-commit "$(git rev-parse HEAD)"
+      - name: Record native MayOS titlebar, real running-app Dock and PNG proof
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          mkdir -p build/recordings/dock
+          python3 scripts/record_dock.py \
+            --iso build/mayos.iso --output-dir build/recordings/dock \
+            --source-commit "$(git rev-parse HEAD)"
+          ffmpeg -hide_banner -loglevel error -y \
+            -i build/recordings/dock/MayOS-Desktop-Dock-Titlebar-QEMU.mp4 \
+            -vf 'fps=12,format=yuv420p' -c:v libx264 -preset veryfast \
+            -profile:v baseline -level 3.1 -crf 23 -an -movflags +faststart \
+            build/recordings/dock/MayOS-Desktop-Dock-iPhone.mp4
+          ffprobe -v error -select_streams v:0 \
+            -show_entries stream=codec_name,profile,width,height -of json \
+            build/recordings/dock/MayOS-Desktop-Dock-iPhone.mp4
       - name: Verify five H264 MP4 assets
         working-directory: MayOS_0.3.0-pre1
         run: |
@@ -56,14 +72,21 @@ jobs:
           done
           test -s build/recordings/maydos/MayOS-legacy-all-four-real-QEMU.mp4
           test -s build/recordings/maydos/MayOS-legacy-all-four-real-QEMU.json
+          test -s build/recordings/dock/MayOS-Desktop-Dock-Titlebar-QEMU.mp4
+          test -s build/recordings/dock/MayOS-Desktop-Dock-iPhone.mp4
+          test -s build/recordings/dock/MayOS-dock-two-running-apps.png
       - name: Upload raw QEMU MayDOS MP4s, evidence and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: MayOS-legacy-four-functions-real-QEMU
+          name: MayOS-desktop-and-legacy-QEMU-recordings
           retention-days: 30
           if-no-files-found: warn
           path: |
+            MayOS_0.3.0-pre1/build/recordings/dock/*.mp4
+            MayOS_0.3.0-pre1/build/recordings/dock/*.png
+            MayOS_0.3.0-pre1/build/recordings/dock/*.json
+            MayOS_0.3.0-pre1/build/recordings/dock/*.ffmpeg.log
             MayOS_0.3.0-pre1/build/recordings/maydos/*.mp4
             MayOS_0.3.0-pre1/build/recordings/maydos/*.json
             MayOS_0.3.0-pre1/build/recordings/maydos/*.ffmpeg.log
