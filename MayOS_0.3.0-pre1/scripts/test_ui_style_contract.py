@@ -80,7 +80,18 @@ assert "ui_card(w->x, w->y, w->w, w->h, 25, panel);" in source
 assert "ui_card(cx, card_top, cw, card_height, 24, card_bg);" in source
 assert 'reference_text(cx + 57, card_top + 48, "Version " MAYOS_RELEASE, muted, 0);' in source
 assert 'reference_right_label(cx + cw - 18, card_top + 158, "Development Preview", ink);' in source
-assert "ui_card(left, top, 244, 70, 24," in source
+assert "ui_card(left, top, width, 70, 24," in source
+assert "int width = count * 57 + 16" in source
+assert "static void dock_items(" in source
+assert "static void dock_activate(" in source
+assert "if (windows[i].open) ids[n++] = i;" in source
+assert "if (running)" in source
+assert "windows[id].min = 1;" in source
+assert "static int window_icon(int id)" in source
+assert "static void frame(int id)" in source
+assert '"MayDOS Calculator"' not in source
+assert '"MayDOS Minesweeper"' not in source
+assert '"MayDOS Extensions"' not in source
 assert "set gfxmode" not in source  # no graphics firmware tweaks via GUI
 assert "static void cursor(void)" in source
 assert "#include \"material_icons.h\"" in source
@@ -98,8 +109,8 @@ assert 'const char *shapes[] = {"■ 黑色方块", "□ 白色方块", "自定�
 assert "roundrect(14, 60, 76, 508, panel);" not in source
 assert "static void desktop(void)" in source
 assert "static void taskbar(void)" in source
-assert "int left = 382, top = H - 92;" in source
+assert "int width = count * 57 + 16, left = dock_left(count), top = H - 92;" in source
 assert "int upper = 128 - x / 3 + (x * x) / 4200;" in source
 assert '{177, 133, 640, 450, 0, 0, 0, 0, 0, 0, 0, "Settings"}' in source
 assert "settings_tab = 6" in source
-print("PASS: exact approved monochrome Settings reference, menu, wallpaper, About card and four-icon Dock")
+print("PASS: exact approved monochrome Settings reference, menu, wallpaper, About card and stateful Dock")
