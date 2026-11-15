@@ -20,6 +20,12 @@ int main(void) {
     assert(!md_calc_eval("1+abc", out, sizeof(out)));
     assert(!md_calc_eval("((1+2)", out, sizeof(out)));
     assert(!md_calc_eval("10000000*2", out, sizeof(out)));
+    char encoded[64], decoded[64];
+    assert(md_note_encode("Hello\\n", 6, encoded, sizeof(encoded)) == 8);
+    assert(!strcmp(encoded, "SGVsbG8K"));
+    assert(md_note_decode(encoded, 8, decoded, sizeof(decoded)) == 6);
+    assert(!strcmp(decoded, "Hello\\n"));
+    assert(md_note_decode("!!??", 4, decoded, sizeof(decoded)) < 0);
     MayDosMines g;
     assert(md_mines_new(&g,1,0,0,0,123));
     assert(g.rows==9 && g.cols==9 && g.mines==10);
