@@ -110,6 +110,8 @@ def act(vm, scene):
                 "Ctrl+S save", "verify encoded file"]
 
     if scene == "extensions":
+        # The original MayDOS import staging directory is created by ADD.
+        command(vm, "add", "no eligible new data")
         command(vm, "write Documents/AddFiles/demo.txt HELLO-MAYDOS", "OK")
         command(vm, "add demo.txt",
                 "MayDOS: imported into Documents/ThirdPartyFile")
