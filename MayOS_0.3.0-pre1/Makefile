@@ -4,6 +4,7 @@ LD := ld
 PYTHON ?= python3
 GRUB_MKRESCUE ?= grub-mkrescue
 GRUB_FILE ?= grub-file
+LIMINE ?= limine
 QEMU ?= qemu-system-x86_64
 QEMU64 ?= qemu-system-x86_64
 LINUX_VERSION ?= latest
@@ -85,7 +86,7 @@ dual: build/mayos.elf build/mayos-disk.img
 	$(PYTHON) scripts/dual_iso.py --version "$(LINUX_VERSION)" --jobs "$(LINUX_JOBS)" --firmware "$(BOOT_FIRMWARE)" $(if $(BUSYBOX),--busybox "$(BUSYBOX)") $(if $(FASTFETCH),--fastfetch "$(FASTFETCH)") --grub-mkrescue '$(GRUB_MKRESCUE)'
 limine: build/mayos.elf
 	@test -n "$(LIMINE_DIR)" || (echo "Set LIMINE_DIR to a Limine release directory" >&2; exit 2)
-	$(PYTHON) scripts/limine_iso.py --limine-dir "$(LIMINE_DIR)" --output build/mayos-limine.iso
+	$(PYTHON) scripts/limine_iso.py --limine-dir "$(LIMINE_DIR)" --limine "$(LIMINE)" --output build/mayos-limine.iso
 run-dual: dual
 	$(QEMU64) $(if $(QEMU_DATA_DIR),-L "$(QEMU_DATA_DIR)") -machine pc -accel tcg -cpu max -m 512 -vga std -cdrom build/mayos-dual.iso -drive file=build/mayos-disk.img,format=raw,if=ide,index=0 -boot d -serial stdio -no-reboot
 test-dual: dual
