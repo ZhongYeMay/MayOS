@@ -51,9 +51,6 @@ static void updater_draw(int cx, int cy, int cw) {
         text(cx, cy + 381, "本地发布记录 · 未与 GitHub 实时连接", muted);
     else
         titlebar_text(cx, cy + 381, u->message, cw - 10, muted);
-    if (u->phase == MAY_UPDATE_DOWNLOADING && u->elapsed_seconds &&
-        u->transferred && u->transferred < u->total) {
-        text(cx, cy + 408, "Estimated download remaining (seconds):", muted);
-        numtext(cx + 321, cy + 408, may_updater_download_eta(), ink);
-    }
+    /* Real transfer ETA is maintained by may_updater_download_eta().
+     * Keep the fixed-height Settings pane within its original bounds. */
 }
