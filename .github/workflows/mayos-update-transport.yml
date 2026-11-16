@@ -1,0 +1,69 @@
+name: MayOS Linux TLS updater build and safe command tests
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/linux/fetch.c'
+      - 'MayOS_0.3.0-pre1/linux/update_transport.c'
+      - 'MayOS_0.3.0-pre1/linux/desktop.c'
+      - 'MayOS_0.3.0-pre1/kernel/updater.c'
+      - 'MayOS_0.3.0-pre1/kernel/updater.h'
+      - 'MayOS_0.3.0-pre1/kernel/update_sha256.c'
+      - 'MayOS_0.3.0-pre1/scripts/modern_network.py'
+      - 'MayOS_0.3.0-pre1/scripts/make_update_catalog.py'
+      - '.github/workflows/mayos-update-transport.yml'
+permissions:
+  contents: read
+jobs:
+  linux-https-updater:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native libcurl TLS compile dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev pkg-config ca-certificates
+      - name: Build Linux updater worker and check all entry points
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          python3 scripts/make_update_catalog.py
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -Ikernel \
+            linux/fetch.c linux/update_transport.c kernel/update_sha256.c \
+            $(pkg-config --cflags --libs libcurl) \
+            -o build/mayos-fetch-test
+          build/mayos-fetch-test --capabilities
+          gcc -std=c11 -O2 -Wall -Wextra -Werror \
+            -DMAYOS_LINUX -Ikernel -Ibuild -fsyntax-only \
+            linux/desktop.c kernel/updater.c kernel/update_sha256.c
+          set +e
+          result="$(build/mayos-fetch-test --mayos-update-invalid)"
+          code=$?
+          set -e
+          echo "Invalid request rejected: exit=$code; $result"
+          test "$code" -eq 2
+          test "$result" = "E|Unsupported system update request"
+          set +e
+          result="$(build/mayos-fetch-test --mayos-update-download v0.6.0-pre1 dual invalid-hash 4194304)"
+          code=$?
+          set -e
+          echo "Invalid hash rejected: exit=$code; $result"
+          test "$code" -eq 2
+          test "$result" = "E|Unsafe release arguments"
+          echo "PASS: Linux HTTPS worker compilation, GUI build syntax and invalid-download rejection"
+      - name: Probe current GitHub Release catalog via real TLS
+        working-directory: MayOS_0.3.0-pre1
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          timeout 70s build/mayos-fetch-test --mayos-update-check \
+            | tee build/mayos-updates-https-check.log
+          grep -Fqx 'C|ok' build/mayos-updates-https-check.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mayos-linux-tls-update-check
+          path: MayOS_0.3.0-pre1/build/mayos-updates-https-check.log
+          if-no-files-found: ignore

@@ -56,18 +56,21 @@ jobs:
       - name: Compile actual Linux HTTPS update worker without network access
         working-directory: MayOS_0.3.0-pre1
         run: |
-          pkg-config --exists libcurl
-          gcc -std=c11 -O2 -Wall -Wextra -Werror \
-            linux/fetch.c linux/update_transport.c \
-            $(pkg-config --cflags --libs libcurl) -o /tmp/mayos-update-check-worker
-          /tmp/mayos-update-check-worker --capabilities
-          set +e
-          got="$(/tmp/mayos-update-check-worker --mayos-update-invalid 2>&1)"
-          code=$?
-          set -e
-          printf 'Invalid-update request: exit=%s output=%s\n' "$code" "$got"
-          test "$code" -eq 2
-          test "$got" = "E|Unsupported system update request"
+          if pkg-config --exists libcurl; then
+            gcc -std=c11 -O2 -Wall -Wextra -Werror -Ikernel \
+              linux/fetch.c linux/update_transport.c kernel/update_sha256.c \
+              $(pkg-config --cflags --libs libcurl) -o /tmp/mayos-update-check-worker
+            /tmp/mayos-update-check-worker --capabilities
+            set +e
+            got="$(/tmp/mayos-update-check-worker --mayos-update-invalid 2>&1)"
+            code=$?
+            set -e
+            printf 'Invalid-update request: exit=%s output=%s\n' "$code" "$got"
+            test "$code" -eq 2
+            test "$got" = "E|Unsupported system update request"
+          else
+            echo "SKIP: libcurl development headers absent in no-apt fast runner; dedicated TLS updater job performs required native build"
+          fi
       - name: Dry-run website release promotion before any publishing
         run: |
           python3 scripts/promote_strict_ui_release_website.py
