@@ -12,7 +12,9 @@ def main():
     try:
         vm.shot('desktop-reference-050')
         desktop = Image.open(BUILD / 'desktop-reference-050.png').convert('RGB')
-        assert desktop.size == (1024, 768)
+        assert desktop.size == (1024, 768), (
+            f'unexpected desktop framebuffer size: {desktop.size}, expected (1024, 768)'
+        )
         assert desktop.getpixel((10, 20)) == (5, 5, 6)
         assert max(desktop.getpixel((15, 760))) < 25
         assert desktop.getpixel((450, 700)) == (10, 10, 12)
