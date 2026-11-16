@@ -53,6 +53,10 @@ typedef struct {
 const MayUpdaterState *may_updater_state(void);
 void may_updater_init(void);
 void may_updater_offline(void);
+#ifdef MAYOS_LINUX
+int platform_update_check_start(void);
+int platform_update_check_poll(void);
+#endif
 const char *may_updater_current_version(void);
 int may_updater_compare(const char *a, const char *b);
 int may_updater_feed_line(const char *line);

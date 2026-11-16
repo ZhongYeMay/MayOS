@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+int mayos_update_command(int argc, char **argv);
 #define PREVIEW_LIMIT 1800
 typedef struct { size_t used; int truncated; } Preview;
 static size_t preview(void *data, size_t size, size_t count, void *opaque) {
@@ -21,6 +22,8 @@ static size_t preview(void *data, size_t size, size_t count, void *opaque) {
 }
 
 int main(int argc, char **argv) {
+    if (argc >= 2 && !strncmp(argv[1], "--mayos-update-", 15))
+        return mayos_update_command(argc, argv);
     if (curl_global_init(CURL_GLOBAL_DEFAULT)) return 1;
     const curl_version_info_data *v = curl_version_info(CURLVERSION_NOW);
     if (argc == 2 && !strcmp(argv[1], "--capabilities")) {

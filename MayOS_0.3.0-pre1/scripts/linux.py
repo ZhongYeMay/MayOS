@@ -39,6 +39,7 @@ VERSION_RE = re.compile(r"[1-9][0-9]*\.[0-9]+(?:\.[0-9]+)?\Z")
 INPUT_FILES = {
     "modern_network_builder_sha256": ROOT / "scripts/modern_network.py",
     "modern_network_source_sha256": ROOT / "linux/fetch.c",
+    "modern_update_transport_sha256": ROOT / "linux/update_transport.c",
     "config_sha256": ROOT / "linux/kernel.config",
     "init_sha256": ROOT / "linux/init",
     "inittab_sha256": ROOT / "linux/inittab",

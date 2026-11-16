@@ -2328,11 +2328,13 @@ static void left_click(void) {
                     serial("MayOS: Updates view changed\n");
                 } else if (updater_view == 2 &&
                            inside(rx, ry, 217, 386, 176, 30)) {
+#ifdef MAYOS_LINUX
+                    if (platform_update_check_start())
+                        notify("正在通过 HTTPS 检查 GitHub Release");
+                    else notify("更新检查任务正在运行或后端不可用");
+#else
                     may_updater_offline();
                     serial("MayOS: update online check unavailable, no network request made\n");
-#ifdef MAYOS_LINUX
-                    notify("HTTPS 检测后端尚未连接");
-#else
                     notify("MayKernel 尚缺原生安全网络下载能力");
 #endif
                 } else if (updater_view == 2 &&
@@ -2687,6 +2689,8 @@ void kernel_main(u32 magic, u32 info) {
                 key_event(key);
         }
 #ifdef MAYOS_LINUX
+        if (platform_update_check_poll())
+            dirty = 1;
         if (explorer_loading) {
             explorer_loading = platform_web_poll(explorer_response, sizeof(explorer_response));
             dirty = 1;

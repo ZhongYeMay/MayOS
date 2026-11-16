@@ -126,7 +126,13 @@ static void updater_progress_view(int cx, int cy, int cw, const MayUpdaterState 
     /* Buttons have real, explicitly limited behavior. They cannot write a
      * disk until a verified transactional installer actually exists. */
     ui_card(cx + 12, cy + 333, 176, 30, 10, surface_high);
+#ifdef MAYOS_LINUX
+    text(cx + 24, cy + 339,
+         u->phase == MAY_UPDATE_CHECKING ? "Checking GitHub..." : "Check GitHub",
+         u->phase == MAY_UPDATE_CHECKING ? muted : ink);
+#else
     text(cx + 24, cy + 339, "Check unavailable", muted);
+#endif
     ui_card(cx + 198, cy + 333, 176, 30, 10, surface_high);
     text(cx + 210, cy + 339, "Install disabled", muted);
     if (u->phase == MAY_UPDATE_FAILED)
