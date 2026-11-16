@@ -37,7 +37,10 @@ with tempfile.TemporaryDirectory() as folder:
     try:
         vm = BootVM(iso=BUILD / "mayos-dual.iso", disk=disk, tag="test-modern-network",
                     qemu="qemu-system-x86_64", memory=512, timeout=60)
-        vm.wait("custom kernel", timeout=30)
+        # Current GRUB menu labels are "Start MayKernel64" and
+        # "Start Linux64". Select the second entry BEFORE the default
+        # MayKernel autoboot timer expires, not after the kernel boots.
+        vm.wait("Start MayKernel64", timeout=30)
         vm.key("down"); vm.key("ret")
         vm.wait("MayOS-Linux# ", timeout=120)
         vm.wait("MayOS: desktop ready", timeout=120)
@@ -52,7 +55,22 @@ with tempfile.TemporaryDirectory() as folder:
         vm.shell_check(f"MAYOS_CA_BUNDLE=/tmp/qa-ca.pem /usr/bin/mayos-fetch {url} > /tmp/tls.txt && "
                        "grep -q 'MayOS guest TLS transport verified' /tmp/tls.txt", "TLS13_TRUSTED")
         vm.shell_check(f"! /usr/bin/mayos-fetch {url}", "TLS_UNTRUSTED_REJECTED")
-        print("PASS: real MayOS guest native ELF + libraries, RTC-valid TLS1.3, CA verification, IPv6 kernel and e1000 NAT")
+
+        # Real Linux desktop UI, not a mock frontend. A native MayKernel does
+        # not use this worker; only the dual-boot Linux session can start TLS.
+        vm.click(50, 16)        # MayOS menu -> Settings
+        vm.click(237, 455)      # Updates category
+        vm.wait("MayOS: native Settings > Updates opened (offline catalog)", timeout=20)
+        vm.click(678, 267)      # Progress tab
+        vm.wait("MayOS: Updates view changed", timeout=20)
+        vm.move(1000, 690)
+        vm.shot("test-linux-updates-progress")
+        vm.click(430, 547)      # Launch genuine HTTPS update-catalog worker
+        vm.wait("MayOS: GitHub TLS update check started (Linux mode)", timeout=20)
+        vm.move(1000, 690)
+        vm.shot("test-linux-updates-https-started")
+        print("PASS: guest native TLS ELF + libraries, CA verification, e1000 NAT, "
+              "real Linux Updates UI and asynchronous GitHub worker start")
     finally:
         if vm: vm.stop()
         server.shutdown(); server.server_close()

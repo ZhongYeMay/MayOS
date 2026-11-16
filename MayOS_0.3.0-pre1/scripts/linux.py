@@ -39,6 +39,7 @@ VERSION_RE = re.compile(r"[1-9][0-9]*\.[0-9]+(?:\.[0-9]+)?\Z")
 INPUT_FILES = {
     "modern_network_builder_sha256": ROOT / "scripts/modern_network.py",
     "modern_network_source_sha256": ROOT / "linux/fetch.c",
+    "modern_update_transport_sha256": ROOT / "linux/update_transport.c",
     "config_sha256": ROOT / "linux/kernel.config",
     "init_sha256": ROOT / "linux/init",
     "inittab_sha256": ROOT / "linux/inittab",
@@ -49,6 +50,16 @@ INPUT_FILES = {
     "desktop_session_sha256": ROOT / "linux/desktop-session",
     "desktop_backend_sha256": ROOT / "linux/desktop.c",
     "desktop_gui_sha256": ROOT / "kernel/gui.c",
+    "updater_crypto_sha256": ROOT / "kernel/update_sha256.c",
+    "updater_crypto_header_sha256": ROOT / "kernel/update_sha256.h",
+    "updater_bootplan_sha256": ROOT / "kernel/update_bootplan.c",
+    "updater_bootplan_header_sha256": ROOT / "kernel/update_bootplan.h",
+    "updater_slot_store_sha256": ROOT / "kernel/update_store.c",
+    "updater_slot_store_header_sha256": ROOT / "kernel/update_store.h",
+    "desktop_updater_sha256": ROOT / "kernel/updater.c",
+    "desktop_updater_ui_sha256": ROOT / "kernel/updater_ui.inc",
+    "desktop_updater_header_sha256": ROOT / "kernel/updater.h",
+    "update_catalog_sha256": ROOT.parent / "website/update-feed-v1.txt",
     "maydos_ui_sha256": ROOT / "kernel/maydos_ui.inc",
     "maydos_tools_header_sha256": ROOT / "kernel/maydos_tools.h",
     "maydos_tools_source_sha256": ROOT / "kernel/maydos_tools.c",
@@ -479,6 +490,8 @@ def build(args: argparse.Namespace) -> dict:
              "-isystem", str(OUT / "headers/include"),
              str(ROOT / "linux/desktop.c"), str(ROOT / "kernel/fs.c"),
              str(ROOT / "kernel/gui.c"), str(ROOT / "kernel/maydos_tools.c"),
+             str(ROOT / "kernel/updater.c"), str(ROOT / "kernel/update_sha256.c"),
+             str(ROOT / "kernel/update_bootplan.c"), str(ROOT / "kernel/update_store.c"),
              "-o", str(OUT / "mayos-desktop")])
         validate_static_elf(OUT / "mayos-desktop")
     kernel = output / "arch/x86/boot/bzImage"

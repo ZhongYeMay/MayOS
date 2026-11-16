@@ -19,7 +19,10 @@ def runtime(root: Path, output: Path):
     flags = shlex.split(subprocess.check_output(
         ["pkg-config", "--cflags", "--libs", "libcurl"], text=True))
     subprocess.run(["gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
-                    str(root / "linux/fetch.c"), *flags, "-o", str(binary)], check=True)
+                    str(root / "linux/fetch.c"), str(root / "linux/update_transport.c"),
+                     str(root / "kernel/update_sha256.c"),
+                     "-I" + str(root / "kernel"),
+                     *flags, "-o", str(binary)], check=True)
     capabilities = subprocess.check_output([str(binary), "--capabilities"], text=True).strip()
     linked = subprocess.check_output(["ldd", str(binary)], text=True)
     if "not found" in linked:
