@@ -61,9 +61,28 @@ jobs:
           timeout 70s build/mayos-fetch-test --mayos-update-check \
             | tee build/mayos-updates-https-check.log
           grep -Fqx 'C|ok' build/mayos-updates-https-check.log
+      - name: End-to-end HTTPS download of published ISO into disposable /tmp
+        working-directory: MayOS_0.3.0-pre1
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          expected="0c84fd568cf08861e5d466fdd4ee7fec3b072b606b369a2dc03049628a6c8323"
+          timeout 240s build/mayos-fetch-test --mayos-update-download \
+            v0.3.0 dual "$expected" 33275904 \
+            | tee build/mayos-updates-iso-verify.log
+          grep -Fqx 'D|verified' build/mayos-updates-iso-verify.log
+          stage="$(find /tmp -maxdepth 2 -name verified.iso -path '/tmp/mayos-update.*/verified.iso' -print -quit)"
+          test -n "$stage"
+          test "$(stat -c %s "$stage")" -eq 33275904
+          printf '%s  %s\n' "$expected" "$stage" | sha256sum --check -
+          rm -f "$stage"
+          rmdir "$(dirname "$stage")"
+          echo "PASS: official ISO downloaded by TLS and independently SHA-256-checked"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: mayos-linux-tls-update-check
-          path: MayOS_0.3.0-pre1/build/mayos-updates-https-check.log
+          path: |
+            MayOS_0.3.0-pre1/build/mayos-updates-https-check.log
+            MayOS_0.3.0-pre1/build/mayos-updates-iso-verify.log
           if-no-files-found: ignore
