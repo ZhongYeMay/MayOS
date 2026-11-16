@@ -12,7 +12,7 @@ def capture(disk, name):
         vm.shot(name)
         image = Image.open(BUILD / f'{name}.png').convert('RGB')
         assert image.size == (1280, 720)
-        assert logical_pixel(image, 400, 300) == (0, 0, 0)
+        assert logical_pixel(image, 600, 300) == (0, 0, 0)
         assert logical_pixel(image, 15, 20) == (5, 5, 6)
     finally:
         vm.stop()

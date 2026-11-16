@@ -564,9 +564,9 @@ static int animation_step(int mx, int my) {
     for (int i = 0; i < WINDOW_COUNT; i++)
         if (animation_running[i]) changed = 1;
     for (int i = 0; i < 4; i++) {
-        int x = 403 + i * 57;
+        int x = 514 + i * 57;
         int target = !high_contrast && mx >= x - 7 && mx < x + 43 &&
-                     my >= H - 88 && my < H - 31 ? 256 : 0;
+                     my >= H - 76 && my < H - 19 ? 256 : 0;
         int delta = target - dock_level[i];
         if (delta) {
             int step = delta / 3;
@@ -577,13 +577,13 @@ static int animation_step(int mx, int my) {
     }
     return changed;
 }
-static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "Files"},
-                            {177, 133, 640, 450, 0, 0, 0, 0, 0, 0, 0, "Settings"},
-                            {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
-                            {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
-                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
+static Window windows[WINDOW_COUNT] = {{275, 105, 730, 510, 0, 0, 0, 0, 0, 0, 0, "Files"},
+                            {228, 128, 824, 436, 0, 0, 0, 0, 0, 0, 0, "Settings"},
+                            {290, 136, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
+                            {315, 112, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
+                            {240, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
 static int order[WINDOW_COUNT] = {0, 2, 3, 4, 1}, focus = 1, dirty = 1;
-static int mx = 530, my = 390, buttons, oldbuttons, drag = -1, dragx, dragy;
+static int mx = 640, my = 360, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
            cut = 0, settings_tab = 6;
 static int file_scroll = 0;
@@ -858,7 +858,7 @@ static void shell(void) {
         emit("Fastfetch requires the Linux boot environment.");
         emit("OS: MayOS " MAYOS_RELEASE);
         emit("Kernel: MayKernel x86_64 (custom)");
-        emit("Desktop canvas: 1024 x 768 / scaled to firmware display");
+        emit("Desktop canvas: 1280 x 720 / native 16:9");
         emitnum("Memory: ", memory_mb, " MiB");
         emitnum("Uptime: ", ticks / 100, " seconds");
         emit(disk_ready ? "Disk: ATA / MayFS" : "Disk: RAM fallback");
@@ -1091,8 +1091,8 @@ static void desktop(void) {
     }
     const int status_icons[] = {4, 8, 7, 12};
     for (int i = 0; i < 4; i++)
-        symbol(777 + i * 39, 7, status_icons[i], 18, muted);
-    text(907, 8, "Tue Jan 28  10:24", muted);
+        symbol(986 + i * 39, 7, status_icons[i], 18, muted);
+    text(1116, 8, "Tue Jan 28  10:24", muted);
 }
 static void frame(int id) {
     Window *w = &windows[id];
@@ -1125,11 +1125,11 @@ static void frame(int id) {
         border(w->x + 2, w->y + 2, w->w - 4, w->h - 4, line);
 }
 static void settings(Window *w) {
-    int x = w->x, y = w->y, cx = x + 205, cy = y + 53, cw = w->w - 238;
-    rect(x + 1, y + 36, 187, w->h - 38, dark ? 0x080809 : 0xf7f7f9);
-    rect(x + 187, y + 36, 1, w->h - 38, line);
+    int x = w->x, y = w->y, cx = x + 264, cy = y + 53, cw = w->w - 286;
+    rect(x + 1, y + 36, 240, w->h - 38, dark ? 0x080809 : 0xf7f7f9);
+    rect(x + 240, y + 36, 1, w->h - 38, line);
     heading_text(x + 20, y + 49, "Settings", ink);
-    ui_card(x + 18, y + 82, 158, 34, 17, dark ? 0x111113 : surface_high);
+    ui_card(x + 18, y + 82, 207, 34, 17, dark ? 0x111113 : surface_high);
     symbol(x + 28, y + 90, 4, 15, muted);
     text(x + 51, y + 91, "Search Settings", muted);
     const char *tabs[] = {"General", "Display", "Sound", "Network",
@@ -1138,7 +1138,7 @@ static void settings(Window *w) {
     for (int i = 0; i < 7; i++) {
         int yy = y + 132 + i * 36;
         if (settings_tab == i)
-            soft_roundrect(x + 18, yy, 158, 34, 10, selected_fill);
+            soft_roundrect(x + 18, yy, 207, 34, 10, selected_fill);
         symbol(x + 29, yy + 8, tab_icons[i], 18,
                settings_tab == i ? ink : muted);
         text(x + 61, yy + 7, tabs[i], settings_tab == i ? ink : muted);
@@ -1148,8 +1148,7 @@ static void settings(Window *w) {
         /*
          * Supplied reference: 1320x580 card with black #000 interior,
          * #292929 rounded outline, white monitor+name and muted gray version.
-         * Native 1024x768 settings area fits a 566x289 rendition, preserving
-         * the original side navigation and all input hotspot coordinates.
+         * Native 1280x720 layout follows the approved 16:9 reference.
          */
         const int card_top = cy + 48, card_height = 230;
         u32 card_bg = dark ? 0x000000 : 0xffffff;
@@ -1518,7 +1517,7 @@ static void explorer_draw(Window *w) {
    Icons launch the same native MayOS windows and services. */
 static void taskbar(void) {
     /* The reference Dock intentionally has only Files, Settings, Terminal and Trash. */
-    int left = 382, top = H - 92;
+    int left = 493, top = H - 80;
     soft_roundrect(left + 5, top + 8, 244, 70, 25,
                    dark ? 0x020203 : 0xc0c0c6);
     ui_card(left, top, 244, 70, 24, dark ? 0x0a0a0c : 0xf7f7f9);
@@ -1940,8 +1939,8 @@ static void left_click(void) {
         if (mx < 96) {
             top_panel = 0;
             raise_window(1);
-        } else if (mx >= 770 && mx < 930) {
-            int id = (mx - 770) / 39 + 2;
+        } else if (mx >= 979 && mx < 1139) {
+            int id = (mx - 979) / 39 + 2;
             if (id > 5) id = 5;
             top_panel = top_panel == id ? 0 : id;
             start_open = 0;
@@ -1949,10 +1948,10 @@ static void left_click(void) {
         return;
     }
     /* Reference Dock: Files, Settings, Terminal, Trash. */
-    if (my >= H - 92) {
-        const int centers[] = {403, 460, 517, 574};
+    if (my >= H - 80) {
+        const int centers[] = {514, 571, 628, 685};
         for (int i = 0; i < 4; i++) {
-            if (!inside(mx, my, centers[i] - 24, H - 88, 52, 60))
+            if (!inside(mx, my, centers[i] - 24, H - 76, 52, 60))
                 continue;
             if (i == 0) {
                 raise_window(0);
@@ -2071,7 +2070,7 @@ static void left_click(void) {
             return;
         }
         if (id == 1) {
-            if (settings_tab == 6 && inside(rx, ry, 223, 265, 30, 30)) {
+            if (settings_tab == 6 && inside(rx, ry, 282, 265, 30, 30)) {
                 if (ticks - egg_last_click > 150)
                     egg_clicks = 0;
                 egg_last_click = ticks;
@@ -2079,7 +2078,7 @@ static void left_click(void) {
                     open_easter();
                 return;
             }
-            if (rx < 188) {
+            if (rx < 241) {
                 int tab = (ry - 132) / 36;
                 if (ry >= 132 && tab >= 0 && tab < 7 && (ry - 132) % 36 < 34) {
                     if (settings_tab != tab) animate_window(1);

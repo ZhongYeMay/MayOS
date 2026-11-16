@@ -109,7 +109,7 @@ def record(args):
          "-show_entries", "stream=codec_name,width,height,nb_frames",
          "-of", "json", str(args.output)], text=True)
     stream = json.loads(video_info)["streams"][0]
-    if stream.get("codec_name") != "h264" or stream.get("width") != 1024 or stream.get("height") != 768:
+    if stream.get("codec_name") != "h264" or stream.get("width") != 1280 or stream.get("height") != 720:
         raise AssertionError(f"invalid video stream: {stream}")
     result = {
         "release_source_version": args.release,

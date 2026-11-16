@@ -14,7 +14,7 @@ def check_photo(path):
     for x,y in [(20,20),(130,50),(270,100),(130,210),(240,280),(80,390),(330,450)]:
         r,g,b=expected.getpixel((x,y));r>>=3;g>>=2;b>>=3
         rgb=((r<<3)|(r>>2),(g<<2)|(g>>4),(b<<3)|(b>>2))
-        sampled = logical_pixel(actual, 332 + x, 124 + y)
+        sampled = logical_pixel(actual, (actual.width - expected.width) // 2 + x, 124 + y)
         assert sampled == rgb, (x, y, sampled, rgb)
 
 def main():
@@ -28,10 +28,10 @@ def main():
         vm.type('xxx');vm.key('esc');vm.cmd('pwd');vm.wait('\n/\n')
         assert 'xxx' not in vm.log.read_text(),'Modal leaked keys into the terminal'
         vm.click(50,16) # Open the reference Settings / About page.
-        for _ in range(4):vm.click(414,412)
+        for _ in range(4):vm.click(510,393)
         before=vm.log.read_text().count('MayOS: meow easter egg opened')
         assert before==1,'Easter egg opened before the fifth click'
-        vm.click(414,412);time.sleep(.2)
+        vm.click(510,393);time.sleep(.2)
         assert vm.log.read_text().count('MayOS: meow easter egg opened')==2
         vm.move(50,50);vm.shot('easter-about');check_photo(BUILD/'easter-about.png')
         vm.click(664,660) # Return button.
