@@ -41,7 +41,7 @@ class Session:
         self.frames = 0
         self.stop_capture = threading.Event()
         self.first_frame = threading.Event()
-        self.mx, self.my = 530, 390
+        self.mx, self.my = 640, 360
         disk = BUILD / (self.tag + '-disk.img')
         with disk.open('wb') as handle:
             handle.truncate(8 * 1024 * 1024)

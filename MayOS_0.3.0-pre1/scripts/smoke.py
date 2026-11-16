@@ -21,7 +21,7 @@ class VM:
             time.sleep(.05)
         self.s=socket.socket(socket.AF_UNIX);self.s.settimeout(10);self.s.connect(str(self.sock));self.f=self.s.makefile('rwb',buffering=0);self.f.readline();self.q('qmp_capabilities')
         self.wait('MayOS: desktop ready');time.sleep(.5)
-        self.mx,self.my=530,390
+        self.mx,self.my=640,360
     def q(self,cmd,args=None):
         self.f.write((json.dumps({'execute':cmd,'arguments':args or {}})+'\n').encode())
         while True:

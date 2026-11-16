@@ -33,7 +33,7 @@ class BootVM:
         for path in (self.serial_path, self.qmp_path):
             path.unlink(missing_ok=True)
         self.transcript = bytearray()
-        self.mx, self.my = 530, 390
+        self.mx, self.my = 640, 360
         self.serial = self.qmp = self.qmp_file = None
         self.proc = None
         self._log_file = self.log.open('wb')
