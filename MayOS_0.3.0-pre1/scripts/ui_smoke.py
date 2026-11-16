@@ -22,7 +22,7 @@ def main():
             f'unexpected desktop framebuffer size: {desktop.size}, expected (1280, 720)'
         )
         assert logical_pixel(desktop, 10, 20) == (5, 5, 6)
-        assert max(logical_pixel(desktop, 15, 760)) < 25
+        assert max(logical_pixel(desktop, 15, 712)) < 25
         assert max(logical_pixel(desktop, 640, 700)) < 35
 
         vm.click(50, 16)
