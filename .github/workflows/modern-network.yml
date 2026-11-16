@@ -1,6 +1,13 @@
 name: Verify native modern network in MayOS Linux guest
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/linux/**'
+      - 'MayOS_0.3.0-pre1/kernel/updater*'
+      - 'MayOS_0.3.0-pre1/scripts/modern_guest_test.py'
+      - 'MayOS_0.3.0-pre1/scripts/modern_network.py'
+      - '.github/workflows/modern-network.yml'
   push:
     branches: [main]
     paths:
@@ -39,4 +46,5 @@ jobs:
           path: |
             MayOS_0.3.0-pre1/build/test-modern-network*.log
             MayOS_0.3.0-pre1/build/linux/network-runtime.json
+            MayOS_0.3.0-pre1/build/test-linux-updates-*.png
           if-no-files-found: warn
