@@ -14,3 +14,11 @@ subprocess.run([
     "-o", str(BUILD / "updater-test"),
 ], check=True)
 subprocess.run([str(BUILD / "updater-test")], check=True)
+subprocess.run([
+    "gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+    "-I" + str(ROOT / "kernel"),
+    str(ROOT / "kernel/update_bootplan.c"),
+    str(ROOT / "scripts/updater_boot_test.c"),
+    "-o", str(BUILD / "updater-boot-test"),
+], check=True)
+subprocess.run([str(BUILD / "updater-boot-test")], check=True)
