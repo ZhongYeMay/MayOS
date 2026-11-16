@@ -2339,8 +2339,21 @@ static void left_click(void) {
 #endif
                 } else if (updater_view == 2 &&
                            inside(rx, ry, 403, 386, 176, 30)) {
+#ifdef MAYOS_LINUX
+                    const MayUpdaterState *available = may_updater_state();
+                    if (available->online_checked && available->has_upgrade &&
+                        available->phase == MAY_UPDATE_AVAILABLE) {
+                        if (platform_update_download_start())
+                            notify("下载真实 ISO 到临时空间并验证 SHA-256");
+                        else notify("安全下载后端尚不可用");
+                    } else {
+                        serial("MayOS: update install blocked (no A/B verified rollback)\n");
+                        notify("没有 A/B 可回退安装器；禁止覆盖启动盘");
+                    }
+#else
                     serial("MayOS: update install blocked (no A/B verified rollback)\n");
                     notify("没有 A/B 可回退安装器；禁止覆盖启动盘");
+#endif
                 }
             } else if (settings_tab == 1) {
                 if (ry >= 220 && ry <= 382) {

@@ -35,56 +35,91 @@
 #include "updater.h"
 static pid_t mayos_update_pid=-1;
 static int mayos_update_fd=-1, mayos_update_count, mayos_update_ack;
+static int mayos_update_download_mode;
 static unsigned int mayos_update_len;
 static char mayos_update_line[800];
-static void mayos_update_stop(void) {
-    if(mayos_update_fd>=0) close(mayos_update_fd);
+static void mayos_update_stop(void){
+    if(mayos_update_fd>=0)close(mayos_update_fd);
     mayos_update_fd=-1;
-    if(mayos_update_pid>0) {
+    if(mayos_update_pid>0){
         kill(mayos_update_pid,SIGKILL);
-        while(waitpid(mayos_update_pid,NULL,0)<0 && errno==EINTR) {}
+        while(waitpid(mayos_update_pid,NULL,0)<0 && errno==EINTR){}
     }
-    mayos_update_pid=-1;
-    mayos_update_len=0;
+    mayos_update_pid=-1;mayos_update_len=0;
 }
-int platform_update_check_start(void) {
-    if(mayos_update_pid>0) return 0;
+static int mayos_update_spawn(int download){
+    if(mayos_update_pid>0)return 0;
+    char size[32];
+    const MayUpdaterState *current=may_updater_state();
+    if(download){
+        if(!current->online_checked||!current->has_upgrade||
+           current->phase!=MAY_UPDATE_AVAILABLE||
+           strcmp(current->latest.variant,"dual")||
+           !current->latest.bytes)return 0;
+        snprintf(size,sizeof(size),"%u",current->latest.bytes);
+    }
     int fds[2];
-    if(pipe(fds)<0) return 0;
+    if(pipe(fds)<0)return 0;
     pid_t child=fork();
     if(child==0){
         close(fds[0]);
-        if(dup2(fds[1],STDOUT_FILENO)<0) _exit(127);
+        if(dup2(fds[1],STDOUT_FILENO)<0)_exit(127);
         close(fds[1]);
-        execl(MAYOS_FETCH_PATH,"mayos-fetch","--mayos-update-check",(char*)NULL);
+        if(download)
+            execl(MAYOS_FETCH_PATH,"mayos-fetch","--mayos-update-download",
+                  current->latest.tag,"dual",current->latest.sha256,size,(char*)NULL);
+        else
+            execl(MAYOS_FETCH_PATH,"mayos-fetch","--mayos-update-check",(char*)NULL);
         _exit(127);
     }
     close(fds[1]);
     if(child<0){close(fds[0]);return 0;}
     if(fcntl(fds[0],F_SETFL,O_NONBLOCK)<0){
         close(fds[0]);kill(child,SIGKILL);
-        while(waitpid(child,NULL,0)<0 && errno==EINTR) {}
+        while(waitpid(child,NULL,0)<0 && errno==EINTR){}
         return 0;
     }
-    mayos_update_fd=fds[0];
-    mayos_update_pid=child;
-    mayos_update_len=0;
-    mayos_update_count=0;
-    mayos_update_ack=0;
-    may_updater_checking();
-    serial("MayOS: GitHub TLS update check started (Linux mode)\n");
+    mayos_update_fd=fds[0];mayos_update_pid=child;
+    mayos_update_len=0;mayos_update_count=0;mayos_update_ack=0;
+    mayos_update_download_mode=download;
+    if(download){
+        if(!may_updater_linux_begin()){
+            mayos_update_stop();
+            return 0;
+        }
+        serial("MayOS: verified ISO temporary download started (Linux mode)\n");
+    }else{
+        may_updater_checking();
+        serial("MayOS: GitHub TLS update check started (Linux mode)\n");
+    }
     return 1;
 }
-static void mayos_update_feed_line(const char *line) {
-    if(!strncmp(line,"U|",2)){
-        if(may_updater_feed_line(line+2)) mayos_update_count++;
-    }else if(!strcmp(line,"C|ok")){
+int platform_update_check_start(void){return mayos_update_spawn(0);}
+int platform_update_download_start(void){return mayos_update_spawn(1);}
+static void mayos_update_feed_line(const char *line){
+    if(!mayos_update_download_mode){
+        if(!strncmp(line,"U|",2)){
+            if(may_updater_feed_line(line+2))mayos_update_count++;
+        }else if(!strcmp(line,"C|ok"))mayos_update_ack=1;
+        return;
+    }
+    if(!strncmp(line,"P|",2)){
+        unsigned long long bytes=0,total=0;
+        unsigned int elapsed=0;
+        char surplus=0;
+        if(sscanf(line,"P|%llu|%llu|%u%c",
+                  &bytes,&total,&elapsed,&surplus)==3)
+            may_updater_linux_progress(bytes,total,elapsed);
+        else
+            may_updater_failed("Invalid byte progress from update worker");
+    }else if(!strcmp(line,"V|SHA-256")){
+        may_updater_linux_verifying();
+    }else if(!strcmp(line,"D|verified")){
         mayos_update_ack=1;
     }
-    /* Untrusted stderr-like text cannot set a success state. */
 }
-int platform_update_check_poll(void) {
-    if(mayos_update_fd<0) return 0;
+int platform_update_check_poll(void){
+    if(mayos_update_fd<0)return 0;
     char chunk[512];
     int changed=0;
     ssize_t n=read(mayos_update_fd,chunk,sizeof(chunk));
@@ -96,39 +131,47 @@ int platform_update_check_poll(void) {
                 mayos_update_line[mayos_update_len]=0;
                 mayos_update_feed_line(mayos_update_line);
                 mayos_update_len=0;
-            }else if(ch<32 || ch>=127 ||
+            }else if(ch<32||ch>=127||
                      mayos_update_len+1>=sizeof(mayos_update_line)){
                 mayos_update_stop();
-                may_updater_failed("GitHub catalog worker emitted invalid data");
+                may_updater_failed("Malformed update worker response");
                 return 1;
             }else mayos_update_line[mayos_update_len++]=(char)ch;
         }
-    }else if(n==0 || (n<0 && errno!=EAGAIN && errno!=EINTR)){
+    }else if(n==0||(n<0&&errno!=EAGAIN&&errno!=EINTR)){
         int status=0;
         pid_t finished=waitpid(mayos_update_pid,&status,WNOHANG);
-        int success=(finished==mayos_update_pid && WIFEXITED(status) &&
-                     WEXITSTATUS(status)==0 && mayos_update_ack &&
-                     mayos_update_count>0 && mayos_update_len==0);
+        int success=finished==mayos_update_pid&&WIFEXITED(status)&&
+                    WEXITSTATUS(status)==0&&mayos_update_ack&&
+                    mayos_update_len==0&&
+                    (mayos_update_download_mode||mayos_update_count>0);
+        int download=mayos_update_download_mode;
         if(mayos_update_fd>=0)close(mayos_update_fd);
         mayos_update_fd=-1;
-        if(finished!=mayos_update_pid && mayos_update_pid>0){
+        if(finished!=mayos_update_pid&&mayos_update_pid>0){
             kill(mayos_update_pid,SIGKILL);
-            while(waitpid(mayos_update_pid,NULL,0)<0 && errno==EINTR) {}
+            while(waitpid(mayos_update_pid,NULL,0)<0&&errno==EINTR){}
         }
-        mayos_update_pid=-1;
-        mayos_update_len=0;
+        mayos_update_pid=-1;mayos_update_len=0;
         if(success){
-            may_updater_checked();
-            serial("MayOS: GitHub TLS Release check completed successfully\n");
-        }else{
-            may_updater_failed("GitHub HTTPS check failed; saved data retained");
-            serial("MayOS: GitHub TLS Release check failed (no online success)\n");
+            if(download){
+                success=may_updater_linux_verified();
+                if(success)serial("MayOS: staged ISO size and SHA-256 verified\n");
+            }else{
+                may_updater_checked();
+                serial("MayOS: GitHub TLS catalog check completed\n");
+            }
+        }
+        if(!success){
+            may_updater_failed(download ?
+                "ISO download or digest verification failed" :
+                "GitHub HTTPS check failed; saved data retained");
+            serial("MayOS: update request failed; no system install performed\n");
         }
         return 1;
     }
     return changed;
 }
-
 
 void *mayos_memset(void *destination, int value, u32 length) {
     return memset(destination, value, length);
