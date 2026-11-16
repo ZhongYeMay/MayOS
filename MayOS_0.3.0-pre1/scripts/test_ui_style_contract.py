@@ -53,10 +53,15 @@ assert "line = dark ? 0x303033 : 0xd9d9dd;" in source
 assert "static void soft_roundrect(" in source
 assert "static int heading_text(" in source
 assert 'heading_text(42, 4, "MayOS", ink);' in source
-assert 'const char *active_app = focus >= 0' in source
-assert 'text(163, 8, active_app, ink);' in source
-assert 'rect(147, 9, 1, 14, line);' in source
-assert 'text(251, 8, "File", muted);' not in source
+# Preserve the previously approved MayOS top system bar verbatim.
+# Window titlebar and Dock redesign must not change these coordinates.
+assert 'text(163, 8, "Settings", muted);' in source
+assert 'text(251, 8, "File", muted);' in source
+assert 'text(313, 8, "Edit", muted);' in source
+assert 'text(371, 8, "View", muted);' in source
+assert 'text(432, 8, "Window", muted);' in source
+assert 'text(524, 8, "Help", muted);' in source
+assert 'const char *active_app = focus >= 0' not in source
 assert 'text(935, 8, "SESSION", muted);' in source
 assert 'heading_text(x + 20, y + 49, "Settings", ink);' in source
 assert '"Privacy & Security", "Updates", "About MayOS"' in source

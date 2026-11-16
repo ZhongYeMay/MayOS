@@ -1215,12 +1215,13 @@ static void desktop(void) {
     rect(0, 31, W, 1, dark ? 0x171719 : line);
     symbol(17, 7, 11, 17, ink);
     heading_text(42, 4, "MayOS", ink);
-    /* Only real interaction is advertised. The legacy fake File/Edit/View
-     * labels were not menus, and crowded the macOS-inspired system bar. */
-    rect(147, 9, 1, 14, line);
-    const char *active_app = focus >= 0 && windows[focus].open &&
-                             !windows[focus].min ? windows[focus].title : "Desktop";
-    text(163, 8, active_app, ink);
+    /* Separate the brand from menus; no overlapping glyph advances. */
+    text(163, 8, "Settings", muted);
+    text(251, 8, "File", muted);
+    text(313, 8, "Edit", muted);
+    text(371, 8, "View", muted);
+    text(432, 8, "Window", muted);
+    text(524, 8, "Help", muted);
     int count = 0;
     for (int i = 4; i < FS_MAX && count < 15; i++) {
         if (!files[i].used || files[i].parent != 2) continue;
