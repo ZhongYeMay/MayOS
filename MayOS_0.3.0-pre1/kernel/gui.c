@@ -546,6 +546,37 @@ typedef struct {
     const char *title;
 } Window;
 #define WINDOW_COUNT 5
+/* Nonblocking 180ms fades. Geometry and input targets never move. */
+static u32 animation_started[WINDOW_COUNT];
+static int animation_running[WINDOW_COUNT];
+static u32 animation_underlay[W * H];
+static int dock_level[4];
+static u32 animation_frame;
+static void animate_window(int id) {
+    animation_started[id] = ticks;
+    animation_running[id] = !high_contrast;
+}
+static int animation_step(int mx, int my) {
+    u32 now = ticks;
+    if ((u32)(now - animation_frame) < 2) return 0;
+    animation_frame = now;
+    int changed = 0;
+    for (int i = 0; i < WINDOW_COUNT; i++)
+        if (animation_running[i]) changed = 1;
+    for (int i = 0; i < 4; i++) {
+        int x = 403 + i * 57;
+        int target = !high_contrast && mx >= x - 7 && mx < x + 43 &&
+                     my >= H - 88 && my < H - 31 ? 256 : 0;
+        int delta = target - dock_level[i];
+        if (delta) {
+            int step = delta / 3;
+            if (!step) step = delta;
+            dock_level[i] += step;
+            changed = 1;
+        }
+    }
+    return changed;
+}
 static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "Files"},
                             {177, 133, 640, 450, 0, 0, 0, 0, 0, 0, 0, "Settings"},
                             {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
@@ -582,6 +613,7 @@ static void notify(const char *s) {
     dirty = 1;
 }
 static void raise_window(int id) {
+    if (!windows[id].open || windows[id].min) animate_window(id);
     int at = 0;
     for (; at < WINDOW_COUNT && order[at] != id; at++)
         ;
@@ -1142,6 +1174,20 @@ static void settings(Window *w) {
         reference_right_label(cx + cw - 18, card_top + 190, "64-bit", ink);
         /* Device rename/Credits remain available beneath the card,
            outside the screenshot-specific component. */
+    } else if (settings_tab == 5) {
+        heading_text(cx, cy - 8, "System Update", ink);
+        ui_card(cx, cy + 44, cw, 150, 20, bg);
+        reference_text(cx + 18, cy + 57, "MayOS", ink, 1);
+        text(cx + 18, cy + 102, "Current: " MAYOS_RELEASE, muted);
+        text(cx + 18, cy + 128, "Architecture: x86_64", muted);
+        text(cx + 18, cy + 154, platform_kernel(), muted);
+        text(cx, cy + 215, "GitHub Releases", ink);
+        text(cx, cy + 244, "Online updater integration in development", muted);
+        text(cx, cy + 271, "Installation time: unavailable", muted);
+        text(cx, cy + 303, "Download", muted);
+        soft_roundrect(cx, cy + 329, cw, 5, 2, line);
+        text(cx, cy + 348, "Install: not available on this build", muted);
+        soft_roundrect(cx, cy + 377, cw, 5, 2, line);
     } else if (settings_tab == 1) {
         text(cx, cy, "PERSONALIZATION", accent);
         large_text(cx, cy + 26, "外观设置", ink);
@@ -1485,7 +1531,7 @@ static void taskbar(void) {
             soft_roundrect(x - 5, top + 5, 48, 54, 15,
                            active ? selected_fill : surface_high);
         int kind = id == 3 ? 3 : id;
-        symbol(x + 4, top + 15 - (hover ? 2 : 0), kind, 34, active ? ink : muted);
+        symbol(x + 4, top + 15 - dock_level[i] * 4 / 256, kind, 34, active ? ink : muted);
     }
 }
 /* Functional, keyboard-dismissable popovers are deliberately invisible
@@ -1670,6 +1716,10 @@ static void render(void) {
         Window *w = &windows[i];
         if (!w->open || w->min)
             continue;
+        u32 elapsed = ticks - animation_started[i];
+        if (high_contrast || elapsed >= 18) animation_running[i] = 0;
+        int fading = animation_running[i];
+        if (fading) memcpy(animation_underlay, pixels, sizeof(pixels));
         frame(i);
         if (i == 0)
             files_draw(w);
@@ -1681,6 +1731,14 @@ static void render(void) {
             editor_draw(w);
         else
             explorer_draw(w);
+        if (fading) {
+            u32 remaining = 18 - elapsed;
+            u32 alpha = 255 - remaining * remaining * 255 / (18 * 18);
+            /* Composite the complete rendered layer, including its shadow. */
+            for (int p = 0; p < W * H; p++)
+                if (pixels[p] != animation_underlay[p])
+                    pixels[p] = blend(animation_underlay[p], pixels[p], alpha);
+        }
     }
     taskbar();
     status_panel_draw();
@@ -2023,8 +2081,10 @@ static void left_click(void) {
             }
             if (rx < 188) {
                 int tab = (ry - 132) / 36;
-                if (ry >= 132 && tab >= 0 && tab < 7 && (ry - 132) % 36 < 34)
+                if (ry >= 132 && tab >= 0 && tab < 7 && (ry - 132) % 36 < 34) {
+                    if (settings_tab != tab) animate_window(1);
                     settings_tab = tab;
+                }
             }
             else if (settings_tab == 1) {
                 if (ry >= 220 && ry <= 382) {
@@ -2362,6 +2422,7 @@ void kernel_main(u32 magic, u32 info) {
             last = ticks / 50;
             dirty = 1;
         }
+        if (animation_step(mx, my)) dirty = 1;
         if (dirty)
             render();
         platform_idle();
