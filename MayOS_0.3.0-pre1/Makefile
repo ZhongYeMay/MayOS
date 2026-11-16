@@ -24,7 +24,7 @@ FS_POWERLOSS_SELFTEST ?= 0
 ifeq ($(FS_POWERLOSS_SELFTEST),1)
 CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
 endif
-OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/maydos_tools.o build/updater.o build/update_sha256.o build/update_bootplan.o
+OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/maydos_tools.o build/updater.o build/update_sha256.o build/update_bootplan.o build/update_store.o
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
@@ -59,6 +59,7 @@ build/update_catalog.h: scripts/make_update_catalog.py ../website/update-feed-v1
 build/updater.o: build/update_catalog.h kernel/updater.h kernel/update_sha256.h kernel/version.h
 build/update_sha256.o: kernel/update_sha256.h
 build/update_bootplan.o: kernel/update_bootplan.h
+build/update_store.o: kernel/update_store.h kernel/update_bootplan.h
 build/gui.o: kernel/updater.h kernel/updater_ui.inc build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/maydos_tools.h kernel/maydos_ui.inc
 build/core.o: kernel/framebuffer.h kernel/boot64.S
 build/galgame.o: kernel/galgame.h
