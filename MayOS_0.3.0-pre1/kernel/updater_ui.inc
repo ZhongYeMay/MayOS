@@ -8,7 +8,9 @@ static void updater_draw(int cx, int cy, int cw) {
     text(cx, cy + 51, "Installed: MayOS " MAYOS_RELEASE, muted);
 
     ui_card(cx, cy + 71, cw, 178, 20, surface_high);
-    text(cx + 16, cy + 83, "LATEST GITHUB RELEASE", muted);
+    text(cx + 16, cy + 83,
+         u->online_checked ? "GITHUB RELEASE / ONLINE" : "GITHUB RELEASE / SAVED",
+         muted);
     if (u->has_latest) {
         heading_text(cx + 16, cy + 106, u->latest.name, ink);
         text(cx + 16, cy + 136, u->latest.arch, muted);
@@ -30,7 +32,12 @@ static void updater_draw(int cx, int cy, int cw) {
 
     if (u->has_latest)
         titlebar_text(cx, cy + 258, u->latest.notes, cw - 7, muted);
-    text(cx, cy + 284, "Download (actual bytes)", ink);
+    text(cx, cy + 284, "Download / actual bytes", ink);
+    if (u->total && u->phase >= MAY_UPDATE_DOWNLOADING &&
+        u->phase <= MAY_UPDATE_VERIFIED) {
+        numtext(cx + cw - 67, cy + 284, may_updater_download_percent(), ink);
+        text(cx + cw - 42, cy + 284, "%", muted);
+    }
     rect(cx, cy + 304, cw, 6, line);
     if (u->phase == MAY_UPDATE_DOWNLOADING || u->phase == MAY_UPDATE_VERIFYING ||
         u->phase == MAY_UPDATE_VERIFIED)
@@ -38,10 +45,15 @@ static void updater_draw(int cx, int cy, int cw) {
     text(cx, cy + 318, "Installation (not available)", muted);
     rect(cx, cy + 338, cw, 5, line);
     /* No installer exists: never draw a fake positive install percentage. */
-    button(cx, cy + 345, 142, "检查 GitHub", 1);
+    button(cx, cy + 345, 142, "检查不可用", 0);
     button(cx + 162, cy + 345, 170, "安装不可用", 0);
     if (u->phase == MAY_UPDATE_OFFLINE)
-        text(cx, cy + 381, "本地发布记录 · 未进行在线检查", muted);
+        text(cx, cy + 381, "本地发布记录 · 未与 GitHub 实时连接", muted);
     else
         titlebar_text(cx, cy + 381, u->message, cw - 10, muted);
+    if (u->phase == MAY_UPDATE_DOWNLOADING && u->elapsed_seconds &&
+        u->transferred && u->transferred < u->total) {
+        text(cx, cy + 408, "Estimated download remaining (seconds):", muted);
+        numtext(cx + 321, cy + 408, may_updater_download_eta(), ink);
+    }
 }
