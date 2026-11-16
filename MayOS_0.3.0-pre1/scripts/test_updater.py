@@ -22,3 +22,12 @@ subprocess.run([
     "-o", str(BUILD / "updater-boot-test"),
 ], check=True)
 subprocess.run([str(BUILD / "updater-boot-test")], check=True)
+subprocess.run([
+    "gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+    "-DMAYOS_LINUX", "-I" + str(ROOT / "kernel"), "-I" + str(BUILD),
+    str(ROOT / "kernel/updater.c"), str(ROOT / "kernel/update_sha256.c"),
+    str(ROOT / "scripts/updater_linux_state_test.c"),
+    "-o", str(BUILD / "updater-linux-state-test"),
+], check=True)
+subprocess.run([str(BUILD / "updater-linux-state-test")], check=True)
+
