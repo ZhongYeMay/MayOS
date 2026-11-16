@@ -6,10 +6,10 @@
 - **版本界线：** `0.5.0-pre1-dev` 是 PR #12 中**未发布**的开发版本，概念视觉不能当作实机截图。页面继续保留 `0.4.1-pre2` 的真实 QEMU 历史截图与 ISO/MP4 下载链接。
 - 原生系统界面仍以实际 MayKernel QEMU 回归和截图为最终验收依据。网站不声称新版 Linux 双内核或实体机稳定性已验证。
 
-根据 2026-11-07 提供的草图实现三页静态站点：
+## 2026-11-17 · 新增完整版本更新日志\n- 新增 `changelog.html`：独立的 MayOS 版本历史页面，包含全部已发布正式版、预览版和源码发布，支持搜索、筛选、展开完整发布说明与直达 GitHub Release。\n- `changelog.js` 优先读取公开 GitHub Releases 接口（分页，最多 2000 条），加载失败时使用 `release-history.json` 历史快照，并明确告知可能延迟。\n- `release-history.json` 是结构化只读 JSON（`schema_version: 1`），可作为未来原生系统 Settings > Updates 的数据接入参考；目前不声称 MayKernel 已拥有 HTTPS 或在线更新能力。\n- 正式发布与开发分支严格区分；未发布的开发版单列显示。网页不伪造更新历史或发布附件。\n- 新增网站构建时的更新日志与站内链接完整性校验。\n\n根据 2026-11-07 提供的草图实现网站页面：
 - `index.html`：MayOS 字标、双内核介绍、开发进度。
 - `download.html`：源码与历史启动包、SHA-256 与复制按钮。
-- `demos.html`：历史 MayKernel / Linux 启动录像。
+- `demos.html`：历史 MayKernel / Linux 启动录像。\n- `changelog.html`：完整 GitHub Release 版本更新日志。
 
 共享 `style.css` 和 `site.js`，包含移动端布局、可持久化深浅主题、键盘焦点及复制失败提示。所有站内路径使用相对地址，兼容 `/MayOS/` 项目站点。
 

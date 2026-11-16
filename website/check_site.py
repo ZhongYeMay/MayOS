@@ -111,3 +111,25 @@ for asset in ("MayOS-0.4.1-pre2-MayKernel64-All-Functions.mp4",
               "MayOS-0.4.1-pre2-Linux64-All-Functions.mp4",
               "MayOS-0.4.1-pre2-desktop.png"):
     assert asset in (docs["demos.html"][1] + docs["index.html"][1]), asset
+
+# Changelog page is navigable from every existing page, including prereleases.
+assert "changelog.html" in docs
+for name in ("index.html", "download.html", "demos.html"):
+    assert 'href="changelog.html"' in docs[name][1], (name, "missing release notes navigation")
+assert 'id="release-list"' in docs["changelog.html"][1]
+assert 'id="log-search"' in docs["changelog.html"][1]
+assert 'data-filter="preview"' in docs["changelog.html"][1]
+assert 'src="changelog.js"' in docs["changelog.html"][1]
+history = json.loads((ROOT / "release-history.json").read_text(encoding="utf-8"))
+assert history["schema_version"] == 1
+assert history["repository"] == "ZhongYeMay/MayOS"
+assert len(history["releases"]) >= 10
+tags = [r["tag"] for r in history["releases"]]
+assert len(tags) == len(set(tags)), "duplicate release tag in snapshot"
+assert "v0.5.0-pre1" in tags and "v0.3.0" in tags, "historical release omitted"
+for entry in history["releases"]:
+    assert entry["name"] and entry["published_at"]
+    assert entry["url"] == "https://github.com/ZhongYeMay/MayOS/releases/tag/" + entry["tag"]
+    assert isinstance(entry["prerelease"], bool)
+    assert isinstance(entry["body"], str)
+print("PASS: all published release notes present, including prereleases; safe navigation")

@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "repository": "ZhongYeMay/MayOS",
+  "source": "https://github.com/ZhongYeMay/MayOS/releases",
+  "snapshot_date": "2026-11-17",
+  "description": "Published GitHub Releases, including prereleases and source-only previews. Unreleased branches are not releases.",
+  "releases": [
+    {
+      "tag": "v0.5.0-pre1",
+      "name": "MayOS 0.5.0-pre1 — premium monochrome UI, MayKernel64 + Linux64",
+      "published_at": "2026-11-14T10:19:40Z",
+      "prerelease": true,
+      "body": "# MayOS 0.5.0-pre1 — verified premium monochrome UI\n\nExperimental QEMU-tested preview, not a stable daily-use OS.\n\n- New native black/charcoal desktop, thin-outline windows, floating\n  Dock, antialiased rounded cards and redesigned About MayOS.\n- Native 64-bit MayKernel and Linux 7.3.1 dual-boot via BIOS/UEFI GRUB.\n- MayFS dual snapshots, cold-boot recovery, simulated QEMU power-cut\n  durability tests and disk-capacity protection.\n- Two genuine QEMU walkthroughs with iPhone-compatible H.264 Baseline\n  MP4 copies for easier streaming. Original recordings and their\n  SHA256 metadata are also retained.\n- Exactly built and validated ISO files, genuine screenshot, source\n  archive and SHA256SUMS for independent verification.\n\nQEMU testing does not mean physical-PC support or complete USB, GPU,\nNVMe, Wi-Fi, networking, Secure Boot or production filesystem safety.\nOnly use isolated test disks. Historical releases are not replaced.\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.5.0-pre1",
+      "assets_count": 11
+    },
+    {
+      "tag": "v0.4.1-pre2",
+      "name": "MayOS 0.4.1-pre2 — verified strict-reference UI, MayKernel64 / Linux64",
+      "published_at": "2026-11-12T17:44:38Z",
+      "prerelease": true,
+      "body": "# MayOS 0.4.1-pre2 — user's strict-reference desktop UI\n\nThe actual 1024×768 user-supplied screenshot, not a generic macOS\ntheme, is the visual specification. The previous native desktop layout\nwas restored and the original Google Material Symbols Rounded glyph\nrasterizer and layered MD3 window controls returned. Defaults are\nrestrained black/gray rather than purple. The 64-bit OS keeps its\nsettings, six optional accent choices, MayFS persistence, pointer\nsizes, square black/white and custom P3-image cursors.\n\nBoth ISOs are tested QEMU BIOS/UEFI builds of this exact commit:\n- MayKernel ELF64 x86_64 ISO.\n- MayKernel ELF64 + independent Linux 7.3.1 x86_64 dual ISO.\n\nRelease assets include exact QEMU framebuffer screenshots, two\nunedited real QEMU MP4 walkthroughs, machine-readable run metadata,\nsource code and SHA-256 checksums.\n\n**Limitations**: QEMU is verified, not arbitrary physical PCs.\nSecure Boot, IA32 UEFI, broad GPU/USB/NVMe drivers, modern HTTPS\nbrowser and general Wi-Fi hardware support are not guaranteed.\nDo not rely on this research OS for important data.\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.4.1-pre2",
+      "assets_count": 12
+    },
+    {
+      "tag": "v0.4.1-pre1",
+      "name": "MayOS 0.4.1-pre1 — native MayKernel64 / Linux x86_64",
+      "published_at": "2026-11-11T04:37:11Z",
+      "prerelease": true,
+      "body": "# MayOS 0.4.1-pre1 — MayKernel64\n\nThis preview contains a **genuine native x86_64 MayKernel ELF64**\nbuilt using a 32-bit Multiboot entry trampoline that switches the CPU\nto x86_64 long mode before executing its C core and original GUI.\n\n- **Dual-boot ISO:** MayKernel64 and independent Linux 7.3.1 x86_64.\n- **MayKernel ISO:** dedicated x86_64 native kernel with GUI and MayFS.\n- Legacy BIOS x64 and x64 UEFI tested with actual QEMU/OVMF boots.\n- PS/2 input, MayFS cold-boot data recovery and Linux isolation tested.\n- Initial 64 GiB identity-mapped physical address window for firmware\n  framebuffers; early allocator still limited to the first 128 MiB.\n- 32-bit-only CPUs no longer supported by MayKernel.\n\nCheck SHA-256 hashes before using either ISO. The matching source ZIP,\nQEMU screenshot and machine-readable test reports are attached.\n\n**Limits:** Secure Boot disabled; IA32 UEFI, ARM, physical PCs, general\nGPU/USB/NVMe/Wi-Fi drivers and arbitrary firmware have NOT been verified.\nThis is a research preview, not a production OS.\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.4.1-pre1",
+      "assets_count": 7
+    },
+    {
+      "tag": "v0.4.0-pre63",
+      "name": "MayOS 0.4.0-pre63 · source prerelease",
+      "published_at": "2026-11-11T02:55:37Z",
+      "prerelease": true,
+      "body": "## MayOS 0.4.0-pre63 · source prerelease\n\n**Source-only development snapshot. No newly verified bootable ISO is included.**\n\nx86/x64 boot compatibility update: 32-bit BIOS MayKernel, x64 BIOS/UEFI dual-kernel boot, CPU-aware Linux menu, firmware resolution fallback, shared RGB565/24/32 framebuffer scaling and conservative rescue entry. QEMU matrix and regular regressions passed. Device-driver expansion is deferred. Source-only prerelease; existing ISO files do not contain these changes.\n\nCommit: `b5c70adf1ad43fbbe025af1d75894680cadbf2bf`\n\nThe archive contains the source, scripts, website and notices. A formal release requires matching bootable artifacts, checksums and boot validation.\n\nMayOS Team 2023 - 2026.\nThis version of MayOS is for test use only.\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.4.0-pre63",
+      "assets_count": 2
+    },
+    {
+      "tag": "summer-letters-mayos-native-r1",
+      "name": "MayOS × 夏日未寄：双内核原生移植预览 r1",
+      "published_at": "2026-11-09T17:19:40Z",
+      "prerelease": true,
+      "body": "# 夏日未寄 — MayOS 双内核原生移植预览 r1\n\nBased on the exact tested **MayOS 0.4.0-pre9 development snapshot**.\nThis game-specific preview is **not** a replacement for the latest\nnumbered MayOS release.\n\n**Original game:** https://github.com/ZhongYeMay/galgame\n**MayOS source:** https://github.com/ZhongYeMay/MayOS\n\n- Native 1024x768 QEMU visual novel app for MayKernel x86 and\n  MayOS Linux 7.3.1 x86_64.\n- All 97 original story nodes, 3 routes, 6 standard endings.\n- All 12 original generated AI WebP backgrounds and character\n  expression images reproduced as native indexed framebuffer art.\n- Keyboard/mouse story choices, dialogue advance, gallery, backlog,\n  autoplay, 3 save/load slots and desktop launcher.\n- MayKernel: MayFS saves survive cold reboots with writable virtual disk.\n- Linux: saves remain available only within the current RAM session.\n- Successful real QEMU custom-kernel ISO tests, dual-kernel BIOS and\n  UEFI boots, and actual GUI game input/save verification on each kernel.\n- Bundled images are built into both ISO files and game does not need\n  a network connection at runtime.\n\n**Not included:** HTML/CSS/JS browser runtime, audio/BGM, animated\nweb transitions, optional mature epilogues or physical PC support.\nPreviews and tests run in QEMU, not on a real physical computer.\n\nAttachments include native MayKernel ISO, dual-kernel BIOS/UEFI ISO,\nauthentic QEMU screenshots for both kernels, exact tested source\narchive, source provenance manifest, porting notes and SHA256SUMS.\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/summer-letters-mayos-native-r1",
+      "assets_count": 8
+    },
+    {
+      "tag": "v0.4.0-pre7",
+      "name": "MayOS 0.4.0-pre7 · source prerelease",
+      "published_at": "2026-11-08T01:26:40Z",
+      "prerelease": true,
+      "body": "## MayOS 0.4.0-pre7 · source prerelease\n\n**Source-only development snapshot. No newly verified bootable ISO is included.**\n\nExplorer HTTP navigation: back/forward/reload, session bookmarks, bounded history and response scrolling. Includes query parameter handling, cancellation, monotonic timeout and repaired publication. Source only; pre3 ISO and videos retain their original verification scope.\n\nCommit: `85b8769a926657d90bd4e2467569f8479d3c1663`\n\nThe archive contains the source, scripts, website and notices. A formal release requires matching bootable artifacts, checksums and boot validation.\n\nMayOS Team 2023 - 2026.\nThis version of MayOS is for test use only.\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.4.0-pre7",
+      "assets_count": 2
+    },
+    {
+      "tag": "v0.4.0-pre3",
+      "name": "MayOS 0.4.0-pre3",
+      "published_at": "2026-11-07T17:14:43Z",
+      "prerelease": true,
+      "body": "# MayOS 0.4.0-pre3\n\nExperimental QEMU-only MayKernel / Linux 7.3.1 desktop preview.\n\n## Browser\n- Redesigned Material 3 browser with four independent tabs, native\n  top tabstrip, address bar, back/forward, reload and home.\n- Session bookmarks, HTTP reading mode, clickable HTML anchors,\n  UTF-8 text, in-page search, page scrolling and error messages.\n- Keyboard shortcuts: Ctrl+L/T/W/F/R.\n- MayKernel: experimental RTL8139 DHCP/IPv4/TCP/HTTP.\n- Linux: e1000 DHCP/DNS and IPv4 HTTP.\n\nBrowser limitations: This is a native HTTP HTML-to-text reader, not\nChromium/Firefox/WebKit. HTTPS/TLS, CSS layout, JavaScript execution,\nmedia playback, arbitrary modern websites and browser extensions\nare not implemented. HTTPS is refused, not insecurely downgraded.\n\n## Test results\nNative MayKernel browser integration and UI/disk/network regression;\nLinux and MayKernel BIOS/UEFI boot; and real full-feature QEMU\nrecordings must all pass before this preview becomes available.\n\nTwo ISO images, two downloadable real QEMU walkthrough MP4s, their\nJSON/ISO SHA-256 checksums, a screenshot and matching MayOS source are\nattached. Earlier GitHub Releases are unchanged.\n\nThis is a 1024x768 CPU framebuffer experiment, not suitable for\nnormal physical hardware or production use. Linux upstream and\nBusyBox source/attribution instructions are in the source archive.\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.4.0-pre3",
+      "assets_count": 9
+    },
+    {
+      "tag": "v0.4.0-pre2",
+      "name": "MayOS 0.4.0-pre2",
+      "published_at": "2026-11-07T15:48:57Z",
+      "prerelease": true,
+      "body": "# MayOS 0.4.0-pre2\n\nThis preview preserves the pre1 kernels and network features while\nrefining the native Material Design 3 desktop. Changes:\n- Windows-style white mouse pointer with dark outline and shadow.\n- Top-right system status is entirely icon-based; text navigation\n  remains on the left side of the menu bar.\n- Functional clock, network, brightness, notifications, power and\n  quick-settings entry points.\n- Refined grayscale window shadows/controls, Dock hover feedback,\n  application icons and desktop selection.\n- Twenty official Apache-licensed Material Symbols Rounded icons,\n  rasterized into the native kernel framebuffer at build time.\n\nGitHub Actions verified MayKernel GUI, cursor pixel output, disk\nisolation, DHCP/ARP/ICMP/DNS/TCP/HTTP, and both Linux 7.3.1 and\nMayKernel BIOS/UEFI QEMU boot modes. The ISO binaries and screenshot\nassets are copied from the exact successful validation run.\n\nExperimental QEMU x86/x86_64 operating system (1024x768 CPU framebuffer).\nNo audio mixer, Wi-Fi manager, HTTPS/TLS browser, GPU acceleration,\nSecure Boot or broad physical PC support. Linux session files are\ntemporary; MayKernel MayFS persists files.\n\nIncludes two ISO images, screenshots, source archive and SHA256SUMS.txt.\nThird-party source and license requirements are documented in\nMayOS_0.3.0-pre1/linux/README.md within the source archive.\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.4.0-pre2",
+      "assets_count": 11
+    },
+    {
+      "tag": "v0.4.0-pre1",
+      "name": "MayOS 0.4.0-pre1",
+      "published_at": "2026-11-07T15:30:55Z",
+      "prerelease": true,
+      "body": "# MayOS 0.4.0-pre1\n\nFirst verified 0.4.0 preview. Native Material 3 desktop with macOS-like\ntop menu and Dock, native Material Symbols Rounded icons, application\ndrawer, window overview, file management, notifications and quick settings.\n\nNative MayKernel RTL8139: DHCP, ARP, ICMP, DNS and limited TCP/HTTP text\npreview. Linux 7.3.1: Ethernet DHCP/DNS and HTTP text preview.\n\nValidated native GUI/network tests and Linux/MayKernel BIOS/UEFI QEMU\nboot tests from the exact source revision for this preview.\n\nExperimental QEMU system: 1024x768 CPU framebuffer, no Secure Boot,\nHTTPS, Wi-Fi manager, arbitrary physical hardware or audio mixer.\nLinux desktop files are RAM-only. Do not use on production devices.\n\nNative and dual-kernel ISO SHA-256 checksums are in SHA256SUMS.txt.\nProject source is attached. Third-party upstream kernel sources and\ncorresponding licenses are described in linux/README.md in the\nproject source tree.\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.4.0-pre1",
+      "assets_count": 5
+    },
+    {
+      "tag": "v0.3.0",
+      "name": "MayOS 0.3.0",
+      "published_at": "2026-11-07T12:24:09Z",
+      "prerelease": false,
+      "body": "# MayOS 0.3.0\nStable release candidate validated by GitHub Actions on Ubuntu 24.04.\n\n- Material Design 3-inspired shared desktop UI, tonal dark/light\n  themes, navigation, controls and locally drawn outline icons.\n- MayKernel x86 and Linux 7.3.1 x86_64 dual boot via GRUB.\n- Basic Linux Ethernet (QEMU e1000), DHCP, DNS, IP/route diagnostics\n  via MayShell `net` and limited `http://` text preview in Explorer.\n- BIOS and UEFI QEMU boot checks, GUI/input tests, and MayFS disk isolation.\n\n**Known limits:** No HTTPS/TLS browser, Wi-Fi manager or MayKernel\nTCP/IP stack. Secure Boot and physical hardware have not been validated.\nThis is still an experimental operating system; back up any important files.\n\nThe dual-boot ISO is the primary download. Check its SHA-256 against\n`SHA256SUMS.txt`. Historical Releases are preserved.\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.3.0",
+      "assets_count": 4
+    },
+    {
+      "tag": "v0.3.0-pre1-source.1",
+      "name": "MayOS 0.3.0-pre1 · source update 1 (no ISO)",
+      "published_at": "2026-11-01T10:45:06Z",
+      "prerelease": true,
+      "body": "## MayOS 0.3.0-pre1 · Source update 1 (development prerelease)\n\n**Source-only development snapshot. No updated bootable ISO or new QEMU recordings are included.**\n\nChanges since the historical MayOS 0.3.0-pre1 binary:\n- Ubuntu-like aubergine windows, orange controls and a less cartoonish interface.\n- Real Fastfetch executable integration for the Linux x86_64 boot environment.\n- Optimized native XRGB8888 scanline copying in the Linux framebuffer backend.\n- Updated responsive MayOS website source and corrected release documentation.\n- Old MayOS 0.1 / 0.2 files removed from the current working tree; history remains.\n\nExisting tests: MayKernel QEMU regression suite, Linux desktop build and real Fastfetch execution passed in the source CI. **The new Linux dual-boot ISO itself has NOT been built or boot-tested in this release.**\n\nThe archive contains the source code, scripts, website and notices. Read the build instructions in `MayOS_0.3.0-pre1/README.md`. Original Linux/GRUB/BusyBox third-party sources must be obtained/provided as documented when distributing a rebuilt ISO.\n\nMayOS Team 2023 - 2026.\nThis version of MayOS is for test use only.\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.3.0-pre1-source.1",
+      "assets_count": 2
+    }
+  ]
+}
