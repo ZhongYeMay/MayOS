@@ -2320,8 +2320,14 @@ static void left_click(void) {
                 }
             }
             else if (settings_tab == 5) {
-                if (inside(rx, ry, 205, 398, 142, 32)) {
-                    /* No fabricated online check or update installation. */
+                /* These coordinates match the three tabs DRAWN by updater_draw.
+                 * Window-relative hit regions, not absolute screen guesses. */
+                int updater_tab = updater_tab_at(rx, ry, w->w - 238);
+                if (updater_tab >= 0) {
+                    updater_view = updater_tab;
+                    serial("MayOS: Updates view changed\n");
+                } else if (updater_view == 2 &&
+                           inside(rx, ry, 217, 386, 176, 30)) {
                     may_updater_offline();
                     serial("MayOS: update online check unavailable, no network request made\n");
 #ifdef MAYOS_LINUX
@@ -2329,7 +2335,8 @@ static void left_click(void) {
 #else
                     notify("MayKernel 尚缺原生安全网络下载能力");
 #endif
-                } else if (inside(rx, ry, 367, 398, 170, 32)) {
+                } else if (updater_view == 2 &&
+                           inside(rx, ry, 403, 386, 176, 30)) {
                     serial("MayOS: update install blocked (no A/B verified rollback)\n");
                     notify("没有 A/B 可回退安装器；禁止覆盖启动盘");
                 }
