@@ -61,7 +61,13 @@ jobs:
             linux/fetch.c linux/update_transport.c \
             $(pkg-config --cflags --libs libcurl) -o /tmp/mayos-update-check-worker
           /tmp/mayos-update-check-worker --capabilities
-          test "$(/tmp/mayos-update-check-worker --mayos-update-invalid 2>/dev/null || true)" = "E|Unsupported system update request"
+          set +e
+          got="$(/tmp/mayos-update-check-worker --mayos-update-invalid 2>&1)"
+          code=$?
+          set -e
+          printf 'Invalid-update request: exit=%s output=%s\n' "$code" "$got"
+          test "$code" -eq 2
+          test "$got" = "E|Unsupported system update request"
       - name: Dry-run website release promotion before any publishing
         run: |
           python3 scripts/promote_strict_ui_release_website.py
