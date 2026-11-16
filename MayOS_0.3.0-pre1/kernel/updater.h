@@ -56,6 +56,12 @@ void may_updater_offline(void);
 #ifdef MAYOS_LINUX
 int platform_update_check_start(void);
 int platform_update_check_poll(void);
+int platform_update_download_start(void);
+int may_updater_linux_begin(void);
+int may_updater_linux_progress(unsigned long long bytes, unsigned long long total,
+                                unsigned int elapsed_seconds);
+void may_updater_linux_verifying(void);
+int may_updater_linux_verified(void);
 #endif
 const char *may_updater_current_version(void);
 int may_updater_compare(const char *a, const char *b);

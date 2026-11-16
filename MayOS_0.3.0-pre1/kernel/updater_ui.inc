@@ -134,7 +134,15 @@ static void updater_progress_view(int cx, int cy, int cw, const MayUpdaterState 
     text(cx + 24, cy + 339, "Check unavailable", muted);
 #endif
     ui_card(cx + 198, cy + 333, 176, 30, 10, surface_high);
+#ifdef MAYOS_LINUX
+    text(cx + 210, cy + 339,
+         u->online_checked && u->has_upgrade &&
+         u->phase == MAY_UPDATE_AVAILABLE ? "Download ISO" : "Install disabled",
+         u->online_checked && u->has_upgrade &&
+         u->phase == MAY_UPDATE_AVAILABLE ? ink : muted);
+#else
     text(cx + 210, cy + 339, "Install disabled", muted);
+#endif
     if (u->phase == MAY_UPDATE_FAILED)
         titlebar_text(cx + 2, cy + 374, u->message, cw - 6, muted);
     else

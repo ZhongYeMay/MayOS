@@ -275,6 +275,54 @@ void may_updater_failed(const char *message) {
     state.verified = 0;
     copy_to(state.message, sizeof(state.message), message ? message : "Update failed");
 }
+#ifdef MAYOS_LINUX
+/* The Linux worker streams and SHA-256-verifies downloaded bytes on disk.
+ * These callbacks only reflect a trusted local worker protocol; they cannot
+ * perform any installation. The custom MayKernel uses stream_chunk instead. */
+int may_updater_linux_begin(void) {
+    if (!state.online_checked || !state.has_upgrade ||
+        state.phase != MAY_UPDATE_AVAILABLE || !state.has_latest ||
+        !valid_sha(state.latest.sha256)) return 0;
+    state.phase = MAY_UPDATE_DOWNLOADING;
+    state.transferred = 0;
+    state.total = state.latest.bytes;
+    state.elapsed_seconds = 0;
+    state.verified = 0;
+    copy_to(state.message, sizeof(state.message), "Downloading ISO to an isolated staging directory");
+    return 1;
+}
+int may_updater_linux_progress(unsigned long long bytes, unsigned long long total,
+                               unsigned int elapsed_seconds) {
+    if (state.phase != MAY_UPDATE_DOWNLOADING ||
+        total != state.total || !total ||
+        bytes < state.transferred || bytes > total) {
+        may_updater_failed("Unexpected downloaded-byte progress");
+        return 0;
+    }
+    state.transferred = bytes;
+    state.elapsed_seconds = elapsed_seconds;
+    return 1;
+}
+void may_updater_linux_verifying(void) {
+    if (state.phase != MAY_UPDATE_DOWNLOADING || !state.total ||
+        state.transferred != state.total) {
+        may_updater_failed("Incomplete ISO before SHA-256 verification");
+        return;
+    }
+    state.phase = MAY_UPDATE_VERIFYING;
+    copy_to(state.message, sizeof(state.message), "Verifying ISO digest on temporary storage");
+}
+int may_updater_linux_verified(void) {
+    if (state.phase != MAY_UPDATE_VERIFYING ||
+        state.transferred != state.total || !state.total)
+        return 0;
+    state.verified = 1;
+    state.phase = MAY_UPDATE_VERIFIED;
+    copy_to(state.message, sizeof(state.message),
+            "Verified temporary ISO; safe installer not implemented");
+    return 1;
+}
+#endif
 unsigned int may_updater_download_percent(void) {
     if (!state.total) return 0;
     return (unsigned int)(state.transferred * 100u / state.total);
