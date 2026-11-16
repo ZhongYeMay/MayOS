@@ -86,8 +86,8 @@ def main():
         vm.cmd('mv persist.txt saved.txt');vm.wait('Renamed')
         vm.cmd('touch delete.txt');vm.cmd('rm delete.txt');vm.wait('Moved to Trash')
         # Use the actual emulated mouse, GUI modal, editor and Ctrl-S.
-        vm.click(403,710);vm.shot('files')
-        vm.click(370,212);vm.type('gui.txt\n');time.sleep(.3);vm.key('ret');time.sleep(.2)
+        vm.click(514,674);vm.shot('files')
+        vm.click(479,212);vm.type('gui.txt\n');time.sleep(.3);vm.key('ret');time.sleep(.2)
         vm.type('GUI-PERSIST');vm.key('ctrl-s');time.sleep(.4);vm.shot('editor')
         data=entries(disk)
         assert data['gui.txt'][3]=='GUI-PERSIST',f'GUI editor did not save: {data.get("gui.txt")}'

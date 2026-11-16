@@ -59,22 +59,22 @@ def record(args):
         vm.hold(2.2)
         actions += ["Settings_reference", "Settings_navigation", "About_MayOS"]
         # In the exact screenshot's top bar, every icon has a real native panel.
-        for x, label in ((777, "network_status_panel"),
-                         (816, "notifications_panel"),
-                         (855, "power_menu")):
+        for x, label in ((986, "network_status_panel"),
+                         (1025, "notifications_panel"),
+                         (1064, "power_menu")):
             vm.click(x, 21)
             vm.hold(.85)
             vm.key("esc")
             vm.hold(.2)
             actions.append(label)
 
-        vm.click(403, 710)                 # Files from the four-icon Dock
+        vm.click(514, 674)                 # Files from the four-icon Dock
         vm.hold(1.3)
-        vm.click(490, 212)                 # new folder modal
+        vm.click(599, 212)                 # new folder modal
         vm.command("RecordedTour")
         vm.hold(1.1)
         actions.append("file_manager_create_folder")
-        vm.click(370, 212)                 # new text file / editor
+        vm.click(479, 212)                 # new text file / editor
         vm.command("recorded.txt")
         vm.hold(1)
         actions.append("new_text_file_dialog")
