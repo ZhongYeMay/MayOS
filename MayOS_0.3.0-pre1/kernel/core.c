@@ -84,6 +84,7 @@ volatile u32 ticks;
 u32 memory_mb, free_pages;
 char cpu_name[64];
 static MaySurface display;
+static int display_scale_mode;
 static u8 pages[32768];
 static u32 page_count;
 extern char kernel_end;
@@ -416,7 +417,20 @@ void hardware_init(u32 magic, u32 info) {
     serial("MayOS: framebuffer, memory, PIT and PS/2 ready\n");
 }
 void present(u32 *p) {
-    surface_present(&display, p);
+    surface_present(&display, p, display_scale_mode);
+}
+void display_set_scale_mode(int mode) {
+    if (mode >= 0 && mode <= 3) display_scale_mode = mode;
+}
+void display_get_info(MayDisplayInfo *info) {
+    info->width = display.width; info->height = display.height; info->bpp = display.bpp;
+    info->refresh_hz = 0; info->refresh_known = 0; info->scale_mode = display_scale_mode;
+    u32 horizontal = display.width * 100 / W;
+    u32 vertical = display.height * 100 / H;
+    info->scale_percent = horizontal < vertical ? horizontal : vertical;
+    if (display_scale_mode == 1) info->scale_percent = 100;
+    if (display_scale_mode == 3)
+        info->scale_percent = horizontal > vertical ? horizontal : vertical;
 }
 void poweroff(void) {
     serial("MayOS: power off\n");

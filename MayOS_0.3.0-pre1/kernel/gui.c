@@ -98,9 +98,12 @@ static int cursor_image_load(int create_sample) {
 }
 #define MAYOS_PREFS_MAGIC 0x4d505246u
 static void preferences_save(void) {
+    MayDisplayInfo display_info;
+    display_get_info(&display_info);
     u32 raw[8] = {MAYOS_PREFS_MAGIC, (u32)dark, (u32)accent_choice,
                   (u32)desktop_style, (u32)pointer_size, (u32)show_brand,
-                  (u32)high_contrast | ((u32)cursor_style << 8), 1};
+                  (u32)high_contrast | ((u32)cursor_style << 8) |
+                      ((u32)display_info.scale_mode << 16), 1};
     /* Linux and diskless MayKernel keep the new values for this session. */
     fs_prefs_write((const u8 *)raw, sizeof(raw));
 }
@@ -108,7 +111,7 @@ static void preferences_load(void) {
     u32 raw[8];
     if (!fs_prefs_read((u8 *)raw, sizeof(raw)) || raw[0] != MAYOS_PREFS_MAGIC ||
         raw[7] != 1 || raw[1] > 1 || raw[2] >= 6 || raw[3] >= 3 ||
-        raw[4] >= 3 || raw[5] > 1 || (raw[6] & ~0x301u) != 0 ||
+        raw[4] >= 3 || raw[5] > 1 || (raw[6] & ~0x30301u) != 0 ||
         ((raw[6] >> 8) & 3u) >= 3)
         return;
     dark = (int)raw[1];
@@ -118,6 +121,7 @@ static void preferences_load(void) {
     show_brand = (int)raw[5];
     high_contrast = (int)(raw[6] & 1u);
     cursor_style = (int)((raw[6] >> 8) & 3u);
+    display_set_scale_mode((int)((raw[6] >> 16) & 3u));
     if (cursor_style == 2 && !cursor_image_load(0)) {
         cursor_style = 0;
         serial("MayOS: invalid custom pointer; using black square\n");
@@ -132,6 +136,7 @@ static void preferences_reset(void) {
     cursor_style = 0;
     show_brand = 1;
     high_contrast = 0;
+    display_set_scale_mode(0);
     preferences_save();
 }
 static void rect(int x, int y, int w, int h, u32 c) {
@@ -1188,34 +1193,35 @@ static void settings(Window *w) {
         text(cx, cy + 348, "Install: not available on this build", muted);
         soft_roundrect(cx, cy + 377, cw, 5, 2, line);
     } else if (settings_tab == 1) {
-        text(cx, cy, "PERSONALIZATION", accent);
-        large_text(cx, cy + 26, "外观设置", ink);
-        text(cx, cy + 76, "调整窗口与主题色，工作区始终保持清晰。", muted);
-        text(cx, cy + 120, "窗口外观", ink);
-        for (int i = 0; i < 2; i++) {
-            int xx = cx + i * 236;
-            roundrect(xx, cy + 155, 216, 128, i ? 0x101013 : 0xededee);
-            roundrect(xx + 18, cy + 171, 180, 87, i ? 0x171719 : 0xffffff);
-            rect(xx + 18, cy + 171, 180, 19, i ? 0x242427 : 0xe4e4e6);
-            rect(xx + 18, cy + 190, 40, 68, i ? 0x0c0c0e : 0xf8f8f9);
-            rect(xx + 71, cy + 208, 90, 4, i ? 0x6c6c72 : 0xc0c0c7);
-            rect(xx + 71, cy + 222, 111, 4, i ? 0x404045 : 0xd8d8de);
-            text(xx, cy + 297, i ? "深色 / Dark" : "浅色 / Light", ink);
-            if (dark == i) {
-                circle(xx + 201, cy + 306, 8, accent);
-                circle(xx + 201, cy + 306, 3, dark ? 0x13232b : 0xffffff);
-            }
+        MayDisplayInfo info;
+        display_get_info(&info);
+        heading_text(cx, cy - 8, "Display", ink);
+        ui_card(cx, cy + 40, cw, 116, 18, bg);
+        symbol(cx + 18, cy + 59, 11, 28, ink);
+        text(cx + 62, cy + 57, "Built-in Display", ink);
+        numtext(cx + 62, cy + 84, info.width, muted);
+        int after_width = cx + 62 + 8 * 4;
+        text(after_width, cy + 84, " x ", muted);
+        numtext(after_width + 24, cy + 84, info.height, muted);
+        numtext(cx + cw - 100, cy + 84, info.bpp, muted);
+        text(cx + cw - 68, cy + 84, "-bit", muted);
+        text(cx + 18, cy + 123, "Refresh rate", muted);
+        if (info.refresh_known) {
+            numtext(cx + cw - 82, cy + 123, info.refresh_hz, ink);
+            text(cx + cw - 50, cy + 123, "Hz", ink);
+        } else {
+            text(cx + cw - 148, cy + 123, "Firmware managed", muted);
         }
-        text(cx, cy + 353, "主题色 / Accent", ink);
-        u32 colors[] = {0xe2e2e7, 0x80d5ce, 0xafc6ff, 0xffb4a6, 0xf5ca6e, 0xcba9f8};
-        for (int i = 0; i < 6; i++) {
-            circle(cx + 19 + i * 64, cy + 410, 18, colors[i]);
-            if (accent_choice == i)
-                circle(cx + 19 + i * 64, cy + 410, 6, 0xffffff);
-        }
-        text(cx, cy + 474, "文本与边框对比度", ink);
-        button(cx, cy + 505, 118, "标准", !high_contrast);
-        button(cx + 132, cy + 505, 118, "高对比", high_contrast);
+        text(cx, cy + 178, "Display scaling", ink);
+        const char *modes[] = {"Auto", "100%", "Fit", "Fill"};
+        for (int i = 0; i < 4; i++)
+            button(cx + i * 132, cy + 205, 122, modes[i], info.scale_mode == i);
+        text(cx, cy + 252, "Effective scale", muted);
+        numtext(cx + 120, cy + 252, info.scale_percent, ink);
+        text(cx + 152, cy + 252, "%", ink);
+        text(cx, cy + 286, "Auto keeps the desktop readable without stretching.", muted);
+        text(cx, cy + 315, "Resolution is selected by GRUB/firmware at boot.", muted);
+        text(cx, cy + 342, "MayOS never invents an unsupported refresh rate.", muted);
     } else if (settings_tab == 2) {
         text(cx, cy, "STORAGE / SESSION", accent);
         large_text(cx, cy + 26, "存储空间", ink);
@@ -2086,24 +2092,13 @@ static void left_click(void) {
                 }
             }
             else if (settings_tab == 1) {
-                if (ry >= 220 && ry <= 382) {
-                    if (rx >= 204 && rx < 420) {
-                        dark = 0;
-                        preferences_save();
-                    } else if (rx >= 440 && rx < 656) {
-                        dark = 1;
-                        preferences_save();
+                if (ry >= 258 && ry < 290 && rx >= 264 && rx < 792) {
+                    int mode = (rx - 264) / 132;
+                    if (mode >= 0 && mode < 4) {
+                        display_set_scale_mode(mode);
+                        serial("MayOS: display scaling changed\n");
+                        dirty = 1;
                     }
-                }
-                if (ry >= 457 && ry <= 493 && rx >= 204) {
-                    int i = (rx - 204) / 64;
-                    if (i >= 0 && i < 6) {
-                        accent_choice = i;
-                        preferences_save();
-                    }
-                }
-                if (ry >= 570 && ry < 602 && rx >= 204 && rx < 468) {
-                    high_contrast = rx >= 336;
                     preferences_save();
                 }
             } else if (settings_tab == 4) {

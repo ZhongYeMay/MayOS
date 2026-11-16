@@ -25,7 +25,7 @@ static void run(u32 width, u32 height, u32 bpp, int bgr) {
         .blue=bpp == 16 ? 0 : (bgr ? 16 : 0), .blue_bits=bpp == 16 ? 5 : 8};
     assert(surface_valid(&s, capacity));
     assert(!surface_valid(&s, (u64)height * stride));
-    surface_present(&s, pixels);
+    surface_present(&s, pixels, 0);
     u32 expected = ((1U << s.red_bits) - 1) << s.red;
     u32 dw = width, dh = width * H / W;
     if (dh > height) { dh = height; dw = dh * W / H; }

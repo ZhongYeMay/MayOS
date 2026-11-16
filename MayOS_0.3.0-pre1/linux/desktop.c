@@ -49,6 +49,7 @@ static size_t framebuffer_size;
 static struct fb_fix_screeninfo fixed;
 static struct fb_var_screeninfo variable;
 static MaySurface display;
+static int display_scale_mode;
 static struct pollfd inputs[32];
 static int input_count;
 static struct timespec started;
@@ -320,10 +321,10 @@ void hardware_init(u32 magic, u32 info) {
 }
 
 void present(u32 *pixels) {
-    if (display.width != W || display.height != H || display.bpp != 32 ||
+    if (display_scale_mode != 0 || display.width != W || display.height != H || display.bpp != 32 ||
         display.red_bits != 8 || display.green_bits != 8 || display.blue_bits != 8 ||
         (display.alpha_bits && display.alpha_bits != 8)) {
-        surface_present(&display, pixels);
+        surface_present(&display, pixels, display_scale_mode);
         return;
     }
     u32 x_origin = variable.xoffset + (variable.xres - W) / 2;
@@ -358,6 +359,26 @@ void present(u32 *pixels) {
                              ((color & 255) << variable.blue.offset) | alpha;
         }
     }
+}
+
+void display_set_scale_mode(int mode) {
+    if (mode >= 0 && mode <= 3) display_scale_mode = mode;
+}
+
+void display_get_info(MayDisplayInfo *info) {
+    info->width = display.width; info->height = display.height; info->bpp = display.bpp;
+    info->scale_mode = display_scale_mode;
+    u32 horizontal = display.width * 100 / W;
+    u32 vertical = display.height * 100 / H;
+    info->scale_percent = horizontal < vertical ? horizontal : vertical;
+    if (display_scale_mode == 1) info->scale_percent = 100;
+    if (display_scale_mode == 3)
+        info->scale_percent = horizontal > vertical ? horizontal : vertical;
+    u64 total_x = (u64)variable.xres + variable.left_margin + variable.right_margin + variable.hsync_len;
+    u64 total_y = (u64)variable.yres + variable.upper_margin + variable.lower_margin + variable.vsync_len;
+    info->refresh_known = variable.pixclock && total_x && total_y;
+    info->refresh_hz = info->refresh_known
+        ? (u32)(1000000000000ULL / ((u64)variable.pixclock * total_x * total_y)) : 0;
 }
 
 static int keycode(unsigned int code, int value) {

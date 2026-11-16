@@ -24,7 +24,19 @@ def main():
         stream.truncate(8 * 1024 * 1024)
     capture(disk, 'settings-reference-first-boot')
     capture(disk, 'settings-reference-cold-boot')
-    print('PASS: reference Settings layout renders after a MayFS cold boot', flush=True)
+    vm = VM(disk, 'settings-display-controls')
+    try:
+        vm.click(50, 16)
+        vm.click(330, 301)  # Display in the native 1280x720 sidebar.
+        vm.shot('settings-display-auto')
+        vm.click(817, 386)  # Fit scaling.
+        vm.wait('MayOS: display scaling changed')
+        vm.shot('settings-display-fit')
+        vm.click(553, 386)  # Restore automatic matching.
+        vm.shot('settings-display-restored')
+    finally:
+        vm.stop()
+    print('PASS: Settings layout, detected display details and live scaling controls', flush=True)
 
 
 if __name__ == '__main__':

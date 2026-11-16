@@ -29,8 +29,9 @@ static int surface_valid(const MaySurface *s, u64 capacity) {
 static u32 surface_channel(u32 value, u32 bits, u32 shift) {
     return ((value * ((1U << bits) - 1) + 127) / 255) << shift;
 }
-static void surface_present(const MaySurface *s, const u32 *pixels) {
-    if (s->width == W && s->height == H && s->bpp == 32 &&
+static void surface_present(const MaySurface *s, const u32 *pixels, int scale_mode) {
+    if ((scale_mode == 0 || scale_mode == 2) &&
+        s->width == W && s->height == H && s->bpp == 32 &&
         s->red_bits == 8 && s->red == 16 && s->green_bits == 8 && s->green == 8 &&
         s->blue_bits == 8 && s->blue == 0 &&
         (!s->alpha_bits || (s->alpha_bits == 8 && s->alpha == 24))) {
@@ -41,12 +42,28 @@ static void surface_present(const MaySurface *s, const u32 *pixels) {
         }
         return;
     }
-    u32 dw = s->width, dh = dw * H / W;
-    if (dh > s->height) { dh = s->height; dw = dh * W / H; }
-    u32 left = (s->width - dw) / 2, top = (s->height - dh) / 2, bytes = s->bpp / 8;
+    u32 dw, dh;
+    if (scale_mode == 1) {
+        dw = W; dh = H;
+    } else if (scale_mode == 3) {
+        dw = s->width; dh = dw * H / W;
+        if (dh < s->height) { dh = s->height; dw = dh * W / H; }
+    } else {
+        dw = s->width; dh = dw * H / W;
+        if (dh > s->height) { dh = s->height; dw = dh * W / H; }
+    }
+    i32 left = ((i32)s->width - (i32)dw) / 2;
+    i32 top = ((i32)s->height - (i32)dh) / 2;
+    u32 bytes = s->bpp / 8;
     static u32 xmap[16384], ymap[16384];
-    for (u32 x = 0; x < s->width; x++) xmap[x] = x < left || x >= left + dw ? 0xffffffffU : (x - left) * W / dw;
-    for (u32 y = 0; y < s->height; y++) ymap[y] = y < top || y >= top + dh ? 0xffffffffU : (y - top) * H / dh * W;
+    for (u32 x = 0; x < s->width; x++) {
+        i32 relative = (i32)x - left;
+        xmap[x] = relative < 0 || (u32)relative >= dw ? 0xffffffffU : (u32)relative * W / dw;
+    }
+    for (u32 y = 0; y < s->height; y++) {
+        i32 relative = (i32)y - top;
+        ymap[y] = relative < 0 || (u32)relative >= dh ? 0xffffffffU : (u32)relative * H / dh * W;
+    }
     for (u32 y = 0; y < s->height; y++) {
         u8 *row = s->data + (s->yoffset + y) * s->pitch + s->xoffset * bytes;
         for (u32 x = 0; x < s->width; x++) {

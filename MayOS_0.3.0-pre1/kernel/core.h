@@ -51,6 +51,12 @@ void poweroff(void);
 void reboot(void);
 void present(u32 *);
 typedef struct {
+    u32 width, height, bpp, refresh_hz, scale_percent;
+    int refresh_known, scale_mode;
+} MayDisplayInfo;
+void display_get_info(MayDisplayInfo *);
+void display_set_scale_mode(int);
+typedef struct {
     u32 used, dir, parent, size;
     char name[48];
     u8 data[FILE_CAP];
