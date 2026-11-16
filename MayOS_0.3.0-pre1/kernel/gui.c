@@ -9,6 +9,7 @@
 #include "explorer_history.h"
 #endif
 #include "version.h"
+#include "maydos_tools.h"
 #define MAYOS_RELEASE MAYOS_VERSION
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
@@ -531,6 +532,38 @@ static void symbol(int x, int y, int kind, int size, u32 c) {
         rect(cx - 3, cy - size / 3 - 1, 6, size / 4,
              dark ? 0x211f23 : 0xf6f6f8);
         stroke(cx, cy - size / 3 - 2, cx, cy, 2, c);
+    } else if (kind == 23) {
+        /* Calculator: native outline, no incorrect clock glyph. */
+        int lx = x + size / 5, ly = y + size / 8;
+        int ww = size * 3 / 5, hh = size * 3 / 4;
+        stroke(lx, ly, lx + ww, ly, thick, c);
+        stroke(lx, ly, lx, ly + hh, thick, c);
+        stroke(lx + ww, ly, lx + ww, ly + hh, thick, c);
+        stroke(lx, ly + hh, lx + ww, ly + hh, thick, c);
+        rect(lx + 4, ly + 5, ww - 8, 3, c);
+        for (int row = 0; row < 2; ++row)
+            for (int col = 0; col < 2; ++col)
+                rect(lx + 5 + col * (ww / 2 - 2),
+                     ly + hh / 2 + row * 7, 4, 4, c);
+    } else if (kind == 24) {
+        /* Minesweeper: gridded playfield and one marked square. */
+        int x0 = x + size / 6, y0 = y + size / 6, cell = size / 5;
+        for (int row = 0; row < 3; ++row)
+            for (int col = 0; col < 3; ++col) {
+                int px = x0 + col * (cell + 2);
+                int py = y0 + row * (cell + 2);
+                stroke(px, py, px + cell, py, 1, c);
+                stroke(px, py, px, py + cell, 1, c);
+                stroke(px + cell, py, px + cell, py + cell, 1, c);
+                stroke(px, py + cell, px + cell, py + cell, 1, c);
+                if (row == 1 && col == 1)
+                    circle(px + cell / 2, py + cell / 2, 2, c);
+            }
+    } else if (kind == 25) {
+        /* Extensions: a file tile with a simple addition mark. */
+        document_symbol(x, y, size, c);
+        stroke(cx - 6, cy + 1, cx + 6, cy + 1, 2, c);
+        stroke(cx, cy - 5, cx, cy + 7, 2, c);
     }
 }
 static void icon(int x, int y, int kind, int size) {
@@ -545,13 +578,19 @@ typedef struct {
     int x, y, w, h, open, min, max, ox, oy, ow, oh;
     const char *title;
 } Window;
-#define WINDOW_COUNT 5
+#define WINDOW_COUNT 8
 static Window windows[WINDOW_COUNT] = {{166, 100, 730, 510, 0, 0, 0, 0, 0, 0, 0, "Files"},
                             {177, 133, 640, 450, 0, 0, 0, 0, 0, 0, 0, "Settings"},
-                            {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
-                            {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
-                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
-static int order[WINDOW_COUNT] = {0, 2, 3, 4, 1}, focus = 1, dirty = 1;
+                            {190, 150, 700, 448, 0, 0, 0, 0, 0, 0, 0, "Terminal"},
+                            {240, 130, 650, 490, 0, 0, 0, 0, 0, 0, 0, "Editor"},
+                            {180, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "Explorer"},
+                            {287, 125, 450, 510, 0, 0, 0, 0, 0, 0, 0, "Calculator"},
+                            {122, 88, 780, 590, 0, 0, 0, 0, 0, 0, 0, "Minesweeper"},
+                            {222, 144, 590, 504, 0, 0, 0, 0, 0, 0, 0, "Extensions"}};
+static int order[WINDOW_COUNT] = {0, 2, 3, 4, 5, 6, 7, 1}, focus = 1, dirty = 1;
+/* A monotonically increasing launch sequence gives the Dock true app-open order.
+ * It is independent of Z-order, which changes every time a window is focused. */
+static u32 dock_launch[WINDOW_COUNT], dock_next_launch;
 static int mx = 530, my = 390, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
            cut = 0, settings_tab = 6;
@@ -581,10 +620,38 @@ static void notify(const char *s) {
     notice_until = ticks + 350;
     dirty = 1;
 }
+static void focus_visible_window(void) {
+    focus = -1;
+    for (int k = WINDOW_COUNT - 1; k >= 0; --k) {
+        int id = order[k];
+        if (windows[id].open && !windows[id].min) {
+            focus = id;
+            break;
+        }
+    }
+}
+static void minimize_window(int id) {
+    if (id < 0 || id >= WINDOW_COUNT || !windows[id].open) return;
+    windows[id].min = 1;
+    focus_visible_window();
+    dirty = 1;
+}
+static void close_window(int id) {
+    if (id < 0 || id >= WINDOW_COUNT) return;
+    windows[id].open = 0;
+    windows[id].min = 0;
+    dock_launch[id] = 0;  /* closed transient apps disappear automatically */
+    focus_visible_window();
+    dirty = 1;
+}
 static void raise_window(int id) {
+    if (id < 0 || id >= WINDOW_COUNT) return;
+    if (!windows[id].open && id >= 3)
+        dock_launch[id] = ++dock_next_launch;
     int at = 0;
     for (; at < WINDOW_COUNT && order[at] != id; at++)
         ;
+    if (at == WINDOW_COUNT) return; /* never corrupt stacking order */
     for (int i = at; i < WINDOW_COUNT - 1; i++)
         order[i] = order[i + 1];
     order[WINDOW_COUNT - 1] = id;
@@ -695,6 +762,18 @@ static int sync_notice(void) {
 #endif
     return ok;
 }
+/* Native GUI and legacy DOS utility adapters; shared in both boot modes. */
+#include "maydos_ui.inc"
+static void open_file(int i);
+static int md_parse_int(const char *p) {
+    int n = 0;
+    if (!p || !*p) return -1;
+    while (*p) {
+        if (*p < '0' || *p > '9' || n > 10000) return -1;
+        n = n * 10 + *p++ - '0';
+    }
+    return n;
+}
 static void shell(void) {
     char full[200] = "may@mayos:~ $ ";
     copy(full + 14, command, 186);
@@ -721,15 +800,95 @@ static void shell(void) {
     if (!argc)
         return;
     char *c = argv[0];
+    /* MayDOS 1.0 commands were case-insensitive; normalize the command only. */
+    for (char *p = c; *p; ++p)
+        if (*p >= 'A' && *p <= 'Z') *p = (char)(*p - 'A' + 'a');
     int target = argc > 1 ? resolve(argv[1], cwd) : -1;
-    if (!strcmp(c, "help")) {
+    if (!strcmp(c, "help") || !strcmp(c, "usebook")) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
         emit("theme light|dark  net status  reboot  shutdown");
+        emit("MayOS legacy commands (MayDOS): calc [expression]  minesweeper [easy|medium|expert]");
+        emit("mine <row> <col>  flag <row> <col>  notepad [dos|gui]");
+        emit("usebook  sysver  cls  apps  add [file]  list  del <file>  shut confirm");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
-    } else if (!strcmp(c, "clear"))
+    } else if (!strcmp(c, "clear") || !strcmp(c, "cls"))
         out_count = 0;
+    else if (!strcmp(c, "sysver")) {
+        emit("MayOS " MAYOS_RELEASE " / " PLATFORM_SHORT);
+        emit("Legacy tools: MayDOS 1.0.0 compatibility / native x86_64");
+    } else if (!strcmp(c, "calc")) {
+        if (!command[4]) { raise_window(5); }
+        else {
+            char result[64];
+            if (md_calc_eval(command + 4, result, sizeof(result))) {
+                emit("Result:"); emit(result);
+            } else { emit("Calculator error:"); emit(result); }
+        }
+    } else if (!strcmp(c, "notepad")) {
+        if (argc >= 2 && !strcmp(argv[1], "dos")) {
+            emit("MayOS Notes CLI: cat <file>, write <file> <text>, ls, save");
+        } else {
+            int note = argc >= 3 && !strcmp(argv[1], "gui") ? resolve(argv[2], cwd) :
+                       argc >= 2 && strcmp(argv[1], "gui") ? target : fs_find(2, "Notes.txt");
+            if (note >= 0 && !files[note].dir) open_file(note);
+            else emit("notepad: file not found; create it with touch <file>");
+        }
+    } else if (!strcmp(c, "minesweeper")) {
+        int mode = 0, rows = 0, cols = 0, mines = 0;
+        if (argc < 2 || !strcmp(argv[1], "easy") || !strcmp(argv[1], "beginner")) mode = 1;
+        else if (!strcmp(argv[1], "medium") || !strcmp(argv[1], "intermediate")) mode = 2;
+        else if (!strcmp(argv[1], "expert")) mode = 3;
+        else if (!strcmp(argv[1], "custom") && argc == 5) {
+            mode = 4; rows = md_parse_int(argv[2]); cols = md_parse_int(argv[3]);
+            mines = md_parse_int(argv[4]);
+        }
+        if (mode && md_mines_new(&md_game, mode, rows, cols, mines, ticks + 0x4387u)) {
+            md_game_mode = mode;
+            raise_window(6);
+            emit("MayOS Minesweeper ready: left click/reveal, right click/flag.");
+        } else emit("Usage: minesweeper easy|medium|expert|custom ROW COL MINES (15-25%)");
+    } else if (!strcmp(c, "mine") || !strcmp(c, "flag")) {
+        if (argc != 3 || !md_game.rows) emit("Usage: mine|flag ROW COL (zero-based)");
+        else {
+            int row = md_parse_int(argv[1]), col = md_parse_int(argv[2]);
+            if (row < 0 || col < 0 || row >= md_game.rows || col >= md_game.cols)
+                emit("mine: invalid coordinates");
+            else if (!strcmp(c, "flag")) {
+                emit(md_mines_flag(&md_game, row, col) ? "Flag updated" : "Flag ignored");
+            } else {
+                int result = md_mines_reveal(&md_game, row, col, ticks);
+                emit(result == -1 ? "Mine hit; game over" : result == 2 ? "Minesweeper: won" :
+                     result == 1 ? "Cell revealed" : "Cell unchanged");
+            }
+        }
+    } else if (!strcmp(c, "apps")) {
+        raise_window(7);
+    } else if (!strcmp(c, "add")) {
+        int added = argc >= 2 ? md_import_one(argv[1]) : md_import_all();
+        emit(added ? "MayOS: imported into Documents/ThirdPartyFile" :
+                     "MayOS: no eligible new data in Documents/AddFiles");
+    } else if (!strcmp(c, "list")) {
+        int dst = md_directory("ThirdPartyFile", 0), found = 0;
+        if (dst >= 0)
+            for (int i = 4; i < FS_MAX; ++i)
+                if (files[i].used && !files[i].dir && files[i].parent == (u32)dst) {
+                    emit(files[i].name); ++found;
+                }
+        if (!found) emit("MayOS: no imported data files");
+    } else if (!strcmp(c, "del")) {
+        int dir = md_directory("ThirdPartyFile", 0);
+        int file = argc >= 2 && dir >= 0 ? fs_find(dir, argv[1]) : -1;
+        if (file < 4 || files[file].dir || !fs_move(file, 3))
+            emit("del: file not found, already removed, or Trash name conflict");
+        else { sync_notice(); emit("MayOS: moved extension data to Trash"); }
+    } else if (!strcmp(c, "shut")) {
+        if (argc > 1 && !strcmp(argv[1], "confirm")) { fs_sync(); poweroff(); }
+        else emit("Type shut confirm to power off MayOS");
+    } else if (!strcmp(c, "exit")) {
+        close_window(2);
+    }
     else if (!strcmp(c, "pwd"))
         pwd();
     else if (!strcmp(c, "ls")) {
@@ -880,6 +1039,10 @@ static void shell(void) {
     } else
         emit("Unknown command. Type help.");
 }
+static int md_note_file(const char *name) {
+    int n = (int)strlen(name);
+    return n >= 8 && !strcmp(name + n - 8, ".MayNote");
+}
 static void open_file(int i) {
     if (i < 0)
         return;
@@ -893,8 +1056,14 @@ static void open_file(int i) {
         notify("请先保存编辑器中的修改");
         return;
     }
+    if (md_note_file(files[i].name)) {
+        if (md_note_decode((const char *)files[i].data, (int)files[i].size,
+                           editor_buf, FILE_CAP) < 0) {
+            notify("MayNote 格式无效，未修改原文件");
+            return;
+        }
+    } else copy(editor_buf, (char *)files[i].data, FILE_CAP);
     editor_file = i;
-    copy(editor_buf, (char *)files[i].data, FILE_CAP);
     editor_changed = 0;
     raise_window(3);
 }
@@ -903,8 +1072,15 @@ static void save_editor(void) {
         notify("文件已不存在");
         return;
     }
-    copy((char *)files[editor_file].data, editor_buf, FILE_CAP);
-    files[editor_file].size = strlen(editor_buf);
+    if (md_note_file(files[editor_file].name)) {
+        int encoded = md_note_encode(editor_buf, (int)strlen(editor_buf),
+                                     (char *)files[editor_file].data, FILE_CAP);
+        if (encoded < 0) { notify("MayNote 容量不足；原文件未修改"); return; }
+        files[editor_file].size = (u32)encoded;
+    } else {
+        copy((char *)files[editor_file].data, editor_buf, FILE_CAP);
+        files[editor_file].size = strlen(editor_buf);
+    }
     int ok = fs_sync();
     editor_changed = disk_ready && !ok;
 #ifdef MAYOS_LINUX
@@ -1039,12 +1215,13 @@ static void desktop(void) {
     rect(0, 31, W, 1, dark ? 0x171719 : line);
     symbol(17, 7, 11, 17, ink);
     heading_text(42, 4, "MayOS", ink);
-    text(101, 8, "Settings", muted);
-    text(164, 8, "File", muted);
-    text(205, 8, "Edit", muted);
-    text(244, 8, "View", muted);
-    text(286, 8, "Window", muted);
-    text(348, 8, "Help", muted);
+    /* Separate the brand from menus; no overlapping glyph advances. */
+    text(163, 8, "Settings", muted);
+    text(251, 8, "File", muted);
+    text(313, 8, "Edit", muted);
+    text(371, 8, "View", muted);
+    text(432, 8, "Window", muted);
+    text(524, 8, "Help", muted);
     int count = 0;
     for (int i = 4; i < FS_MAX && count < 15; i++) {
         if (!files[i].used || files[i].parent != 2) continue;
@@ -1060,35 +1237,71 @@ static void desktop(void) {
     const int status_icons[] = {4, 8, 7, 12};
     for (int i = 0; i < 4; i++)
         symbol(777 + i * 39, 7, status_icons[i], 18, muted);
-    text(907, 8, "Tue Jan 28  10:24", muted);
+    /* Real session label instead of a clipped, hardcoded fake date/time. */
+    text(935, 8, "SESSION", muted);
+}
+/* One MayOS title bar shared across all native windows.  The title has a
+   reserved width, so controls cannot collide with labels or app glyphs. */
+static int window_icon(int id) {
+    const int kinds[WINDOW_COUNT] = {0, 1, 2, 5, 4, 23, 24, 25};
+    return kinds[id];
+}
+#define TITLEBAR_H 44
+#define TITLEBAR_CONTROL_START 132
+#define TITLEBAR_CONTROL_STEP 40
+/* Returns 1=minimize, 2=maximize, 3=close. Used by both drawing and
+ * interaction so a visible control always has the matching hit target. */
+static int titlebar_button(const Window *w, int rx, int ry) {
+    if (ry < 4 || ry >= TITLEBAR_H) return 0;
+    int start = w->w - TITLEBAR_CONTROL_START;
+    for (int i = 0; i < 3; ++i)
+        if (rx >= start + i * TITLEBAR_CONTROL_STEP &&
+            rx < start + i * TITLEBAR_CONTROL_STEP + 34)
+            return i + 1;
+    return 0;
+}
+static void titlebar_text(int x, int y, const char *label, int max_width, u32 color) {
+    /* No title can intrude into the window buttons, including long file names. */
+    char shown[64];
+    int limit = max_width / 8;
+    int length = (int)strlen(label);
+    if (limit <= 0) return;
+    if (limit >= (int)sizeof(shown)) limit = (int)sizeof(shown) - 1;
+    if (length <= limit) {
+        text(x, y, label, color);
+        return;
+    }
+    memcpy(shown, label, (u32)limit);
+    if (limit > 3) shown[limit - 3] = shown[limit - 2] = shown[limit - 1] = '.';
+    shown[limit] = 0;
+    text(x, y, shown, color);
 }
 static void frame(int id) {
     Window *w = &windows[id];
+    int active = focus == id;
     soft_roundrect(w->x + 8, w->y + 12, w->w, w->h, 25,
                    dark ? 0x010102 : 0xcccdd1);
     ui_card(w->x, w->y, w->w, w->h, 25, panel);
-    if (id == 1) {
-        circle(w->x + 21, w->y + 22, 6, 0x2b2b2e);
-        circle(w->x + 41, w->y + 22, 6, 0x2b2b2e);
-        circle(w->x + 61, w->y + 22, 6, 0x2b2b2e);
-        return;
-    }
-    rect(w->x + 24, w->y + 43, w->w - 48, 1, line);
-    symbol(w->x + 18, w->y + 11,
-           id == 0 ? 0 : id == 1 ? 1 : id == 4 ? 4 : id == 3 ? 5 : 2,
-           22, muted);
-    text(w->x + 48, w->y + 11, w->title, focus == id ? ink : muted);
-    int controls = w->x + w->w - 119;
+    /* Fixed 44px chrome does not push the existing application contents. */
+    rect(w->x + 18, w->y + TITLEBAR_H - 1, w->w - 36, 1, line);
+    ui_card(w->x + 14, w->y + 7, 30, 30, 10,
+            active ? selected_fill : surface_high);
+    symbol(w->x + 20, w->y + 13, window_icon(id), 18,
+           active ? ink : muted);
+    titlebar_text(w->x + 55, w->y + 12, w->title, w->w - 207,
+                  active ? ink : muted);
+    /* Compact, right-aligned native controls share exact click geometry. */
     const int kinds[] = {15, 16, 14};
-    for (int i = 0; i < 3; i++) {
-        int xx = controls + i * 36 + 1;
-        int hover = inside(mx, my, xx, w->y + 5, 33, 33);
-        if (hover) soft_roundrect(xx, w->y + 5, 33, 33, 11, selected_fill);
-        symbol(xx + 6, w->y + 11, kinds[i], 20, hover ? ink : muted);
+    int controls = w->x + w->w - TITLEBAR_CONTROL_START;
+    ui_card(controls - 5, w->y + 5, 120, 34, 12, surface_high);
+    for (int i = 0; i < 3; ++i) {
+        int xx = controls + i * TITLEBAR_CONTROL_STEP;
+        int hover = inside(mx, my, xx, w->y + 5, 34, 34);
+        if (hover)
+            soft_roundrect(xx, w->y + 5, 34, 34, 10, selected_fill);
+        symbol(xx + 8, w->y + 13, kinds[i], 18,
+               hover || (active && i == 2) ? ink : muted);
     }
-    for (int i = 0; i < 3; i++)
-        stroke(w->x + w->w - 8 - i * 5, w->y + w->h - 4,
-               w->x + w->w - 4, w->y + w->h - 8 - i * 5, 1, muted);
     if (high_contrast)
         border(w->x + 2, w->y + 2, w->w - 4, w->h - 4, line);
 }
@@ -1468,24 +1681,90 @@ static void explorer_draw(Window *w) {
     text(x + 100, y + 417, "请选择 Linux 启动项使用 HTTP 文本预览。", muted);
 #endif
 }
-/* Centered macOS-like dock from the user's reference screenshot.
-   Icons launch the same native MayOS windows and services. */
+/* MayOS Dock: pinned shortcuts + transient apps in true launch order.
+ * Focusing/minimizing never reorders the Dock; closing removes transient
+ * entries. The same item array is used by drawing and mouse hit-testing. */
+#define DOCK_PINNED 3
+#define DOCK_MAX (WINDOW_COUNT + 1)
+static void dock_items(int ids[DOCK_MAX], int *count) {
+    int n = 0;
+    ids[n++] = 0; /* Files */
+    ids[n++] = 1; /* Settings */
+    ids[n++] = 2; /* Terminal */
+    u32 after = 0;
+    for (;;) {
+        int next = -1;
+        for (int id = 3; id < WINDOW_COUNT; ++id)
+            if (windows[id].open && dock_launch[id] > after &&
+                (next < 0 || dock_launch[id] < dock_launch[next]))
+                next = id;
+        if (next < 0) break;
+        ids[n++] = next;
+        after = dock_launch[next];
+    }
+    ids[n++] = -1; /* Trash is not a running application. */
+    *count = n;
+}
+static int dock_left(int count) {
+    return (W - (count * 57 + 16)) / 2;
+}
+static void dock_activate(int id) {
+    if (id == -1) {
+        serial("MayOS: Dock opened Trash\n");
+        folder = 3;
+        file_scroll = 0;
+        selected = -1;
+        raise_window(0);
+        return;
+    }
+    if (windows[id].open && !windows[id].min && focus == id) {
+        serial("MayOS: Dock minimized ");
+        serial(windows[id].title);
+        serial("\n");
+        minimize_window(id);
+    } else {
+        serial("MayOS: Dock focused ");
+        serial(windows[id].title);
+        serial("\n");
+        raise_window(id);
+    }
+}
 static void taskbar(void) {
-    /* The reference Dock intentionally has only Files, Settings, Terminal and Trash. */
-    int left = 382, top = H - 92;
-    soft_roundrect(left + 5, top + 8, 244, 70, 25,
+    int ids[DOCK_MAX], count;
+    dock_items(ids, &count);
+    int width = count * 57 + 16, left = dock_left(count), top = H - 92;
+    soft_roundrect(left + 5, top + 8, width, 70, 25,
                    dark ? 0x020203 : 0xc0c0c6);
-    ui_card(left, top, 244, 70, 24, dark ? 0x0a0a0c : 0xf7f7f9);
-    const int ids[] = {0, 1, 2, 3};
-    for (int i = 0; i < 4; i++) {
-        int x = left + 21 + i * 57, id = ids[i];
-        int active = windows[id].open && !windows[id].min && focus == id;
-        int hover = inside(mx, my, x - 7, top + 4, 50, 57);
+    ui_card(left, top, width, 70, 24, dark ? 0x0a0a0c : 0xf7f7f9);
+    int tooltip = -2;
+    for (int i = 0; i < count; ++i) {
+        int id = ids[i], x = left + 18 + i * 57;
+        int running = id >= 0 && windows[id].open;
+        int active = running && !windows[id].min && focus == id;
+        int hover = inside(mx, my, x - 5, top + 5, 47, 58);
+        if (i == DOCK_PINNED || i == count - 1)
+            rect(x - 10, top + 18, 1, 33, line);
         if (active || hover)
-            soft_roundrect(x - 5, top + 5, 48, 54, 15,
+            soft_roundrect(x - 5, top + 5, 47, 54, 15,
                            active ? selected_fill : surface_high);
-        int kind = id == 3 ? 3 : id;
-        symbol(x + 4, top + 15 - (hover ? 2 : 0), kind, 34, active ? ink : muted);
+        int kind = id == -1 ? 3 : window_icon(id);
+        symbol(x + 5, top + 13 - (hover ? 2 : 0), kind, 32,
+               active ? ink : muted);
+        /* An inactive/minimized app is still running: retain its dot. */
+        if (running)
+            circle(x + 21, top + 62, 3, active ? ink : muted);
+        if (hover) tooltip = id;
+    }
+    /* A short hover label identifies a temporary app instead of decorating
+     * the desktop with permanent captions that clutter the Dock. */
+    if (tooltip != -2) {
+        const char *name = tooltip < 0 ? "Trash" : windows[tooltip].title;
+        int ww = (int)strlen(name) * 8 + 22;
+        int center = mx;
+        if (center < ww / 2 + 6) center = ww / 2 + 6;
+        if (center > W - ww / 2 - 6) center = W - ww / 2 - 6;
+        ui_card(center - ww / 2, top - 38, ww, 30, 10, panel);
+        text(center - ww / 2 + 11, top - 31, name, ink);
     }
 }
 /* Functional, keyboard-dismissable popovers are deliberately invisible
@@ -1548,41 +1827,44 @@ static int contains(const char *a, const char *b) {
 }
 static int search_match(int id) {
     const char *names[] = {"files 文件 文档", "settings 设置 关于", "terminal 终端 shell",
-                           "trash 回收站", "game 游戏 夏日未寄 explorer 浏览器"};
-    return id >= 0 && id < 5 && contains(names[id], search);
+                           "trash 回收站", "game 游戏 夏日未寄 explorer 浏览器",
+                           "calc calculator 计算器", "minesweeper mines 扫雷",
+                           "apps add list del extension 扩展 管理"};
+    return id >= 0 && id < 8 && contains(names[id], search);
 }
 static void start_draw(void) {
-    int x = 210, y = H - 500;
-    roundrect(x + 3, y + 4, 326, 410, dark ? 0x141218 : 0xd8d1df);
-    roundrect(x, y, 326, 410, panel);
+    /* Larger application list keeps the established MayOS visual system. */
+    int x = 210, y = H - 690;
+    roundrect(x + 3, y + 4, 326, 610, dark ? 0x141218 : 0xd8d1df);
+    roundrect(x, y, 326, 610, panel);
     text(x + 22, y + 19, "应用程序 / Applications", ink);
     roundrect(x + 18, y + 57, 290, 34, bg);
-    text(x + 30, y + 64, search[0] ? search : "搜索 / files, settings, terminal",
+    text(x + 30, y + 64, search[0] ? search : "搜索 / 应用程序",
          search[0] ? ink : muted);
     const char *names[] = {"文件管理器", "设置", "终端", "回收站",
 #ifdef MAYOS_LINUX
-                           "Explorer 浏览器"
+                           "Explorer 浏览器",
 #else
-                           "夏日未寄"
+                           "夏日未寄",
 #endif
-    };
+                           "计算器", "扫雷", "扩展文件管理"};
     const char *desc[] = {"浏览文件与文件夹", "系统信息与外观", "命令与会话工具", "找回或删除文件",
 #ifdef MAYOS_LINUX
-                          "Linux 网络文本预览"
+                           "Linux 网络文本预览",
 #else
-                          "MayKernel 原生游戏"
+                           "MayKernel 原生游戏",
 #endif
-    };
-    for (int i = 0; i < 5; i++)
+                           "原生四则运算", "三种难度和自定义", "导入与管理 MayFS 数据"};
+    for (int i = 0; i < 8; i++)
         if (search_match(i)) {
-            icon(x + 24, y + 109 + i * 47, i, 31);
+            icon(x + 24, y + 109 + i * 47, i < 5 ? i : 5, 31);
             text(x + 70, y + 105 + i * 47, names[i], ink);
             text(x + 70, y + 125 + i * 47, desc[i], muted);
         }
-    rect(x + 18, y + 350, 290, 1, line);
-    text(x + 25, y + 369, "may / 本地账户", muted);
-    text(x + 213, y + 369, "重启", ink);
-    text(x + 270, y + 369, "关机", ink);
+    rect(x + 18, y + 553, 290, 1, line);
+    text(x + 25, y + 571, "may / 本地账户", muted);
+    text(x + 213, y + 571, "重启", ink);
+    text(x + 270, y + 571, "关机", ink);
 }
 static void context_draw(void) {
     roundrect(ctxx + 3, ctxy + 3, 184, 320, dark ? 0x141218 : 0xd8d1df);
@@ -1679,8 +1961,14 @@ static void render(void) {
             terminal_draw(w);
         else if (i == 3)
             editor_draw(w);
-        else
+        else if (i == 4)
             explorer_draw(w);
+        else if (i == 5)
+            md_calc_draw(w);
+        else if (i == 6)
+            md_mines_draw(w);
+        else
+            md_library_draw(w);
     }
     taskbar();
     status_panel_draw();
@@ -1890,32 +2178,24 @@ static void left_click(void) {
         }
         return;
     }
-    /* Reference Dock: Files, Settings, Terminal, Trash. */
+    /* Dock hit targets follow the exact same calculated geometry as draw. */
     if (my >= H - 92) {
-        const int centers[] = {403, 460, 517, 574};
-        for (int i = 0; i < 4; i++) {
-            if (!inside(mx, my, centers[i] - 24, H - 88, 52, 60))
-                continue;
-            if (i == 0) {
-                raise_window(0);
-            } else if (i == 1) {
-                raise_window(1);
-            } else if (i == 2) {
-                raise_window(2);
-            } else {
-                folder = 3;
-                file_scroll = 0;
-                selected = -1;
-                raise_window(0);
+        int ids[DOCK_MAX], count;
+        dock_items(ids, &count);
+        int left = dock_left(count), top = H - 92;
+        for (int i = 0; i < count; ++i) {
+            int x = left + 18 + i * 57;
+            if (inside(mx, my, x - 12, top + 5, 54, 58)) {
+                dock_activate(ids[i]);
+                return;
             }
-            return;
         }
         return;
     }
     if (start_open) {
-        int x = 210, y = H - 500;
-        if (inside(mx, my, x, y, 326, 410)) {
-            for (int i = 0; i < 5; i++)
+        int x = 210, y = H - 690;
+        if (inside(mx, my, x, y, 326, 610)) {
+            for (int i = 0; i < 8; i++)
                 if (search_match(i) && inside(mx, my, x + 16, y + 100 + i * 47, 294, 46)) {
                     if (i == 3) {
                         folder = 3;
@@ -1934,7 +2214,7 @@ static void left_click(void) {
                     }
                     return;
                 }
-            if (my >= y + 354) {
+            if (my >= y + 560) {
                 if (mx > x + 267) {
                     fs_sync();
                     poweroff();
@@ -1954,23 +2234,26 @@ static void left_click(void) {
             continue;
         raise_window(id);
         int rx = mx - w->x, ry = my - w->y;
-        if (ry < 42) {
-            if (rx > w->w - 46) {
+        if (ry < TITLEBAR_H) {
+            int action = titlebar_button(w, rx, ry);
+            if (action == 3) {
                 if (id == 3 && editor_changed) {
                     notify("请先保存修改，再关闭编辑器");
                     return;
                 }
-                w->open = 0;
+                close_window(id);
                 return;
             }
-            if (rx > w->w - 82) {
+            if (action == 2) {
                 toggle_max(id);
                 return;
             }
-            if (rx > w->w - 119) {
-                w->min = 1;
+            if (action == 1) {
+                minimize_window(id);
                 return;
             }
+            /* Keep the padding between the controls non-draggable. */
+            if (rx >= w->w - TITLEBAR_CONTROL_START) return;
             if (!w->max) {
                 drag = id;
                 dragx = rx;
@@ -2012,6 +2295,9 @@ static void left_click(void) {
 #endif
             return;
         }
+        if (id == 5) { md_calc_click(rx, ry); return; }
+        if (id == 6) { md_mines_click(w, mx, my, 0); return; }
+        if (id == 7) { md_library_click(w, rx, ry); return; }
         if (id == 1) {
             if (settings_tab == 6 && inside(rx, ry, 223, 265, 30, 30)) {
                 if (ticks - egg_last_click > 150)
@@ -2143,6 +2429,12 @@ static void right_click(void) {
         return;
     if (modal)
         return;
+    Window *mine = &windows[6];
+    if (mine->open && !mine->min && inside(mx, my, mine->x, mine->y, mine->w, mine->h)) {
+        raise_window(6);
+        md_mines_click(mine, mx, my, 1);
+        return;
+    }
     Window *w = &windows[0];
     if (w->open && !w->min && focus == 0 &&
         inside(mx, my, w->x + 146, w->y + 135, w->w - 146, w->h - 135)) {
@@ -2206,7 +2498,7 @@ static void key_event(int k) {
             search[n] = k;
             search[n + 1] = 0;
         } else if (k == '\n') {
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 8; i++)
                 if (search_match(i)) {
                     if (i == 3) {
                         folder = 3;
@@ -2223,6 +2515,18 @@ static void key_event(int k) {
                     break;
                 }
         }
+        return;
+    }
+    if (focus == 5 && windows[5].open && !windows[5].min) {
+        if (k == '\b') md_calc_key('B');
+        else if (k == '\n') md_calc_key('=');
+        else if (k == 27) md_calc_key('C');
+        else if (k >= 32 && k < 127) md_calc_key((char)k);
+        return;
+    }
+    if (focus == 6 && windows[6].open && !windows[6].min) {
+        if (k == '1' || k == '2' || k == '3') md_mines_start(k - '0', 0, 0, 0);
+        if (k == 'r') md_mines_start(md_game_mode, md_game.rows, md_game.cols, md_game.mines);
         return;
     }
     if (focus == 4 && windows[4].open && !windows[4].min) {
@@ -2323,6 +2627,7 @@ void kernel_main(u32 magic, u32 info) {
     fs_init();
     preferences_load();
     terminal_init();
+    md_mines_start(1, 0, 0, 0);
     serial("MayOS: desktop ready\n");
     u32 last = 0;
     for (;;) {

@@ -1,0 +1,96 @@
+name: Record MayOS desktop and legacy app demos (real QEMU)
+
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/kernel/maydos_**'
+      - 'MayOS_0.3.0-pre1/kernel/gui.c'
+      - 'MayOS_0.3.0-pre1/scripts/record_maydos_suite.py'
+      - 'MayOS_0.3.0-pre1/scripts/record_dock.py'
+      - '.github/workflows/maydos-video-evidence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  maydos-real-video:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure signed runner package mirror
+        run: bash scripts/configure-ci-apt-mirror.sh
+      - name: Install QEMU, GRUB, FFmpeg, font and test dependencies
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
+            build-essential gcc-multilib grub-common grub-pc-bin grub-efi-amd64-bin \
+            xorriso mtools qemu-system-x86 python3-pil ffmpeg \
+            fonts-noto-cjk fonts-dejavu-core
+      - name: Build authentic MayKernel x86_64 GUI ISO
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          make -j2 all
+          python3 scripts/test_maydos_tools.py
+          python3 scripts/maydos_smoke.py
+      - name: Capture calculator, minesweeper, MayNote and extensions in QEMU
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          mkdir -p build/recordings/maydos
+          python3 scripts/record_maydos_suite.py \
+            --iso build/mayos.iso \
+            --output-dir build/recordings/maydos \
+            --source-commit "$(git rev-parse HEAD)"
+      - name: Record native MayOS titlebar, real running-app Dock and PNG proof
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          mkdir -p build/recordings/dock
+          python3 scripts/record_dock.py \
+            --iso build/mayos.iso --output-dir build/recordings/dock \
+            --source-commit "$(git rev-parse HEAD)"
+          ffmpeg -hide_banner -loglevel error -y \
+            -i build/recordings/dock/MayOS-Desktop-Dock-Titlebar-QEMU.mp4 \
+            -vf 'fps=12,format=yuv420p' -c:v libx264 -preset veryfast \
+            -profile:v baseline -level 3.1 -crf 23 -an -movflags +faststart \
+            build/recordings/dock/MayOS-Desktop-Dock-iPhone.mp4
+          ffprobe -v error -select_streams v:0 \
+            -show_entries stream=codec_name,profile,width,height -of json \
+            build/recordings/dock/MayOS-Desktop-Dock-iPhone.mp4
+      - name: Verify five H264 MP4 assets
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -eu
+          for name in calculator minesweeper maynote extensions; do
+            file="build/recordings/maydos/MayOS-legacy-$name-real-QEMU.mp4"
+            test -s "$file"
+            ffprobe -v error -select_streams v:0 \
+              -show_entries stream=codec_name,width,height \
+              -of csv=p=0 "$file" | grep -Fx 'h264,1024,768'
+            test -s "build/recordings/maydos/MayOS-legacy-$name-real-QEMU.json"
+          done
+          test -s build/recordings/maydos/MayOS-legacy-all-four-real-QEMU.mp4
+          test -s build/recordings/maydos/MayOS-legacy-all-four-real-QEMU.json
+          test -s build/recordings/dock/MayOS-Desktop-Dock-Titlebar-QEMU.mp4
+          test -s build/recordings/dock/MayOS-Desktop-Dock-iPhone.mp4
+          test -s build/recordings/dock/MayOS-dock-two-running-apps.png
+      - name: Upload raw QEMU MayDOS MP4s, evidence and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-desktop-and-legacy-QEMU-recordings
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            MayOS_0.3.0-pre1/build/recordings/dock/*.mp4
+            MayOS_0.3.0-pre1/build/recordings/dock/*.png
+            MayOS_0.3.0-pre1/build/recordings/dock/*.json
+            MayOS_0.3.0-pre1/build/recordings/dock/*.ffmpeg.log
+            MayOS_0.3.0-pre1/build/recordings/maydos/*.mp4
+            MayOS_0.3.0-pre1/build/recordings/maydos/*.json
+            MayOS_0.3.0-pre1/build/recordings/maydos/*.ffmpeg.log
+            MayOS_0.3.0-pre1/build/record-bios-custom.log
+            MayOS_0.3.0-pre1/build/record-bios-custom-qemu.log
+            MayOS_0.3.0-pre1/build/test-maydos.log
+            MayOS_0.3.0-pre1/build/test-maydos-*.png

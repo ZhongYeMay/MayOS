@@ -53,13 +53,16 @@ assert "line = dark ? 0x303033 : 0xd9d9dd;" in source
 assert "static void soft_roundrect(" in source
 assert "static int heading_text(" in source
 assert 'heading_text(42, 4, "MayOS", ink);' in source
-assert 'text(101, 8, "Settings", muted);' in source
-assert 'text(164, 8, "File", muted);' in source
-assert 'text(205, 8, "Edit", muted);' in source
-assert 'text(244, 8, "View", muted);' in source
-assert 'text(286, 8, "Window", muted);' in source
-assert 'text(348, 8, "Help", muted);' in source
-assert 'text(907, 8, "Tue Jan 28  10:24", muted);' in source
+# Preserve the previously approved MayOS top system bar verbatim.
+# Window titlebar and Dock redesign must not change these coordinates.
+assert 'text(163, 8, "Settings", muted);' in source
+assert 'text(251, 8, "File", muted);' in source
+assert 'text(313, 8, "Edit", muted);' in source
+assert 'text(371, 8, "View", muted);' in source
+assert 'text(432, 8, "Window", muted);' in source
+assert 'text(524, 8, "Help", muted);' in source
+assert 'const char *active_app = focus >= 0' not in source
+assert 'text(935, 8, "SESSION", muted);' in source
 assert 'heading_text(x + 20, y + 49, "Settings", ink);' in source
 assert '"Privacy & Security", "Updates", "About MayOS"' in source
 assert 'heading_text(cx, cy - 8, "About MayOS", ink);' in source
@@ -80,7 +83,24 @@ assert "ui_card(w->x, w->y, w->w, w->h, 25, panel);" in source
 assert "ui_card(cx, card_top, cw, card_height, 24, card_bg);" in source
 assert 'reference_text(cx + 57, card_top + 48, "Version " MAYOS_RELEASE, muted, 0);' in source
 assert 'reference_right_label(cx + cw - 18, card_top + 158, "Development Preview", ink);' in source
-assert "ui_card(left, top, 244, 70, 24," in source
+assert "ui_card(left, top, width, 70, 24," in source
+assert "int width = count * 57 + 16" in source
+assert "static void dock_items(" in source
+assert "static void dock_activate(" in source
+assert "dock_launch[id] > after" in source
+assert "dock_launch[id] = ++dock_next_launch;" in source
+assert "static int titlebar_button(const Window *w, int rx, int ry)" in source
+assert "int action = titlebar_button(w, rx, ry);" in source
+assert "static void focus_visible_window(void)" in source
+assert "if (running)" in source
+assert "windows[id].min = 1;" in source
+assert "static int window_icon(int id)" in source
+assert "0, 1, 2, 5, 4, 23, 24, 25" in source
+assert "kind == 23" in source and "kind == 24" in source and "kind == 25" in source
+assert "static void frame(int id)" in source
+assert '"MayDOS Calculator"' not in source
+assert '"MayDOS Minesweeper"' not in source
+assert '"MayDOS Extensions"' not in source
 assert "set gfxmode" not in source  # no graphics firmware tweaks via GUI
 assert "static void cursor(void)" in source
 assert "#include \"material_icons.h\"" in source
@@ -98,8 +118,8 @@ assert 'const char *shapes[] = {"■ 黑色方块", "□ 白色方块", "自定�
 assert "roundrect(14, 60, 76, 508, panel);" not in source
 assert "static void desktop(void)" in source
 assert "static void taskbar(void)" in source
-assert "int left = 382, top = H - 92;" in source
+assert "int width = count * 57 + 16, left = dock_left(count), top = H - 92;" in source
 assert "int upper = 128 - x / 3 + (x * x) / 4200;" in source
 assert '{177, 133, 640, 450, 0, 0, 0, 0, 0, 0, 0, "Settings"}' in source
 assert "settings_tab = 6" in source
-print("PASS: exact approved monochrome Settings reference, menu, wallpaper, About card and four-icon Dock")
+print("PASS: exact approved monochrome Settings reference, menu, wallpaper, About card and stateful Dock")

@@ -37,7 +37,7 @@ class VM:
     def key(self,k):
         self.q('human-monitor-command',{'command-line':f'sendkey {k} 25'});time.sleep(.07)
     def type(self,s):
-        names={' ':'spc','/':'slash','.':'dot','-':'minus','_':'shift-minus',':':'shift-semicolon','\n':'ret'}
+        names={' ':'spc','/':'slash','.':'dot','-':'minus','_':'shift-minus',':':'shift-semicolon','\n':'ret', '+':'shift-equal', '*':'shift-8', '(':'shift-9', ')':'shift-0', '=':'equal'}
         for c in s:self.key(names.get(c,('shift-'+c.lower()) if c.isupper() else c))
     def cmd(self,s):self.type(s+'\n');time.sleep(.25)
     def move(self,x,y):

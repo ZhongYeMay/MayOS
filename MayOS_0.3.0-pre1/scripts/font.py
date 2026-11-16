@@ -5,8 +5,9 @@ import os
 from PIL import Image, ImageFont, ImageDraw
 root=Path(__file__).resolve().parents[1]
 chars=set(range(32,127))
-for source in (root/'kernel').glob('*.c'):
-    chars.update(map(ord,source.read_text()))
+for pattern in ('*.c', '*.inc'):
+    for source in (root/'kernel').glob(pattern):
+        chars.update(map(ord,source.read_text(encoding='utf-8')))
 # Native story literals are generated before font.h when SUMMER_SITE is set.
 story_header=root/'build/summer_story.h'
 if story_header.is_file():
