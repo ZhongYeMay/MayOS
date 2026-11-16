@@ -68,7 +68,7 @@ def record(args):
             vm.hold(.2)
             actions.append(label)
 
-        vm.click(514, 674)                 # Files from the four-icon Dock
+        vm.click(539, 674)                 # Files from the centered four-icon Dock
         vm.hold(1.3)
         vm.click(599, 212)                 # new folder modal
         vm.command("RecordedTour")

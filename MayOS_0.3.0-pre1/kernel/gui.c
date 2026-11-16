@@ -25,6 +25,7 @@ static u32 bg = 0x050506, panel = 0x080809, ink = 0xf5f5f6, muted = 0xa1a1a5, li
            accent = 0xececef, surface_high = 0x18181b, on_accent = 0x111113, selected_fill = 0x29292d;
 static int dark = 1, accent_choice = 0;
 static int desktop_style = 0, pointer_size = 0, show_brand = 1, high_contrast = 0;
+static int draw_clip_active, draw_clip_left, draw_clip_top, draw_clip_right, draw_clip_bottom;
 /* 0 = black square, 1 = white square, 2 = custom Documents/Cursor.ppm. */
 static int cursor_style = 0;
 static int custom_cursor_width = 0, custom_cursor_height = 0;
@@ -152,6 +153,12 @@ static void rect(int x, int y, int w, int h, u32 c) {
         w = W - x;
     if (y + h > H)
         h = H - y;
+    if (draw_clip_active) {
+        if (x < draw_clip_left) { w -= draw_clip_left - x; x = draw_clip_left; }
+        if (y < draw_clip_top) { h -= draw_clip_top - y; y = draw_clip_top; }
+        if (x + w > draw_clip_right) w = draw_clip_right - x;
+        if (y + h > draw_clip_bottom) h = draw_clip_bottom - y;
+    }
     if (w <= 0 || h <= 0)
         return;
     for (int j = y; j < y + h; j++)
@@ -295,7 +302,9 @@ static int text(int x, int y, const char *s, u32 color) {
         for (int j = 0; j < 20; j++)
             for (int i = 0; i < width; i++) {
                 int px = x + i, py = y + j;
-                if (px >= 0 && px < W && py >= 0 && py < H) {
+                if (px >= 0 && px < W && py >= 0 && py < H &&
+                    (!draw_clip_active || (px >= draw_clip_left && px < draw_clip_right &&
+                                           py >= draw_clip_top && py < draw_clip_bottom))) {
                     u8 a = font_bits[g][j * 16 + i];
                     if (a)
                         pixels[py * W + px] = blend(pixels[py * W + px], color, a);
@@ -315,7 +324,9 @@ static int large_text(int x, int y, const char *s, u32 color) {
                     for (int yy = 0; yy < 2; yy++)
                         for (int xx = 0; xx < 2; xx++) {
                             int px = x + i * 2 + xx, py = y + j * 2 + yy;
-                            if (px >= 0 && px < W && py >= 0 && py < H)
+                            if (px >= 0 && px < W && py >= 0 && py < H &&
+                                (!draw_clip_active || (px >= draw_clip_left && px < draw_clip_right &&
+                                                       py >= draw_clip_top && py < draw_clip_bottom)))
                                 pixels[py * W + px] = blend(pixels[py * W + px], color, a);
                         }
             }
@@ -345,7 +356,9 @@ static int heading_text(int x, int y, const char *s, u32 color) {
                               a01 * (3 - fx) * fy +
                               a11 * fx * fy) / 9;
                 int dx = x + px, dy = y + py;
-                if (a && dx >= 0 && dy >= 0 && dx < W && dy < H)
+                if (a && dx >= 0 && dy >= 0 && dx < W && dy < H &&
+                    (!draw_clip_active || (dx >= draw_clip_left && dx < draw_clip_right &&
+                                           dy >= draw_clip_top && dy < draw_clip_bottom)))
                     pixels[dy * W + dx] = blend(pixels[dy * W + dx], color, a);
             }
         }
@@ -384,10 +397,12 @@ static void reference_text(int x, int y, const char *s, u32 color, int title) {
         int advance = title ? premium_title_advance[g] : premium_body_advance[g];
         for (int yy = 0; yy < height; yy++) {
             int py = y + yy;
-            if (py < 0 || py >= H) continue;
+            if (py < 0 || py >= H ||
+                (draw_clip_active && (py < draw_clip_top || py >= draw_clip_bottom))) continue;
             for (int xx = 0; xx < stride && xx < advance + 3; xx++) {
                 int px = x + xx;
-                if (px < 0 || px >= W) continue;
+                if (px < 0 || px >= W ||
+                    (draw_clip_active && (px < draw_clip_left || px >= draw_clip_right))) continue;
                 u8 alpha = bitmap[yy * stride + xx];
                 if (alpha)
                     pixels[py * W + px] = blend(pixels[py * W + px], color, alpha);
@@ -556,6 +571,7 @@ static u32 animation_started[WINDOW_COUNT];
 static int animation_running[WINDOW_COUNT];
 static u32 animation_underlay[W * H];
 static int dock_level[4];
+#define DOCK_LEFT ((W - 244) / 2)
 static u32 animation_frame;
 static void animate_window(int id) {
     animation_started[id] = ticks;
@@ -569,7 +585,7 @@ static int animation_step(int mx, int my) {
     for (int i = 0; i < WINDOW_COUNT; i++)
         if (animation_running[i]) changed = 1;
     for (int i = 0; i < 4; i++) {
-        int x = 514 + i * 57;
+        int x = DOCK_LEFT + 21 + i * 57;
         int target = !high_contrast && mx >= x - 7 && mx < x + 43 &&
                      my >= H - 76 && my < H - 19 ? 256 : 0;
         int delta = target - dock_level[i];
@@ -594,6 +610,9 @@ static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = 
 static int file_scroll = 0;
 static int desktop_note_selected = 0;
 static int top_panel = 0;  /* 1=clock, 2=network, 3=display, 4=alerts, 5=power */
+#define TOP_STATUS_LEFT 964
+#define TOP_STATUS_STEP 34
+#define STATUS_PANEL_X (W - 336)
 static int modal = 0, modal_target = -1;
 static int egg_open = 0, egg_clicks = 0;
 static u32 egg_last_click;
@@ -1074,14 +1093,15 @@ static void desktop(void) {
     }
     rect(0, 0, W, 32, dark ? 0x050506 : 0xf9f9fb);
     rect(0, 31, W, 1, dark ? 0x171719 : line);
-    symbol(17, 7, 11, 17, ink);
-    heading_text(42, 4, "MayOS", ink);
-    text(101, 8, "Settings", muted);
-    text(164, 8, "File", muted);
-    text(205, 8, "Edit", muted);
-    text(244, 8, "View", muted);
-    text(286, 8, "Window", muted);
-    text(348, 8, "Help", muted);
+    /* Compact monitor mark and dynamically spaced menus.  Never place a
+       label at a guessed x coordinate: font metrics decide the next origin. */
+    soft_roundrect(18, 8, 18, 14, 3, ink);
+    soft_roundrect(20, 10, 14, 10, 2, dark ? 0x050506 : 0xf9f9fb);
+    rect(25, 22, 4, 2, ink);
+    rect(22, 24, 10, 1, ink);
+    int menu_x = text(46, 6, "MayOS", ink) + 22;
+    const char *menus[] = {"Settings", "File", "Edit", "View", "Window", "Help"};
+    for (int i = 0; i < 6; i++) menu_x = text(menu_x, 6, menus[i], muted) + 22;
     int count = 0;
     for (int i = 4; i < FS_MAX && count < 15; i++) {
         if (!files[i].used || files[i].parent != 2) continue;
@@ -1096,8 +1116,9 @@ static void desktop(void) {
     }
     const int status_icons[] = {4, 8, 7, 12};
     for (int i = 0; i < 4; i++)
-        symbol(986 + i * 39, 7, status_icons[i], 18, muted);
-    text(1116, 8, "Tue Jan 28  10:24", muted);
+        symbol(TOP_STATUS_LEFT + i * TOP_STATUS_STEP, 7, status_icons[i], 18, muted);
+    const char *clock_label = "Tue Jan 28  10:24";
+    text(W - 18 - (int)strlen(clock_label) * 8, 6, clock_label, muted);
 }
 static void frame(int id) {
     Window *w = &windows[id];
@@ -1523,9 +1544,11 @@ static void explorer_draw(Window *w) {
    Icons launch the same native MayOS windows and services. */
 static void taskbar(void) {
     /* The reference Dock intentionally has only Files, Settings, Terminal and Trash. */
-    int left = 493, top = H - 80;
-    soft_roundrect(left + 5, top + 8, 244, 70, 25,
-                   dark ? 0x020203 : 0xc0c0c6);
+    int left = DOCK_LEFT, top = H - 80;
+    soft_roundrect(left + 3, top + 8, 244, 70, 25,
+                   dark ? 0x010102 : 0xc0c0c6);
+    soft_roundrect(left + 2, top + 4, 244, 70, 25,
+                   dark ? 0x040405 : 0xd8d8dc);
     ui_card(left, top, 244, 70, 24, dark ? 0x0a0a0c : 0xf7f7f9);
     const int ids[] = {0, 1, 2, 3};
     for (int i = 0; i < 4; i++) {
@@ -1537,13 +1560,14 @@ static void taskbar(void) {
                            active ? selected_fill : surface_high);
         int kind = id == 3 ? 3 : id;
         symbol(x + 4, top + 15 - dock_level[i] * 4 / 256, kind, 34, active ? ink : muted);
+        if (active) circle(x + 21, top + 61, 2, ink);
     }
 }
 /* Functional, keyboard-dismissable popovers are deliberately invisible
    until the user clicks the corresponding screenshot-matched status glyph. */
 static void status_panel_draw(void) {
     if (!top_panel) return;
-    int x = 690, y = 51, w = 318, h = 235;
+    int x = STATUS_PANEL_X, y = 51, w = 318, h = 235;
     roundrect(x + 4, y + 5, w, h, dark ? 0x111115 : 0xd4d2d7);
     roundrect(x, y, w, h, panel);
     rect(x + 18, y + 50, w - 36, 1, line);
@@ -1707,10 +1731,26 @@ static void cursor(void) {
             }
         return;
     }
-    u32 edge = cursor_style == 1 ? 0x161616 : 0xffffff;
-    u32 fill = cursor_style == 1 ? 0xffffff : 0x101010;
-    rect(mx, my, side, side, edge);
-    rect(mx + 2, my + 2, side - 4, side - 4, fill);
+    /* Native arrow pointer: a high-contrast outline remains visible over
+       both the black wallpaper and light Settings surfaces. */
+    u32 edge = cursor_style == 1 ? 0x151517 : 0xf7f7f8;
+    u32 fill = cursor_style == 1 ? 0xf7f7f8 : 0x111113;
+    int arrow_h = side + 5;
+    for (int y = 0; y < arrow_h; y++) {
+        int width = y < arrow_h * 2 / 3 ? 2 + y * 2 / 3
+                                        : 2 + (arrow_h - y) / 3;
+        for (int x = 0; x < width; x++) {
+            int boundary = x == 0 || x == width - 1 || y == 0 || y == arrow_h - 1;
+            rect(mx + x, my + y, 1, 1, boundary ? edge : fill);
+        }
+    }
+    /* Short diagonal stem below the arrow head. */
+    int stem_x = 2 + arrow_h * 2 / 9;
+    for (int y = arrow_h * 2 / 3; y < arrow_h + side / 3; y++) {
+        rect(mx + stem_x, my + y, 4, 1, edge);
+        rect(mx + stem_x + 1, my + y, 2, 1, fill);
+        stem_x += (y & 1) == 0;
+    }
 }
 
 static void render(void) {
@@ -1728,9 +1768,15 @@ static void render(void) {
         frame(i);
         if (i == 0)
             files_draw(w);
-        else if (i == 1)
+        else if (i == 1) {
+            draw_clip_active = 1;
+            draw_clip_left = w->x + 1;
+            draw_clip_top = w->y + 36;
+            draw_clip_right = w->x + w->w - 1;
+            draw_clip_bottom = w->y + w->h - 1;
             settings(w);
-        else if (i == 2)
+            draw_clip_active = 0;
+        } else if (i == 2)
             terminal_draw(w);
         else if (i == 3)
             editor_draw(w);
@@ -1739,10 +1785,27 @@ static void render(void) {
         if (fading) {
             u32 remaining = 18 - elapsed;
             u32 alpha = 255 - remaining * remaining * 255 / (18 * 18);
-            /* Composite the complete rendered layer, including its shadow. */
-            for (int p = 0; p < W * H; p++)
-                if (pixels[p] != animation_underlay[p])
-                    pixels[p] = blend(animation_underlay[p], pixels[p], alpha);
+            int offset = (int)(remaining * 7 / 18);
+            int left = w->x - 3, right = w->x + w->w + 14;
+            int top = w->y - 3, bottom = w->y + w->h + 18 + offset;
+            if (left < 0) left = 0;
+            if (right > W) right = W;
+            if (top < 0) top = 0;
+            if (bottom > H) bottom = H;
+            /* Ease upward by seven pixels while fading in.  Iterate bottom
+               to top so the shifted source is never overwritten early. */
+            for (int y = bottom - 1; y >= top; y--)
+                for (int x = left; x < right; x++) {
+                    int destination = y * W + x;
+                    int source_y = y - offset;
+                    u32 color = animation_underlay[destination];
+                    if (source_y >= top) {
+                        int source = source_y * W + x;
+                        if (pixels[source] != animation_underlay[source])
+                            color = blend(color, pixels[source], alpha);
+                    }
+                    pixels[destination] = color;
+                }
         }
     }
     taskbar();
@@ -1914,26 +1977,26 @@ static void left_click(void) {
     if (top_panel && my >= 42) {
         int id = top_panel;
         top_panel = 0;
-        if (inside(mx, my, 690, 51, 318, 235)) {
-            if (id == 1 && inside(mx, my, 709, 244, 145, 34)) {
+        if (inside(mx, my, STATUS_PANEL_X, 51, 318, 235)) {
+            if (id == 1 && inside(mx, my, STATUS_PANEL_X + 19, 244, 145, 34)) {
                 raise_window(1);
-            } else if (id == 2 && inside(mx, my, 709, 244, 164, 34)) {
+            } else if (id == 2 && inside(mx, my, STATUS_PANEL_X + 19, 244, 164, 34)) {
                 raise_window(4);
             } else if (id == 3) {
-                if (inside(mx, my, 709, 159, 126, 34)) {
+                if (inside(mx, my, STATUS_PANEL_X + 19, 159, 126, 34)) {
                     dark = 1; preferences_save();
-                } else if (inside(mx, my, 851, 159, 126, 34)) {
+                } else if (inside(mx, my, STATUS_PANEL_X + 161, 159, 126, 34)) {
                     dark = 0; preferences_save();
-                } else if (inside(mx, my, 709, 244, 164, 34)) {
+                } else if (inside(mx, my, STATUS_PANEL_X + 19, 244, 164, 34)) {
                     raise_window(1);
                 }
-            } else if (id == 4 && inside(mx, my, 709, 244, 145, 34)) {
+            } else if (id == 4 && inside(mx, my, STATUS_PANEL_X + 19, 244, 145, 34)) {
                 notice_until = 0;
                 notice[0] = 0;
             } else if (id == 5) {
-                if (inside(mx, my, 709, 168, 126, 34)) {
+                if (inside(mx, my, STATUS_PANEL_X + 19, 168, 126, 34)) {
                     fs_sync(); reboot();
-                } else if (inside(mx, my, 851, 168, 126, 34)) {
+                } else if (inside(mx, my, STATUS_PANEL_X + 161, 168, 126, 34)) {
                     fs_sync(); poweroff();
                 }
             }
@@ -1945,8 +2008,9 @@ static void left_click(void) {
         if (mx < 96) {
             top_panel = 0;
             raise_window(1);
-        } else if (mx >= 979 && mx < 1139) {
-            int id = (mx - 979) / 39 + 2;
+        } else if (mx >= TOP_STATUS_LEFT - 7 &&
+                   mx < TOP_STATUS_LEFT - 7 + 4 * TOP_STATUS_STEP) {
+            int id = (mx - (TOP_STATUS_LEFT - 7)) / TOP_STATUS_STEP + 2;
             if (id > 5) id = 5;
             top_panel = top_panel == id ? 0 : id;
             start_open = 0;
@@ -1955,9 +2019,9 @@ static void left_click(void) {
     }
     /* Reference Dock: Files, Settings, Terminal, Trash. */
     if (my >= H - 80) {
-        const int centers[] = {514, 571, 628, 685};
         for (int i = 0; i < 4; i++) {
-            if (!inside(mx, my, centers[i] - 24, H - 76, 52, 60))
+            int center = DOCK_LEFT + 21 + i * 57;
+            if (!inside(mx, my, center - 24, H - 76, 52, 60))
                 continue;
             if (i == 0) {
                 raise_window(0);
