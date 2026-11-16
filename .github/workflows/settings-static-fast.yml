@@ -9,6 +9,10 @@ on:
       - 'MayOS_0.3.0-pre1/kernel/core.h'
       - 'MayOS_0.3.0-pre1/kernel/update_sha256.c'
       - 'MayOS_0.3.0-pre1/kernel/updater.c'
+      - 'MayOS_0.3.0-pre1/linux/update_transport.c'
+      - 'MayOS_0.3.0-pre1/linux/fetch.c'
+      - 'MayOS_0.3.0-pre1/linux/desktop.c'
+      - 'MayOS_0.3.0-pre1/scripts/modern_network.py'
       - 'MayOS_0.3.0-pre1/scripts/updater_test.c'
       - 'MayOS_0.3.0-pre1/scripts/test_updater.py'
       - 'MayOS_0.3.0-pre1/scripts/settings_smoke.py'
@@ -24,6 +28,10 @@ on:
       - 'MayOS_0.3.0-pre1/kernel/core.h'
       - 'MayOS_0.3.0-pre1/kernel/update_sha256.c'
       - 'MayOS_0.3.0-pre1/kernel/updater.c'
+      - 'MayOS_0.3.0-pre1/linux/update_transport.c'
+      - 'MayOS_0.3.0-pre1/linux/fetch.c'
+      - 'MayOS_0.3.0-pre1/linux/desktop.c'
+      - 'MayOS_0.3.0-pre1/scripts/modern_network.py'
       - 'MayOS_0.3.0-pre1/scripts/updater_test.c'
       - 'MayOS_0.3.0-pre1/scripts/test_updater.py'
       - '.github/workflows/settings-static-fast.yml'
@@ -45,6 +53,15 @@ jobs:
           python3 -m py_compile scripts/settings_smoke.py scripts/record_feature_tour.py
           python3 scripts/test_ui_style_contract.py
           python3 scripts/test_updater.py
+      - name: Compile actual Linux HTTPS update worker without network access
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          pkg-config --exists libcurl
+          gcc -std=c11 -O2 -Wall -Wextra -Werror \
+            linux/fetch.c linux/update_transport.c \
+            $(pkg-config --cflags --libs libcurl) -o /tmp/mayos-update-check-worker
+          /tmp/mayos-update-check-worker --capabilities
+          test "$(/tmp/mayos-update-check-worker --mayos-update-invalid 2>/dev/null || true)" = "E|Unsupported system update request"
       - name: Dry-run website release promotion before any publishing
         run: |
           python3 scripts/promote_strict_ui_release_website.py
