@@ -29,12 +29,36 @@ def main():
             crop("test-updates-about-before",(150,0,1024,31)),
             crop("test-updates-offline",(150,0,1024,31))
         ).getbbox(), "Approved top status bar changed"
+        # These are actual view-tab coordinates for the native 1024x768
+        # Settings window, not a scripted fake interface.
+        vm.click(530,267)
+        vm.wait("MayOS: Updates view changed")
+        vm.move(1000,690)
+        vm.shot("test-updates-release-notes")
+        assert ImageChops.difference(
+            crop("test-updates-offline",(392,305,780,512)),
+            crop("test-updates-release-notes",(392,305,780,512))
+        ).getbbox(), "Release notes view did not render"
+
+        vm.click(678,267)
+        vm.move(1000,690)
+        vm.shot("test-updates-progress")
+        assert vm.log.read_text(errors="replace").count(
+            "MayOS: Updates view changed") >= 2, "Tab clicks did not register"
+        assert ImageChops.difference(
+            crop("test-updates-release-notes",(392,305,780,512)),
+            crop("test-updates-progress",(392,305,780,512))
+        ).getbbox(), "Progress view did not render"
         vm.click(430,547)
         vm.wait("MayOS: update online check unavailable, no network request made")
         vm.click(615,547)
         vm.wait("MayOS: update install blocked (no A/B verified rollback)")
         vm.shot("test-updates-install-blocked")
-        print("PASS: MayKernel native Updates page, unchanged top bar, "
+        assert not ImageChops.difference(
+            crop("test-updates-about-before",(150,0,1024,31)),
+            crop("test-updates-progress",(150,0,1024,31))
+        ).getbbox(), "Approved top bar changed on Progress view"
+        print("PASS: MayKernel native Updates tabs, unchanged top bar, "
               "offline warning and blocked unsafe installer",flush=True)
     finally:
         vm.stop()

@@ -93,7 +93,7 @@ static void updater_notes_view(int cx, int cy, int cw, const MayUpdaterState *u)
 }
 static void updater_progress_view(int cx, int cy, int cw, const MayUpdaterState *u) {
     int top = cy + UPDATE_INFO_TOP;
-    ui_card(cx, top, cw, 232, 20, surface_high);
+    ui_card(cx, top, cw, 212, 20, surface_high);
     text(cx + 18, top + 16, "DOWNLOAD", ink);
     text(cx + 18, top + 42,
          u->phase == MAY_UPDATE_DOWNLOADING ? "Receiving bytes" :
@@ -121,7 +121,7 @@ static void updater_progress_view(int cx, int cy, int cw, const MayUpdaterState 
          "Waiting for complete download", muted);
     rect(cx + 18, top + 158, cw - 36, 1, line);
     text(cx + 18, top + 175, "INSTALLATION", ink);
-    text(cx + 18, top + 200, "Unavailable - boot slots not implemented", muted);
+    text(cx + 18, top + 190, "Unavailable - boot slots not implemented", muted);
 
     /* Buttons have real, explicitly limited behavior. They cannot write a
      * disk until a verified transactional installer actually exists. */
