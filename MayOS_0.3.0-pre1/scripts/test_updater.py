@@ -9,7 +9,8 @@ subprocess.run(["python3", str(ROOT / "scripts/make_update_catalog.py")], check=
 subprocess.run([
     "gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
     "-I" + str(ROOT / "kernel"), "-I" + str(BUILD),
-    str(ROOT / "kernel/updater.c"), str(ROOT / "scripts/updater_test.c"),
+    str(ROOT / "kernel/updater.c"), str(ROOT / "kernel/update_sha256.c"),
+    str(ROOT / "scripts/updater_test.c"),
     "-o", str(BUILD / "updater-test"),
 ], check=True)
 subprocess.run([str(BUILD / "updater-test")], check=True)

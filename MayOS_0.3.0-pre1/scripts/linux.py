@@ -49,6 +49,8 @@ INPUT_FILES = {
     "desktop_session_sha256": ROOT / "linux/desktop-session",
     "desktop_backend_sha256": ROOT / "linux/desktop.c",
     "desktop_gui_sha256": ROOT / "kernel/gui.c",
+    "updater_crypto_sha256": ROOT / "kernel/update_sha256.c",
+    "updater_crypto_header_sha256": ROOT / "kernel/update_sha256.h",
     "desktop_updater_sha256": ROOT / "kernel/updater.c",
     "desktop_updater_ui_sha256": ROOT / "kernel/updater_ui.inc",
     "desktop_updater_header_sha256": ROOT / "kernel/updater.h",
@@ -483,7 +485,7 @@ def build(args: argparse.Namespace) -> dict:
              "-isystem", str(OUT / "headers/include"),
              str(ROOT / "linux/desktop.c"), str(ROOT / "kernel/fs.c"),
              str(ROOT / "kernel/gui.c"), str(ROOT / "kernel/maydos_tools.c"),
-             str(ROOT / "kernel/updater.c"),
+             str(ROOT / "kernel/updater.c"), str(ROOT / "kernel/update_sha256.c"),
              "-o", str(OUT / "mayos-desktop")])
         validate_static_elf(OUT / "mayos-desktop")
     kernel = output / "arch/x86/boot/bzImage"

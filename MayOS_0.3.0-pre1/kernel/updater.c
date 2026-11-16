@@ -1,8 +1,11 @@
 #include "updater.h"
 #include "version.h"
 #include "update_catalog.h"
+#include "update_sha256.h"
 
 static MayUpdaterState state;
+static MayUpdateSha256 stream_hash;
+static int stream_active;
 
 static unsigned int slen(const char *s) {
     unsigned int n = 0;
@@ -139,6 +142,7 @@ static int offer(const MayUpdateRelease *r) {
 }
 void may_updater_init(void) {
     clear(&state, (unsigned int)sizeof(state));
+    stream_active = 0;
     state.phase = MAY_UPDATE_OFFLINE;
     copy_to(state.message, sizeof(state.message), "Saved verified GitHub Release metadata");
     for (unsigned int i = 0; i < MAYOS_UPDATE_CATALOG_COUNT; ++i) {
@@ -212,31 +216,61 @@ void may_updater_checked(void) {
     copy_to(state.message, sizeof(state.message),
             state.has_upgrade ? "New GitHub Release found" : "No newer compatible GitHub Release");
 }
-void may_updater_progress(unsigned long long sent, unsigned long long total,
-                          unsigned int elapsed_seconds) {
-    if (!total || sent > total || total != (unsigned long long)state.latest.bytes) {
-        may_updater_failed("Invalid download byte count");
-        return;
-    }
-    state.phase = MAY_UPDATE_DOWNLOADING;
-    state.transferred = sent;
-    state.total = total;
-    state.elapsed_seconds = elapsed_seconds;
+/* Trust only verified transport and real bytes, not a UI timer or estimate. */
+int may_updater_stream_begin(void) {
+    if (!state.online_checked || !state.has_upgrade || !state.has_latest ||
+        state.phase != MAY_UPDATE_AVAILABLE || !valid_sha(state.latest.sha256) ||
+        !valid_url(state.latest.url, state.latest.tag))
+        return 0;
+    may_update_sha256_init(&stream_hash);
+    state.transferred = 0;
+    state.total = state.latest.bytes;
+    state.elapsed_seconds = 0;
     state.verified = 0;
-    copy_to(state.message, sizeof(state.message), "Downloading with verified HTTPS");
+    stream_active = 1;
+    state.phase = MAY_UPDATE_DOWNLOADING;
+    copy_to(state.message, sizeof(state.message), "Receiving TLS-authenticated bytes");
+    return 1;
 }
-void may_updater_verifying(void) {
+int may_updater_stream_chunk(const void *bytes, unsigned int size,
+                             unsigned int elapsed_seconds) {
+    if (!stream_active || state.phase != MAY_UPDATE_DOWNLOADING) return 0;
+    if (!bytes && size) {
+        may_updater_failed("Missing download data");
+        return 0;
+    }
+    if ((unsigned long long)size > state.total - state.transferred) {
+        may_updater_failed("Downloaded more bytes than manifest permits");
+        return 0;
+    }
+    may_update_sha256_write(&stream_hash, bytes, size);
+    state.transferred += size;
+    state.elapsed_seconds = elapsed_seconds;
+    return 1;
+}
+int may_updater_stream_finish(void) {
+    if (!stream_active || state.phase != MAY_UPDATE_DOWNLOADING) return 0;
+    stream_active = 0;
+    if (state.transferred != state.total) {
+        may_updater_failed("Truncated download: byte count mismatch");
+        return 0;
+    }
     state.phase = MAY_UPDATE_VERIFYING;
-    copy_to(state.message, sizeof(state.message), "Comparing downloaded SHA-256 and expected bytes");
-}
-void may_updater_verified(void) {
-    if (state.total && state.transferred == state.total) {
-        state.verified = 1;
-        state.phase = MAY_UPDATE_VERIFIED;
-        copy_to(state.message, sizeof(state.message), "ISO verified and staged; installer unavailable");
-    } else may_updater_failed("Incomplete download");
+    copy_to(state.message, sizeof(state.message), "Computing SHA-256 of received content");
+    char digest[65];
+    may_update_sha256_hex(&stream_hash, digest);
+    if (!same(digest, state.latest.sha256)) {
+        may_updater_failed("SHA-256 mismatch: refusing update");
+        return 0;
+    }
+    state.verified = 1;
+    state.phase = MAY_UPDATE_VERIFIED;
+    copy_to(state.message, sizeof(state.message),
+            "SHA-256 verified; boot installer and rollback unavailable");
+    return 1;
 }
 void may_updater_failed(const char *message) {
+    stream_active = 0;
     state.phase = MAY_UPDATE_FAILED;
     state.verified = 0;
     copy_to(state.message, sizeof(state.message), message ? message : "Update failed");

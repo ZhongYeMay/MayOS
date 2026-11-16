@@ -58,10 +58,12 @@ int may_updater_compare(const char *a, const char *b);
 int may_updater_feed_line(const char *line);
 void may_updater_checking(void);
 void may_updater_checked(void);
-void may_updater_progress(unsigned long long sent, unsigned long long total,
-                          unsigned int elapsed_seconds);
-void may_updater_verifying(void);
-void may_updater_verified(void);
+/* SHA-256 completes only after real data chunks are ingested. The caller must
+ * separately stage data safely: this module NEVER writes a boot device. */
+int may_updater_stream_begin(void);
+int may_updater_stream_chunk(const void *data, unsigned int size,
+                             unsigned int elapsed_seconds);
+int may_updater_stream_finish(void);
 void may_updater_failed(const char *message);
 unsigned int may_updater_download_percent(void);
 unsigned int may_updater_download_eta(void);
