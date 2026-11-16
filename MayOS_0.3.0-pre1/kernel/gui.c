@@ -1894,7 +1894,7 @@ static void left_click(void) {
     }
     Window *about = &windows[1];
     if (!(about->open && !about->min && focus == 1 && settings_tab == 6 &&
-          inside(mx, my, about->x + 223, about->y + 265, 30, 30)))
+          inside(mx, my, about->x + 282, about->y + 265, 30, 30)))
         egg_clicks = 0;
     if (modal) {
         if (inside(mx, my, 604, 413, 90, 30))
