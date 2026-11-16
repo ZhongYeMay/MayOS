@@ -71,7 +71,7 @@ jobs:
             v0.3.0 dual "$expected" 33275904 \
             | tee build/mayos-updates-iso-verify.log
           grep -Fqx 'D|verified' build/mayos-updates-iso-verify.log
-          stage="$(find /tmp -maxdepth 2 -name verified.iso -path '/tmp/mayos-update.*/verified.iso' -print -quit)"
+          stage="$(find /tmp/mayos-update.* -maxdepth 1 -type f -name verified.iso -print -quit)"
           test -n "$stage"
           test "$(stat -c %s "$stage")" -eq 33275904
           printf '%s  %s\n' "$expected" "$stage" | sha256sum --check -
