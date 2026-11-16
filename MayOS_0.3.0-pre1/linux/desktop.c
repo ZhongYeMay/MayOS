@@ -29,6 +29,107 @@
 #undef strcmp
 #include "network.h"
 
+/* Linux-only, asynchronous MayOS Update Check. The update helper is a
+ * locally packaged ELF and is invoked directly (no shell). Its TLS-verified
+ * feed still passes through MayKernel's bounded release manifest parser. */
+#include "updater.h"
+static pid_t mayos_update_pid=-1;
+static int mayos_update_fd=-1, mayos_update_count, mayos_update_ack;
+static unsigned int mayos_update_len;
+static char mayos_update_line[800];
+static void mayos_update_stop(void) {
+    if(mayos_update_fd>=0) close(mayos_update_fd);
+    mayos_update_fd=-1;
+    if(mayos_update_pid>0) {
+        kill(mayos_update_pid,SIGKILL);
+        while(waitpid(mayos_update_pid,NULL,0)<0 && errno==EINTR) {}
+    }
+    mayos_update_pid=-1;
+    mayos_update_len=0;
+}
+int platform_update_check_start(void) {
+    if(mayos_update_pid>0) return 0;
+    int fds[2];
+    if(pipe(fds)<0) return 0;
+    pid_t child=fork();
+    if(child==0){
+        close(fds[0]);
+        if(dup2(fds[1],STDOUT_FILENO)<0) _exit(127);
+        close(fds[1]);
+        execl(MAYOS_FETCH_PATH,"mayos-fetch","--mayos-update-check",(char*)NULL);
+        _exit(127);
+    }
+    close(fds[1]);
+    if(child<0){close(fds[0]);return 0;}
+    if(fcntl(fds[0],F_SETFL,O_NONBLOCK)<0){
+        close(fds[0]);kill(child,SIGKILL);
+        while(waitpid(child,NULL,0)<0 && errno==EINTR) {}
+        return 0;
+    }
+    mayos_update_fd=fds[0];
+    mayos_update_pid=child;
+    mayos_update_len=0;
+    mayos_update_count=0;
+    mayos_update_ack=0;
+    may_updater_checking();
+    serial("MayOS: GitHub TLS update check started (Linux mode)\n");
+    return 1;
+}
+static void mayos_update_feed_line(const char *line) {
+    if(!strncmp(line,"U|",2)){
+        if(may_updater_feed_line(line+2)) mayos_update_count++;
+    }else if(!strcmp(line,"C|ok")){
+        mayos_update_ack=1;
+    }
+    /* Untrusted stderr-like text cannot set a success state. */
+}
+int platform_update_check_poll(void) {
+    if(mayos_update_fd<0) return 0;
+    char chunk[512];
+    int changed=0;
+    ssize_t n=read(mayos_update_fd,chunk,sizeof(chunk));
+    if(n>0){
+        changed=1;
+        for(ssize_t i=0;i<n;++i){
+            unsigned char ch=(unsigned char)chunk[i];
+            if(ch=='\n'){
+                mayos_update_line[mayos_update_len]=0;
+                mayos_update_feed_line(mayos_update_line);
+                mayos_update_len=0;
+            }else if(ch<32 || ch>=127 ||
+                     mayos_update_len+1>=sizeof(mayos_update_line)){
+                mayos_update_stop();
+                may_updater_failed("GitHub catalog worker emitted invalid data");
+                return 1;
+            }else mayos_update_line[mayos_update_len++]=(char)ch;
+        }
+    }else if(n==0 || (n<0 && errno!=EAGAIN && errno!=EINTR)){
+        int status=0;
+        pid_t finished=waitpid(mayos_update_pid,&status,WNOHANG);
+        int success=(finished==mayos_update_pid && WIFEXITED(status) &&
+                     WEXITSTATUS(status)==0 && mayos_update_ack &&
+                     mayos_update_count>0 && mayos_update_len==0);
+        if(mayos_update_fd>=0)close(mayos_update_fd);
+        mayos_update_fd=-1;
+        if(finished!=mayos_update_pid && mayos_update_pid>0){
+            kill(mayos_update_pid,SIGKILL);
+            while(waitpid(mayos_update_pid,NULL,0)<0 && errno==EINTR) {}
+        }
+        mayos_update_pid=-1;
+        mayos_update_len=0;
+        if(success){
+            may_updater_checked();
+            serial("MayOS: GitHub TLS Release check completed successfully\n");
+        }else{
+            may_updater_failed("GitHub HTTPS check failed; saved data retained");
+            serial("MayOS: GitHub TLS Release check failed (no online success)\n");
+        }
+        return 1;
+    }
+    return changed;
+}
+
+
 void *mayos_memset(void *destination, int value, u32 length) {
     return memset(destination, value, length);
 }
@@ -76,6 +177,7 @@ void serial(const char *text) {
 }
 
 static void cleanup(void) {
+    mayos_update_stop();
     for (int i = 0; i < input_count; i++) {
         ioctl(inputs[i].fd, EVIOCGRAB, 0);
         close(inputs[i].fd);

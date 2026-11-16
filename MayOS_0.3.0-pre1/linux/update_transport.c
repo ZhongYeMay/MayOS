@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <limits.h>
+#include <stdint.h>
 
 #define MAY_UPDATE_FEED_URL "https://raw.githubusercontent.com/ZhongYeMay/MayOS/main/website/update-feed-v1.txt"
 #define MAY_UPDATE_MAX_FEED 32768u
