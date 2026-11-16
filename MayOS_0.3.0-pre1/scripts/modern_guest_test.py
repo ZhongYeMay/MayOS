@@ -37,7 +37,10 @@ with tempfile.TemporaryDirectory() as folder:
     try:
         vm = BootVM(iso=BUILD / "mayos-dual.iso", disk=disk, tag="test-modern-network",
                     qemu="qemu-system-x86_64", memory=512, timeout=60)
-        vm.wait("custom kernel", timeout=30)
+        # Current GRUB menu labels are "Start MayKernel64" and
+        # "Start Linux64". Select the second entry BEFORE the default
+        # MayKernel autoboot timer expires, not after the kernel boots.
+        vm.wait("Start MayKernel64", timeout=30)
         vm.key("down"); vm.key("ret")
         vm.wait("MayOS-Linux# ", timeout=120)
         vm.wait("MayOS: desktop ready", timeout=120)
