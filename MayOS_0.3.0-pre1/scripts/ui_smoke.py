@@ -11,8 +11,12 @@ def logical_pixel(image, x, y):
     desktop_height = desktop_width * 3 // 4
     left = (width - desktop_width) // 2
     top = (height - desktop_height) // 2
-    return image.getpixel((left + x * desktop_width // 1024,
-                           top + y * desktop_height // 768))
+    # surface_present() maps physical -> logical with floor division.  Choose
+    # the first physical pixel whose inverse mapping is the requested logical
+    # pixel; plain floor here can select the preceding source pixel.
+    physical_x = left + (x * desktop_width + 1023) // 1024
+    physical_y = top + (y * desktop_height + 767) // 768
+    return image.getpixel((physical_x, physical_y))
 
 
 def main():
