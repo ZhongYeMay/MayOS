@@ -81,6 +81,7 @@ test: all
 	$(PYTHON) scripts/smoke.py
 	$(PYTHON) scripts/ui_smoke.py
 	$(PYTHON) scripts/settings_smoke.py
+	$(PYTHON) scripts/updates_smoke.py
 	$(PYTHON) scripts/easter_smoke.py
 	$(PYTHON) scripts/maydos_smoke.py
 	$(PYTHON) scripts/dock_smoke.py

@@ -7,6 +7,10 @@ on:
       - 'MayOS_0.3.0-pre1/scripts/font.py'
       - 'MayOS_0.3.0-pre1/kernel/fs.c'
       - 'MayOS_0.3.0-pre1/kernel/core.h'
+      - 'MayOS_0.3.0-pre1/kernel/update_sha256.c'
+      - 'MayOS_0.3.0-pre1/kernel/updater.c'
+      - 'MayOS_0.3.0-pre1/scripts/updater_test.c'
+      - 'MayOS_0.3.0-pre1/scripts/test_updater.py'
       - 'MayOS_0.3.0-pre1/scripts/settings_smoke.py'
       - 'MayOS_0.3.0-pre1/scripts/test_ui_style_contract.py'
       - 'MayOS_0.3.0-pre1/scripts/record_feature_tour.py'
@@ -18,6 +22,10 @@ on:
       - 'MayOS_0.3.0-pre1/scripts/font.py'
       - 'MayOS_0.3.0-pre1/kernel/fs.c'
       - 'MayOS_0.3.0-pre1/kernel/core.h'
+      - 'MayOS_0.3.0-pre1/kernel/update_sha256.c'
+      - 'MayOS_0.3.0-pre1/kernel/updater.c'
+      - 'MayOS_0.3.0-pre1/scripts/updater_test.c'
+      - 'MayOS_0.3.0-pre1/scripts/test_updater.py'
       - '.github/workflows/settings-static-fast.yml'
 
 permissions:
@@ -36,6 +44,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/settings_smoke.py scripts/record_feature_tour.py
           python3 scripts/test_ui_style_contract.py
+          python3 scripts/test_updater.py
       - name: Dry-run website release promotion before any publishing
         run: |
           python3 scripts/promote_strict_ui_release_website.py

@@ -2313,19 +2313,24 @@ static void left_click(void) {
             }
             if (rx < 188) {
                 int tab = (ry - 132) / 36;
-                if (ry >= 132 && tab >= 0 && tab < 7 && (ry - 132) % 36 < 34)
+                if (ry >= 132 && tab >= 0 && tab < 7 && (ry - 132) % 36 < 34) {
                     settings_tab = tab;
+                    if (tab == 5)
+                        serial("MayOS: native Settings > Updates opened (offline catalog)\n");
+                }
             }
             else if (settings_tab == 5) {
                 if (inside(rx, ry, 205, 398, 142, 32)) {
                     /* No fabricated online check or update installation. */
                     may_updater_offline();
+                    serial("MayOS: update online check unavailable, no network request made\n");
 #ifdef MAYOS_LINUX
                     notify("HTTPS 检测后端尚未连接");
 #else
                     notify("MayKernel 尚缺原生安全网络下载能力");
 #endif
                 } else if (inside(rx, ry, 367, 398, 170, 32)) {
+                    serial("MayOS: update install blocked (no A/B verified rollback)\n");
                     notify("没有 A/B 可回退安装器；禁止覆盖启动盘");
                 }
             } else if (settings_tab == 1) {
