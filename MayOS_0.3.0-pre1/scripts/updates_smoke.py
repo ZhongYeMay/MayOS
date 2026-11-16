@@ -12,9 +12,14 @@ def main():
     vm = VM(disk, "test-native-updates")
     try:
         vm.click(50,16)
+        # The first screenshot previously included the PS/2 mouse pointer over
+        # the system title bar; a byte-perfect comparison then failed when the
+        # pointer moved to Updates, despite unchanged status-bar code.
+        vm.move(1000,690)
         vm.shot("test-updates-about-before")
         vm.click(237,455)  # Settings sidebar row 5 (Updates)
         vm.wait("MayOS: native Settings > Updates opened (offline catalog)")
+        vm.move(1000,690)
         vm.shot("test-updates-offline")
         assert ImageChops.difference(
             crop("test-updates-about-before",(380,248,799,545)),
