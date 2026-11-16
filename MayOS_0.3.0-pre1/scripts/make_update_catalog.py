@@ -7,7 +7,7 @@ import json
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-feed = (ROOT / "website/update-feed-v1.txt").read_text(encoding="utf-8").splitlines()
+feed = (ROOT.parent / "website/update-feed-v1.txt").read_text(encoding="utf-8").splitlines()
 assert feed[0] == "MAYOS_UPDATE_FEED_V1", "Unexpected update catalog version"
 records = []
 for line in feed[1:]:

@@ -10,6 +10,7 @@
 #endif
 #include "version.h"
 #include "maydos_tools.h"
+#include "updater.h"
 #define MAYOS_RELEASE MAYOS_VERSION
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
@@ -1305,6 +1306,7 @@ static void frame(int id) {
     if (high_contrast)
         border(w->x + 2, w->y + 2, w->w - 4, w->h - 4, line);
 }
+#include "updater_ui.inc"
 static void settings(Window *w) {
     int x = w->x, y = w->y, cx = x + 205, cy = y + 53, cw = w->w - 238;
     rect(x + 1, y + 36, 187, w->h - 38, dark ? 0x080809 : 0xf7f7f9);
@@ -1355,6 +1357,8 @@ static void settings(Window *w) {
         reference_right_label(cx + cw - 18, card_top + 190, "64-bit", ink);
         /* Device rename/Credits remain available beneath the card,
            outside the screenshot-specific component. */
+    } else if (settings_tab == 5) {
+        updater_draw(cx, cy, cw);
     } else if (settings_tab == 1) {
         text(cx, cy, "PERSONALIZATION", accent);
         large_text(cx, cy + 26, "外观设置", ink);
@@ -2312,7 +2316,19 @@ static void left_click(void) {
                 if (ry >= 132 && tab >= 0 && tab < 7 && (ry - 132) % 36 < 34)
                     settings_tab = tab;
             }
-            else if (settings_tab == 1) {
+            else if (settings_tab == 5) {
+                if (inside(rx, ry, 205, 398, 142, 32)) {
+                    /* No fabricated online check or update installation. */
+                    may_updater_offline();
+#ifdef MAYOS_LINUX
+                    notify("HTTPS 检测后端尚未连接");
+#else
+                    notify("MayKernel 尚缺原生安全网络下载能力");
+#endif
+                } else if (inside(rx, ry, 367, 398, 170, 32)) {
+                    notify("没有 A/B 可回退安装器；禁止覆盖启动盘");
+                }
+            } else if (settings_tab == 1) {
                 if (ry >= 220 && ry <= 382) {
                     if (rx >= 204 && rx < 420) {
                         dark = 0;
@@ -2625,6 +2641,7 @@ static void key_event(int k) {
 void kernel_main(u32 magic, u32 info) {
     hardware_init(magic, info);
     fs_init();
+    may_updater_init();
     preferences_load();
     terminal_init();
     md_mines_start(1, 0, 0, 0);

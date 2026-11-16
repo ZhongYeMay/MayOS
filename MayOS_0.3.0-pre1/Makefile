@@ -24,7 +24,7 @@ FS_POWERLOSS_SELFTEST ?= 0
 ifeq ($(FS_POWERLOSS_SELFTEST),1)
 CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
 endif
-OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/maydos_tools.o
+OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/maydos_tools.o build/updater.o
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
@@ -54,7 +54,10 @@ build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 # No external font or browser runtime is required in the finished ISO.
 build/material_icons.h: assets/material_symbols.py | build
 	$(PYTHON) assets/material_symbols.py
-build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/maydos_tools.h kernel/maydos_ui.inc
+build/update_catalog.h: scripts/make_update_catalog.py ../website/update-feed-v1.txt | build
+	$(PYTHON) scripts/make_update_catalog.py
+build/updater.o: build/update_catalog.h kernel/updater.h kernel/version.h
+build/gui.o: kernel/updater.h kernel/updater_ui.inc build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/maydos_tools.h kernel/maydos_ui.inc
 build/core.o: kernel/framebuffer.h kernel/boot64.S
 build/galgame.o: kernel/galgame.h
 build/maydos_tools.o: kernel/maydos_tools.h
@@ -72,6 +75,7 @@ build/mayos-disk.img: | build
 run: all
 	$(QEMU) -cpu max $(if $(QEMU_DATA_DIR),-L $(QEMU_DATA_DIR)) -m 128 -vga std -cdrom build/mayos.iso -drive file=build/mayos-disk.img,format=raw,if=ide,index=0 -boot d -serial file:build/serial.log -no-reboot
 test: all
+	$(PYTHON) scripts/test_updater.py
 	$(PYTHON) scripts/test_maydos_tools.py
 	$(PYTHON) scripts/smoke.py
 	$(PYTHON) scripts/ui_smoke.py
@@ -98,4 +102,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h build/update_catalog.h
