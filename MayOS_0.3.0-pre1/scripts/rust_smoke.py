@@ -67,6 +67,9 @@ def main():
         vm.cmd("update check")
         vm.wait("MayOS: Rust no_std manifest gate passed (UNTRUSTED)")
         vm.wait("Newer version found (UNVERIFIED metadata)")
+        vm.cmd("update recovery-test")
+        vm.wait("MayOS: Rust A/B recovery policy self-test PASSED")
+        vm.wait("A/B boot policy PASS (memory only; no installation)")
         vm.shot("maykernel-rust-c-valid-metadata")
     finally:
         vm.stop()
@@ -80,7 +83,7 @@ def main():
         vm.shot("maykernel-rust-c-duplicate-rejected")
     finally:
         vm.stop()
-    print("PASS: native x86_64 MayKernel Rust no_std/C ABI accepted bounded untrusted metadata and rejected duplicate field", flush=True)
+    print("PASS: native x86_64 Rust C kernel gate + A/B recovery policy diagnostic + duplicate-field rejection", flush=True)
 
 if __name__ == "__main__":
     main()
