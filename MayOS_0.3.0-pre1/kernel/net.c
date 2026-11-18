@@ -3,6 +3,7 @@
 #include "net_ipv4.h"
 #include "net_dhcp.h"
 #include "net_tcp.h"
+#include "net_tcp_retry.h"
 
 /* The RTL8139 is deliberately opt-in by PCI device ID. Unrecognized network
  * hardware remains untouched. A single polling driver avoids changing PIC/IDT.
@@ -34,7 +35,11 @@ static int qemu_gateway_mac_valid, udp_probe_active, dns_probe_active;
 static MayDhcpClient dhcp;
 static int dhcp_request_pending;
 static u32 tcp_next_seq,tcp_remote_seq,tcp_captured;
-static int tcp_state,tcp_pending_ack,tcp_pending_get;
+static int tcp_state,tcp_pending_ack,tcp_pending_get,tcp_pending_fin;
+static int tcp_drop_next_syn;
+static u32 tcp_response_tick;
+static MayTcpRetry tcp_retry;
+static u8 tcp_retry_payload[128];
 static u8 tcp_capture[256];
 static const u8 qemu_local_ip[4] = {10, 0, 2, 15};
 static const u8 qemu_gateway_ip[4] = {10, 0, 2, 2};
@@ -109,7 +114,9 @@ static int rtl_setup(u8 bus, u8 slot, u8 func) {
     qemu_gateway_mac_valid = 0;
     dhcp_request_pending = 0;
     memset(&dhcp, 0, sizeof(dhcp));
-    tcp_state=tcp_pending_ack=tcp_pending_get=0;
+    tcp_state=tcp_pending_ack=tcp_pending_get=tcp_pending_fin=0;
+    tcp_drop_next_syn=0;
+    memset(&tcp_retry,0,sizeof(tcp_retry));
     tcp_next_seq=tcp_remote_seq=tcp_captured=0;
     udp_probe_active = dns_probe_active = 0;
     outw(io + RTL_IMR, 0); /* polling only; don't fire unhandled IRQs */
@@ -159,10 +166,11 @@ const char *may_net_format_ipv4(const u8 ip[4]) {
     result[pos]=0;
     return result;
 }
-/* QEMU localhost diagnostic: no retransmission, congestion control,
- * production HTTP or encryption. Only sends to already ARP-confirmed gateway. */
+/* Single outstanding segment, bounded retries, and explicit close.
+ * Only for a QEMU localhost fixture; not congestion-controlled TCP. */
 static int tcp_transmit(u8 flags,const u8 *data,u16 length) {
-    if(!nic.present||!qemu_gateway_mac_valid)return 0;
+    if(!nic.present||!qemu_gateway_mac_valid||
+       length>sizeof(tcp_retry_payload))return 0;
     u32 index=next_tx;
     u16 io=nic.io_base;
     if(!(inl(io+RTL_TSD0+index*4u)&(1u<<13)))return 0;
@@ -171,18 +179,57 @@ static int tcp_transmit(u8 flags,const u8 *data,u16 length) {
         40100u,10080u,tcp_next_seq,tcp_remote_seq,
         flags,4096u,data,length,(u16)(tcp_next_seq&0xffffu));
     if(!count)return 0;
+    if(flags&(MAY_TCP_SYN|MAY_TCP_PSH|MAY_TCP_FIN)) {
+        if(tcp_retry.active)return 0; /* one inflight segment */
+        may_tcp_retry_start(&tcp_retry,tcp_next_seq,length,flags,ticks);
+        if(length)memcpy(tcp_retry_payload,data,length);
+    }
+    if(tcp_drop_next_syn && (flags&MAY_TCP_SYN)) {
+        tcp_drop_next_syn=0;
+        serial("MayOS: TCP diagnostic intentionally dropped first SYN\n");
+    } else {
+        __asm__ volatile("" ::: "memory");
+        outl(io+RTL_TSD0+index*4u,(u32)count);
+        next_tx=(index+1u)&3u;
+        nic.packets_tx++;
+    }
+    tcp_next_seq+=(u32)length+
+                  ((flags&MAY_TCP_SYN)?1u:0u)+((flags&MAY_TCP_FIN)?1u:0u);
+    if(flags&MAY_TCP_PSH)tcp_response_tick=ticks;
+    return 1;
+}
+static void tcp_retransmit_poll(void) {
+    if(!tcp_state||!tcp_retry.active)return;
+    if(may_tcp_retry_exhausted(&tcp_retry,ticks)) {
+        may_tcp_retry_cancel(&tcp_retry);
+        tcp_state=0;
+        nic.tcp_fixture_timeout=1;
+        serial("MayOS: TCP diagnostic retry limit reached; connection aborted\n");
+        return;
+    }
+    if(!may_tcp_retry_due(&tcp_retry,ticks))return;
+    u32 index=next_tx;
+    u16 io=nic.io_base;
+    if(!(inl(io+RTL_TSD0+index*4u)&(1u<<13)))return;
+    int count=may_tcp_build(tx_frames[index],sizeof(tx_frames[index]),
+        nic.mac,qemu_gateway_mac,qemu_local_ip,qemu_gateway_ip,
+        40100u,10080u,tcp_retry.first_seq,tcp_remote_seq,
+        tcp_retry.flags,4096u,tcp_retry_payload,tcp_retry.payload_length,
+        (u16)(tcp_retry.first_seq&0xffffu));
+    if(!count)return;
     __asm__ volatile("" ::: "memory");
     outl(io+RTL_TSD0+index*4u,(u32)count);
     next_tx=(index+1u)&3u;
     nic.packets_tx++;
-    tcp_next_seq+=(u32)length+
-                  ((flags&MAY_TCP_SYN)?1u:0u)+((flags&MAY_TCP_FIN)?1u:0u);
-    return 1;
+    may_tcp_retry_resent(&tcp_retry,ticks);
+    nic.tcp_fixture_retries++;
+    serial("MayOS: TCP diagnostic segment retransmitted\n");
 }
 static void tcp_received(const MayTcpSegment *t) {
     if(t->source_port!=10080u || t->destination_port!=40100u)return;
     for(u32 i=0;i<4;i++)if(t->source_ip[i]!=qemu_gateway_ip[i])return;
     if(t->flags&MAY_TCP_RST) {
+        may_tcp_retry_cancel(&tcp_retry);
         tcp_state=0;
         serial("MayOS: TCP QEMU fixture connection reset\n");
         return;
@@ -190,7 +237,8 @@ static void tcp_received(const MayTcpSegment *t) {
     if(tcp_state==1) {
         if((t->flags&(MAY_TCP_SYN|MAY_TCP_ACK))==
                        (MAY_TCP_SYN|MAY_TCP_ACK) &&
-           t->ack==tcp_next_seq) {
+           t->ack==tcp_next_seq &&
+           may_tcp_retry_ack(&tcp_retry,t->ack)) {
             tcp_remote_seq=t->seq+1u;
             tcp_state=2;
             tcp_pending_ack=1;
@@ -200,8 +248,16 @@ static void tcp_received(const MayTcpSegment *t) {
         }
         return;
     }
-    if(tcp_state!=2 || !(t->flags&MAY_TCP_ACK) ||
+    if((tcp_state!=2 && tcp_state!=3) ||
+       !(t->flags&MAY_TCP_ACK) ||
        t->seq!=tcp_remote_seq || t->ack>tcp_next_seq)return;
+    (void)may_tcp_retry_ack(&tcp_retry,t->ack);
+    if(tcp_state==3 && t->ack==tcp_next_seq) {
+        tcp_state=4;
+        nic.tcp_fixture_closed=1;
+        serial("MayOS: TCP diagnostic FIN acknowledged; clean close\n");
+        return;
+    }
     if(t->payload_length) {
         u32 n=t->payload_length;
         tcp_remote_seq+=n;
@@ -228,7 +284,8 @@ static void tcp_received(const MayTcpSegment *t) {
     }
     if(t->flags&MAY_TCP_FIN) {
         tcp_remote_seq++;
-        tcp_pending_ack=1;
+        tcp_pending_ack=0;
+        tcp_pending_fin=1;
     }
 }
 
@@ -406,6 +463,20 @@ void may_net_poll(void) {
             serial("MayOS: TCP QEMU plaintext test request sent\n");
         }
     }
+    if(tcp_pending_fin && !tcp_retry.active &&
+       tcp_transmit(MAY_TCP_FIN|MAY_TCP_ACK,0,0)) {
+        tcp_pending_fin=0;
+        tcp_state=3;
+        serial("MayOS: TCP diagnostic FIN sent; closing connection\n");
+    }
+    tcp_retransmit_poll();
+    if(tcp_state==2 && !nic.tcp_fixture_reply &&
+       !tcp_retry.active && !tcp_pending_get &&
+       (u32)(ticks-tcp_response_tick)>=800u) {
+        tcp_state=0;
+        nic.tcp_fixture_timeout=1;
+        serial("MayOS: TCP diagnostic response timed out\n");
+    }
 }
 int may_net_qemu_arp_probe(void) {
     if (!nic.present) return 0;
@@ -487,15 +558,21 @@ int may_net_qemu_dns_fixture(void) {
     return send_ipv4_probe(1);
 }
 
-int may_net_qemu_tcp_http_probe(void) {
+static int start_tcp_probe(int lose_first_syn) {
     if(!nic.present||!qemu_gateway_mac_valid)return 0;
     may_net_poll();
+    if(tcp_state && tcp_state!=4)return 0;
     tcp_next_seq=0x4d415900u^ticks;
     tcp_remote_seq=0;
     tcp_captured=0;
     tcp_state=1;
-    tcp_pending_ack=tcp_pending_get=0;
+    tcp_pending_ack=tcp_pending_get=tcp_pending_fin=0;
+    tcp_drop_next_syn=lose_first_syn;
+    may_tcp_retry_cancel(&tcp_retry);
     nic.tcp_fixture_connected=0;
+    nic.tcp_fixture_closed=0;
+    nic.tcp_fixture_timeout=0;
+    nic.tcp_fixture_retries=0;
     nic.tcp_fixture_reply=0;
     nic.tcp_fixture_bytes=0;
     if(!tcp_transmit(MAY_TCP_SYN,0,0)) {
@@ -505,3 +582,5 @@ int may_net_qemu_tcp_http_probe(void) {
     serial("MayOS: TCP QEMU SYN sent to localhost fixture\n");
     return 1;
 }
+int may_net_qemu_tcp_http_probe(void) { return start_tcp_probe(0); }
+int may_net_qemu_tcp_loss_probe(void) { return start_tcp_probe(1); }
