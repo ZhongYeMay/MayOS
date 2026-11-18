@@ -1,5 +1,8 @@
 #![cfg_attr(not(test), no_std)]
 
+#[cfg(feature = "release-signature")]
+mod release_signature;
+
 // MayKernel Rust + C migration: independent second validation of the
 // UNTRUSTED local MayFS update manifest. No heap, no disk writes, no network,
 // no cryptographic authentication and no permission to install updates.
