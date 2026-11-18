@@ -31,6 +31,9 @@ while IFS= read -r -d '' file; do
   gcc -std=c99 -O2 -m64 -ffreestanding -fno-builtin \
     -fno-stack-protector -fno-pie -fno-pic \
     -fno-asynchronous-unwind-tables -mno-red-zone -mgeneral-regs-only \
+    -Dmemcpy=maybear_memcpy -Dmemset=maybear_memset \
+    -Dmemmove=maybear_memmove -Dmemcmp=maybear_memcmp \
+    -Dstrlen=maybear_strlen \
     -I"$source_dir/inc" -I"$source_dir/src" \
     -c "$file" -o "$object"
   files=$((files+1))
