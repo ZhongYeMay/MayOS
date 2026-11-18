@@ -786,7 +786,7 @@ static void shell(void) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
-        emit("theme light|dark  net status|dhcp|qemu-probe|udp-probe|dns-probe|tcp-probe|tcp-loss-probe");
+        emit("theme light|dark  net status|dhcp|resolve DOMAIN|qemu-probe|udp-probe|dns-probe|tcp-probe|tcp-loss-probe");
         emit("reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
@@ -927,7 +927,14 @@ static void shell(void) {
         emit(report);
         emit("Explorer: HTTP(S), certificate-verified TLS, HTTP/2 and IPv6 (Linux).");
 #else
-        if (argc > 1 && !strcmp(argv[1], "dhcp")) {
+        if (argc > 1 && !strcmp(argv[1], "resolve")) {
+            if(argc<3)
+                emit("Usage: net resolve <hostname>");
+            else if(!may_net_dns_lookup(argv[2]))
+                emit("DNS: obtain DHCP lease first or invalid hostname/busy NIC");
+            else
+                emit("DNS: query sent to DHCP-provided resolver");
+        } else if (argc > 1 && !strcmp(argv[1], "dhcp")) {
             if (!may_net_dhcp_start())
                 emit("DHCP: RTL8139 unavailable or transmit busy");
             else
@@ -948,12 +955,12 @@ static void shell(void) {
             if (!may_net_qemu_dns_fixture())
                 emit("DNS fixture: send ARP probe first; RTL8139 may be busy");
         } else if (argc > 1 && strcmp(argv[1], "status"))
-            emit("Usage: net status|dhcp|qemu-probe|udp-probe|dns-probe|tcp-probe|tcp-loss-probe");
+            emit("Usage: net status|dhcp|resolve DOMAIN|qemu-probe|udp-probe|dns-probe|tcp-probe|tcp-loss-probe");
         may_net_poll();
         const MayNetInfo *nic = may_net_info();
         if (nic->present) {
             emit("Network: RTL8139 PCI Ethernet ready (polled, L2 only).");
-            emit("IPv4/UDP: QEMU static test stack, no DHCP or public DNS.");
+            emit("IPv4/UDP: QEMU-only driver, DHCP and untrusted DNS A support.");
             emitnum("RX frames: ", nic->packets_rx, "");
             emitnum("TX frames: ", nic->packets_tx, "");
             emit(nic->gateway_arp_reply
@@ -965,6 +972,13 @@ static void shell(void) {
             emit(nic->dns_fixture_reply
                 ? "QEMU synthetic DNS A response: validated"
                 : "QEMU synthetic DNS A response: not confirmed");
+            if(nic->dns_native_reply) {
+                emit("DNS (DHCP resolver): A answer received");
+                emit(may_net_format_ipv4(nic->dns_native_address));
+            } else if(nic->dns_native_timeout)
+                emit("DNS (DHCP resolver): query failed or timed out");
+            else
+                emit("DNS (DHCP resolver): no valid answer yet");
             emit(nic->tcp_fixture_connected
                 ? "QEMU TCP: 3-way handshake complete"
                 : "QEMU TCP: not connected");
@@ -998,7 +1012,7 @@ static void shell(void) {
         } else
             emit("Network: no supported RTL8139 PCI adapter.");
         emit("MayKernel: TCP localhost fixture only; no TLS/HTTPS/updates.");
-        emit("UDP/DNS probes require a local QEMU host test fixture.");
+        emit("QEMU fixture UDP/DNS probes are separate from real DNS.");
 #endif
     } else if (!strcmp(c, "memstress")) {
 #ifndef MAYOS_LINUX
