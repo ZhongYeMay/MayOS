@@ -918,7 +918,8 @@ static void shell(void) {
             emit(info->changelog);
             emit("SHA-256 in manifest is NOT an authenticated image hash.");
         }
-        emit("No download/install until native network and safe installer exist.");
+        emit("HTTPS BLOCKED until trusted TLS + release signatures exist.");
+        emit("No download/install; rollback-capable installer not ready.");
 #else
         emit("Native MayKernel update check requires the MayKernel boot option.");
 #endif
@@ -1373,7 +1374,7 @@ static void settings(Window *w) {
             numtext(cx + 380, cy + 293, info->eta_minutes, ink);
             text(cx, cy + 317, info->changelog, muted);
         }
-        text(cx, cy + 343, "Offline preview only - no verified download/install", muted);
+        text(cx, cy + 343, "HTTPS BLOCKED - no verified TLS; download/install disabled", muted);
         text(cx, cy + 367, may_update_verify_status(), muted);
 #else
         text(cx, cy + 190, "MayKernel-only local update check", muted);
