@@ -1,0 +1,23 @@
+name: Validate MayKernel local update parser
+
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/kernel/update.c'
+      - 'MayOS_0.3.0-pre1/kernel/update.h'
+      - 'MayOS_0.3.0-pre1/kernel/gui.c'
+      - 'MayOS_0.3.0-pre1/tests/update_manifest_test.c'
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - '.github/workflows/maykernel-update-parser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-manifest-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and test the bounded update parser
+        run: make -C MayOS_0.3.0-pre1 test-update

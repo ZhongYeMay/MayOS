@@ -9,6 +9,9 @@
 #include "explorer_history.h"
 #endif
 #include "version.h"
+#ifndef MAYOS_LINUX
+#include "update.h"
+#endif
 #define MAYOS_RELEASE MAYOS_VERSION
 #ifdef MAYOS_LINUX
 #define PLATFORM_SHORT "Linux / x86_64"
@@ -782,7 +785,8 @@ static void shell(void) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
-        emit("theme light|dark  net status  reboot  shutdown");
+        emit("theme light|dark  net status  update check|status");
+        emit("reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
         out_count = 0;
@@ -887,6 +891,30 @@ static void shell(void) {
         emitnum("Uptime: ", ticks / 100, " seconds");
         emit(disk_ready ? "Disk: ATA / MayFS" : "Disk: RAM fallback");
         emit(cpu_name);
+#endif
+    } else if (!strcmp(c, "update")) {
+#ifndef MAYOS_LINUX
+        if (argc > 1 && !strcmp(argv[1], "check"))
+            may_update_check();
+        else if (argc > 1 && strcmp(argv[1], "status")) {
+            emit("Usage: update check|status");
+            return;
+        }
+        emit(may_update_status());
+        const MayUpdateInfo *info = may_update_info();
+        if (info->state == MAY_UPDATE_CANDIDATE ||
+            info->state == MAY_UPDATE_CURRENT) {
+            emit(info->name);
+            emit(info->version);
+            emit(info->architecture);
+            emit(info->kernel);
+            emit(info->release_date);
+            emit(info->changelog);
+            emit("SHA-256 in manifest is NOT an authenticated image hash.");
+        }
+        emit("No download/install until native network and safe installer exist.");
+#else
+        emit("Native MayKernel update check requires the MayKernel boot option.");
 #endif
     } else if (!strcmp(c, "net") || !strcmp(c, "network")) {
 #ifdef MAYOS_LINUX
@@ -1201,18 +1229,37 @@ static void settings(Window *w) {
            outside the screenshot-specific component. */
     } else if (settings_tab == 5) {
         heading_text(cx, cy - 8, "System Update", ink);
-        ui_card(cx, cy + 44, cw, 150, 20, bg);
-        reference_text(cx + 18, cy + 57, "MayOS", ink, 1);
-        text(cx + 18, cy + 102, "Current: " MAYOS_RELEASE, muted);
-        text(cx + 18, cy + 128, "Architecture: x86_64", muted);
-        text(cx + 18, cy + 154, platform_kernel(), muted);
-        text(cx, cy + 215, "GitHub Releases", ink);
-        text(cx, cy + 244, "Online updater integration in development", muted);
-        text(cx, cy + 271, "Installation time: unavailable", muted);
-        text(cx, cy + 303, "Download", muted);
-        soft_roundrect(cx, cy + 329, cw, 5, 2, line);
-        text(cx, cy + 348, "Install: not available on this build", muted);
-        soft_roundrect(cx, cy + 377, cw, 5, 2, line);
+        ui_card(cx, cy + 36, cw, 126, 18, bg);
+        reference_text(cx + 18, cy + 48, "MayOS", ink, 1);
+        text(cx + 18, cy + 93, "Current: " MAYOS_RELEASE, muted);
+        text(cx + 18, cy + 123, platform_kernel(), muted);
+        /* An explicit local-only update checker: nothing here claims GitHub
+         * connectivity, successful download, or permission to flash the disk. */
+#ifndef MAYOS_LINUX
+        ui_card(cx, cy + 174, 204, 34, 10, selected_fill);
+        text(cx + 16, cy + 181, "Check local manifest", ink);
+        text(cx + 218, cy + 181, "Documents/Update.may", muted);
+        text(cx, cy + 218, may_update_status(), muted);
+        const MayUpdateInfo *info = may_update_info();
+        if (info->state == MAY_UPDATE_CANDIDATE ||
+            info->state == MAY_UPDATE_CURRENT) {
+            text(cx, cy + 245, info->name, ink);
+            text(cx + 172, cy + 245, info->version, ink);
+            text(cx, cy + 269, info->release_date, muted);
+            text(cx + 138, cy + 269, info->architecture, muted);
+            text(cx + 273, cy + 269, info->kernel, muted);
+            text(cx, cy + 293, "Size (bytes):", muted);
+            numtext(cx + 115, cy + 293, info->size_bytes, ink);
+            text(cx + 282, cy + 293, "ETA (min):", muted);
+            numtext(cx + 380, cy + 293, info->eta_minutes, ink);
+            text(cx, cy + 317, info->changelog, muted);
+        }
+        text(cx, cy + 343, "Offline preview only - no verified download/install", muted);
+#else
+        text(cx, cy + 190, "MayKernel-only local update check", muted);
+        text(cx, cy + 228, "No matching verified update package", muted);
+        text(cx, cy + 286, "No download or installation in this build", muted);
+#endif
     } else if (settings_tab == 1) {
         MayDisplayInfo info;
         display_get_info(&info);
@@ -2155,7 +2202,15 @@ static void left_click(void) {
                     settings_tab = tab;
                 }
             }
-            else if (settings_tab == 1) {
+            else if (settings_tab == 5) {
+#ifndef MAYOS_LINUX
+                if (inside(rx, ry, 264, 227, 204, 34)) {
+                    may_update_check();
+                    notify(may_update_status());
+                    serial("MayOS: local update manifest checked\n");
+                }
+#endif
+            } else if (settings_tab == 1) {
                 if (ry >= 258 && ry < 290 && rx >= 264 && rx < 792) {
                     int mode = (rx - 264) / 132;
                     if (mode >= 0 && mode < 4) {

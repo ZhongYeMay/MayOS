@@ -37,6 +37,30 @@ def main():
     finally:
         vm.stop()
     print('PASS: Settings layout, detected display details and live scaling controls', flush=True)
+    # Real MayKernel/QEMU interaction: verify both shell and Settings route
+    # to the same native, read-only local manifest parser. This test uses an
+    # isolated throwaway MayFS image, not an install image.
+    update_disk = BUILD / 'test-settings-update.img'
+    with update_disk.open('wb') as stream:
+        stream.truncate(8 * 1024 * 1024)
+    vm = VM(update_disk, 'settings-update-check')
+    try:
+        vm.key('f1')
+        vm.cmd('update check')
+        vm.wait('No local manifest in Documents/Update.may')
+        vm.cmd('write Documents/Update.may invalid-metadata')
+        vm.wait('OK')
+        vm.cmd('update check')
+        vm.wait('Manifest invalid or incompatible (no changes made)')
+        vm.click(50, 16)   # MayOS top menu opens native Settings
+        vm.click(300, 452) # Updates tab in 1280x720 window
+        vm.shot('settings-updates-local-check')
+        vm.click(552, 369) # Check local manifest button
+        vm.wait('MayOS: local update manifest checked')
+        vm.shot('settings-updates-invalid-manifest')
+    finally:
+        vm.stop()
+    print('PASS: native Updates page, shell commands and invalid manifest safety', flush=True)
 
 
 if __name__ == '__main__':
