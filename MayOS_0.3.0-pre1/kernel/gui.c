@@ -786,7 +786,7 @@ static void shell(void) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
-        emit("theme light|dark  net status|dhcp|qemu-probe|udp-probe|dns-probe  update check|status");
+        emit("theme light|dark  net status|dhcp|qemu-probe|udp-probe|dns-probe  update check|verify|status");
         emit("reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
@@ -897,11 +897,14 @@ static void shell(void) {
 #ifndef MAYOS_LINUX
         if (argc > 1 && !strcmp(argv[1], "check"))
             may_update_check();
+        else if (argc > 1 && !strcmp(argv[1], "verify"))
+            may_update_verify_local();
         else if (argc > 1 && strcmp(argv[1], "status")) {
-            emit("Usage: update check|status");
+            emit("Usage: update check|verify|status");
             return;
         }
         emit(may_update_status());
+        emit(may_update_verify_status());
         const MayUpdateInfo *info = may_update_info();
         if (info->state == MAY_UPDATE_CANDIDATE ||
             info->state == MAY_UPDATE_CURRENT) {
@@ -1291,7 +1294,9 @@ static void settings(Window *w) {
 #ifndef MAYOS_LINUX
         ui_card(cx, cy + 174, 204, 34, 10, selected_fill);
         text(cx + 16, cy + 181, "Check local manifest", ink);
-        text(cx + 218, cy + 181, "Documents/Update.may", muted);
+        ui_card(cx + 218, cy + 174, 194, 34, 10, selected_fill);
+        text(cx + 234, cy + 181, "Verify local image", ink);
+        text(cx + 12, cy + 151, "Manifest: Documents/Update.may", muted);
         text(cx, cy + 218, may_update_status(), muted);
         const MayUpdateInfo *info = may_update_info();
         if (info->state == MAY_UPDATE_CANDIDATE ||
@@ -1308,6 +1313,7 @@ static void settings(Window *w) {
             text(cx, cy + 317, info->changelog, muted);
         }
         text(cx, cy + 343, "Offline preview only - no verified download/install", muted);
+        text(cx, cy + 367, may_update_verify_status(), muted);
 #else
         text(cx, cy + 190, "MayKernel-only local update check", muted);
         text(cx, cy + 228, "No matching verified update package", muted);
@@ -2261,6 +2267,10 @@ static void left_click(void) {
                     may_update_check();
                     notify(may_update_status());
                     serial("MayOS: local update manifest checked\n");
+                } else if (inside(rx, ry, 482, 227, 194, 34)) {
+                    may_update_verify_local();
+                    notify(may_update_verify_status());
+                    serial("MayOS: local update image integrity checked\n");
                 }
 #endif
             } else if (settings_tab == 1) {
