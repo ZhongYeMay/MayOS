@@ -1,0 +1,83 @@
+name: MayOS actual offline signer to QEMU kernel end-to-end
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/scripts/package_signed_release.py'
+      - 'MayOS_0.3.0-pre1/scripts/verify_signed_release.py'
+      - 'MayOS_0.3.0-pre1/scripts/release_packaging_e2e_smoke.py'
+      - 'MayOS_0.3.0-pre1/rust/maykernel_policy/**'
+      - 'MayOS_0.3.0-pre1/kernel/update.c'
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - '.github/workflows/mayos-release-e2e.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release-signer-to-kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust and MayKernel no_std target
+        run: |
+          rustup toolchain install 1.85.1 --profile minimal --target x86_64-unknown-none
+          rustup default 1.85.1
+      - name: Install signed Ubuntu QEMU and ISO build tools
+        run: |
+          bash scripts/configure-ci-apt-mirror.sh
+          sudo apt-get install -y --no-install-recommends \
+            gcc binutils make python3 python3-pil fonts-noto-cjk \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools qemu-system-x86 openssl
+      - name: Generate short-lived ephemeral CI key and offline-signed MayOS test package
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl genpkey -algorithm Ed25519 -out "$RUNNER_TEMP/mayos-ephemeral-secret.pem"
+          openssl pkey -in "$RUNNER_TEMP/mayos-ephemeral-secret.pem" -pubout \
+            -out "$RUNNER_TEMP/mayos-ephemeral-public.pem"
+          openssl pkey -in "$RUNNER_TEMP/mayos-ephemeral-secret.pem" -pubout \
+            -outform DER -out "$RUNNER_TEMP/mayos-ephemeral-public.der"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          root=Path(os.environ["RUNNER_TEMP"])
+          data=(root / "mayos-ephemeral-public.der").read_bytes()
+          prefix=bytes.fromhex("302a300506032b6570032100")
+          assert len(data)==44 and data.startswith(prefix), "not Ed25519 SPKI"
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as f:
+              f.write("MAYOS_CI_PUBLIC_HEX="+data[len(prefix):].hex()+"\n")
+          (root / "mayos-payload-test.bin").write_bytes(b"abc")
+          PY
+          python3 MayOS_0.3.0-pre1/scripts/package_signed_release.py \
+            --image "$RUNNER_TEMP/mayos-payload-test.bin" \
+            --private-key "$RUNNER_TEMP/mayos-ephemeral-secret.pem" \
+            --output-dir "$RUNNER_TEMP/mayos-ephemeral-release" \
+            --version 0.5.0-pre3 --date 2026-11-19 --eta-minutes 7 \
+            --changelog "QEMU offline signed E2E"
+          python3 MayOS_0.3.0-pre1/scripts/verify_signed_release.py \
+            --image "$RUNNER_TEMP/mayos-payload-test.bin" \
+            --manifest "$RUNNER_TEMP/mayos-ephemeral-release/Update.may" \
+            --signature "$RUNNER_TEMP/mayos-ephemeral-release/Update.sig" \
+            --trusted-public-key "$RUNNER_TEMP/mayos-ephemeral-public.pem"
+      - name: Compile native MayKernel pinned to the ephemeral test public key and boot signed-image QEMU cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C MayOS_0.3.0-pre1 \
+            MAYOS_RELEASE_SIGNATURE=1 \
+            MAYOS_RELEASE_PUBKEY_HEX="$MAYOS_CI_PUBLIC_HEX" all
+          python3 MayOS_0.3.0-pre1/scripts/release_packaging_e2e_smoke.py \
+            --package-dir "$RUNNER_TEMP/mayos-ephemeral-release" \
+            --image "$RUNNER_TEMP/mayos-payload-test.bin"
+          nm -g MayOS_0.3.0-pre1/build/mayos.elf | grep ' mayrs_ed25519_verify$'
+      - name: Preserve real QEMU screenshots and serial logs but never private keys
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel-offline-signed-release-actual-qemu-evidence
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            MayOS_0.3.0-pre1/build/maykernel-release-e2e-*.png
+            MayOS_0.3.0-pre1/build/maykernel-release-e2e-*.log
+            MayOS_0.3.0-pre1/build/maykernel-release-e2e-*-qemu.log
