@@ -40,8 +40,14 @@ static int date_valid(const char *s) {
                (s[2] - '0') * 10 + (s[3] - '0');
     int month = (s[5] - '0') * 10 + (s[6] - '0');
     int day = (s[8] - '0') * 10 + (s[9] - '0');
-    return year >= 2023 && month >= 1 && month <= 12 &&
-           day >= 1 && day <= 31;
+    if (year < 2023 || month < 1 || month > 12 || day < 1) return 0;
+    static const u8 days_in_month[12] = {
+        31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+    };
+    int maximum = days_in_month[month - 1];
+    if (month == 2 && ((year % 4 == 0 && year % 100 != 0) ||
+                       year % 400 == 0)) maximum = 29;
+    return day <= maximum;
 }
 
 static int hex256_valid(const char *s) {
@@ -190,6 +196,7 @@ void may_update_check(void) {
         if (!parse_pair(line, &seen)) return;
     }
     if (seen != 0x1ffu ||
+        strcmp(update.name, "MayOS") ||
         strcmp(update.architecture, "x86_64") ||
         strcmp(update.kernel, "MayKernel") ||
         !date_valid(update.release_date) ||
