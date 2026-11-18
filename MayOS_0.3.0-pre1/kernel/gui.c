@@ -786,7 +786,7 @@ static void shell(void) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
-        emit("theme light|dark  net status|qemu-probe|udp-probe|dns-probe  update check|status");
+        emit("theme light|dark  net status|dhcp|qemu-probe|udp-probe|dns-probe  update check|status");
         emit("reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
@@ -924,7 +924,12 @@ static void shell(void) {
         emit(report);
         emit("Explorer: HTTP(S), certificate-verified TLS, HTTP/2 and IPv6 (Linux).");
 #else
-        if (argc > 1 && !strcmp(argv[1], "qemu-probe")) {
+        if (argc > 1 && !strcmp(argv[1], "dhcp")) {
+            if (!may_net_dhcp_start())
+                emit("DHCP: RTL8139 unavailable or transmit busy");
+            else
+                emit("DHCP: DISCOVER sent; awaiting validated OFFER/ACK");
+        } else if (argc > 1 && !strcmp(argv[1], "qemu-probe")) {
             if (!may_net_qemu_arp_probe())
                 emit("QEMU ARP probe: NIC unavailable or transmit busy");
         } else if (argc > 1 && !strcmp(argv[1], "udp-probe")) {
@@ -934,7 +939,7 @@ static void shell(void) {
             if (!may_net_qemu_dns_fixture())
                 emit("DNS fixture: send ARP probe first; RTL8139 may be busy");
         } else if (argc > 1 && strcmp(argv[1], "status"))
-            emit("Usage: net status|qemu-probe|udp-probe|dns-probe");
+            emit("Usage: net status|dhcp|qemu-probe|udp-probe|dns-probe");
         may_net_poll();
         const MayNetInfo *nic = may_net_info();
         if (nic->present) {
@@ -951,9 +956,27 @@ static void shell(void) {
             emit(nic->dns_fixture_reply
                 ? "QEMU synthetic DNS A response: validated"
                 : "QEMU synthetic DNS A response: not confirmed");
+            const MayDhcpClient *lease=may_net_dhcp_info();
+            if (lease->state==MAY_DHCP_BOUND) {
+                emit("DHCP: bound");
+                emit("Assigned IPv4:");
+                emit(may_net_format_ipv4(lease->address));
+                emit("Subnet:");
+                emit(may_net_format_ipv4(lease->subnet));
+                emit("Gateway:");
+                emit(may_net_format_ipv4(lease->router));
+                emit("DNS:");
+                emit(may_net_format_ipv4(lease->dns));
+                emitnum("Lease (seconds): ",lease->lease_seconds,"");
+            } else if (lease->state==MAY_DHCP_REQUEST)
+                emit("DHCP: REQUEST sent, waiting for ACK");
+            else if (lease->state==MAY_DHCP_DISCOVER)
+                emit("DHCP: DISCOVER sent, waiting for OFFER");
+            else if (lease->state==MAY_DHCP_NAK)
+                emit("DHCP: rejected by server");
         } else
             emit("Network: no supported RTL8139 PCI adapter.");
-        emit("MayKernel: no DHCP, general DNS, TCP or HTTPS yet.");
+        emit("MayKernel: DHCP initial lease only; no renewals/TCP/HTTPS.");
         emit("UDP/DNS probes require a local QEMU host test fixture.");
 #endif
     } else if (!strcmp(c, "memstress")) {
