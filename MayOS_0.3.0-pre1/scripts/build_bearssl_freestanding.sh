@@ -31,6 +31,9 @@ while IFS= read -r -d '' file; do
   gcc -std=c99 -O2 -m64 -ffreestanding -fno-builtin \
     -fno-stack-protector -fno-pie -fno-pic \
     -fno-asynchronous-unwind-tables -mno-red-zone -mgeneral-regs-only \
+    -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 \
+    -DBR_USE_URANDOM=0 -DBR_USE_UNIX_TIME=0 \
+    -DBR_USE_WIN32_RAND=0 -DBR_USE_WIN32_TIME=0 -DBR_RDRAND=0 \
     -Dmemcpy=maybear_memcpy -Dmemset=maybear_memset \
     -Dmemmove=maybear_memmove -Dmemcmp=maybear_memcmp \
     -Dstrlen=maybear_strlen \
