@@ -58,7 +58,7 @@ build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h 
 build/update.o: kernel/update.h kernel/version.h kernel/sha256.h
 build/sha256.o: kernel/sha256.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/net.h
-build/net.o: kernel/net.h kernel/net_ipv4.h kernel/net_dhcp.h kernel/io.h
+build/net.o: kernel/net.h kernel/net_ipv4.h kernel/net_dhcp.h kernel/net_tcp.h kernel/io.h
 build/net_dhcp.o: kernel/net_dhcp.h
 build/net_tcp.o: kernel/net_tcp.h kernel/net_ipv4.h
 build/net_ipv4.o: kernel/net_ipv4.h
