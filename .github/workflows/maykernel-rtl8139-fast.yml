@@ -5,6 +5,10 @@ on:
     paths:
       - 'MayOS_0.3.0-pre1/kernel/net.c'
       - 'MayOS_0.3.0-pre1/kernel/net.h'
+      - 'MayOS_0.3.0-pre1/kernel/net_ipv4.c'
+      - 'MayOS_0.3.0-pre1/kernel/net_ipv4.h'
+      - 'MayOS_0.3.0-pre1/tests/net_ipv4_test.c'
+      - 'MayOS_0.3.0-pre1/scripts/net_smoke.py'
       - 'MayOS_0.3.0-pre1/kernel/core.c'
       - 'MayOS_0.3.0-pre1/kernel/io.h'
       - 'MayOS_0.3.0-pre1/Makefile'
@@ -27,3 +31,6 @@ jobs:
           file build/net.o
           readelf -h build/net.o | grep -F 'ELF64'
           readelf -h build/net.o | grep -F 'Advanced Micro Devices X86-64'
+          gcc -m64 -DMAYOS_X86_64 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie -fno-pic -fno-stack-protector -fno-builtin -fno-strict-aliasing -fno-asynchronous-unwind-tables -mno-red-zone -mgeneral-regs-only -Ikernel -c kernel/net_ipv4.c -o build/net_ipv4.o
+      - name: Check IPv4 UDP and DNS codec
+        run: make -C MayOS_0.3.0-pre1 test-net-codec
