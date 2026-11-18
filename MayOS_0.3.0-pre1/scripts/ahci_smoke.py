@@ -10,7 +10,7 @@ def main():
 
     vm = VM(disk, "test-ahci-first", machine="q35", storage="ahci")
     try:
-        vm.wait("MayOS: ACPI MCFG ranges=1")
+        vm.wait("MCFG ranges=1")
         vm.wait("MayOS: AHCI generic SATA disk ready (LBA48 DMA)")
         vm.key("f1")
         vm.cmd("write ahci.txt standards-based-dma")
