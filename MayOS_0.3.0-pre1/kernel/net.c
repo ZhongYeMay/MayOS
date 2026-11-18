@@ -31,6 +31,10 @@ static u8 rx_ring[RTL_RX_ALLOC] __attribute__((aligned(256)));
 static u8 tx_frames[4][RTL_TX_ALLOC] __attribute__((aligned(16)));
 static u8 ipv4_receive[RTL_TX_ALLOC];
 static u8 qemu_gateway_mac[6];
+static u8 dns_expected_question[270];
+static u16 dns_expected_question_len,dns_native_txid;
+static u32 dns_native_sent_tick;
+static int dns_native_pending;
 static int qemu_gateway_mac_valid, udp_probe_active, dns_probe_active;
 static MayDhcpClient dhcp;
 static int dhcp_request_pending;
@@ -114,6 +118,7 @@ static int rtl_setup(u8 bus, u8 slot, u8 func) {
     rx_cursor = next_tx = 0;
     qemu_gateway_mac_valid = 0;
     dhcp_request_pending = 0;
+    dns_native_pending=0;
     memset(&dhcp, 0, sizeof(dhcp));
     tcp_state=tcp_pending_ack=tcp_pending_get=tcp_pending_fin=0;
     tcp_drop_next_syn=0;
@@ -363,6 +368,26 @@ static void receive_frame(u32 offset, u32 frame_len) {
         }
         if (may_ipv4_udp_parse(ipv4_receive, frame_len, nic.mac,
                                qemu_local_ip, &message)) {
+            if(dns_native_pending && message.source_port==53u &&
+               message.destination_port==40002u &&
+               message.payload_length>=12u+dns_expected_question_len) {
+                int from_dns=1, matching_question=1;
+                for(u32 i=0;i<4;i++)
+                    if(message.source_ip[i]!=dhcp.dns[i])from_dns=0;
+                for(u32 i=0;i<dns_expected_question_len;i++)
+                    if(message.payload[12u+i]!=dns_expected_question[i])
+                        matching_question=0;
+                if(from_dns && matching_question) {
+                    u8 address[4];
+                    if(may_dns_reply_a(message.payload,message.payload_length,
+                                       dns_native_txid,address)) {
+                        memcpy(nic.dns_native_address,address,4);
+                        nic.dns_native_reply=1;
+                        dns_native_pending=0;
+                        serial("MayOS: DHCP DNS server returned a matched A record\n");
+                    }
+                }
+            }
             int gateway = 1;
             for (int i = 0; i < 4; i++)
                 if (message.source_ip[i] != qemu_gateway_ip[i]) gateway = 0;
@@ -471,6 +496,12 @@ void may_net_poll(void) {
         serial("MayOS: TCP diagnostic FIN sent; closing connection\n");
     }
     tcp_retransmit_poll();
+    if(dns_native_pending &&
+       (u32)(ticks-dns_native_sent_tick)>=350u) {
+        dns_native_pending=0;
+        nic.dns_native_timeout=1;
+        serial("MayOS: DHCP DNS lookup timed out (no valid A response)\n");
+    }
     if(tcp_state==2 && !nic.tcp_fixture_reply &&
        !tcp_retry.active && !tcp_pending_get &&
        (u32)(ticks-tcp_response_tick)>=800u) {
@@ -588,3 +619,38 @@ static int start_tcp_probe(int lose_first_syn) {
 }
 int may_net_qemu_tcp_http_probe(void) { return start_tcp_probe(0); }
 int may_net_qemu_tcp_loss_probe(void) { return start_tcp_probe(1); }
+
+
+int may_net_dns_lookup(const char *hostname) {
+    if(!nic.present||!hostname||dhcp.state!=MAY_DHCP_BOUND||
+       !qemu_gateway_mac_valid||dns_native_pending||
+       !dhcp.dns[0] || !dhcp.address[0])return 0;
+    if(strlen(hostname)>72u)return 0;
+    u8 query[280];
+    u16 id=(u16)(0x4d42u^(ticks&0x3fffu));
+    if(!id)id=1;
+    int data_bytes=may_dns_query_a(query,sizeof(query),hostname,id);
+    if(data_bytes<=12 || data_bytes-12>(int)sizeof(dns_expected_question))
+        return 0;
+    u16 io=nic.io_base;
+    u32 index=next_tx;
+    if(!(inl(io+RTL_TSD0+index*4u)&(1u<<13)))return 0;
+    int frame_bytes=may_ipv4_udp_build(
+        tx_frames[index],sizeof(tx_frames[index]),
+        nic.mac,qemu_gateway_mac,dhcp.address,dhcp.dns,
+        40002u,53u,query,(u16)data_bytes,id);
+    if(!frame_bytes)return 0;
+    memcpy(dns_expected_question,query+12u,(u32)data_bytes-12u);
+    dns_expected_question_len=(u16)(data_bytes-12);
+    dns_native_txid=id;
+    nic.dns_native_reply=0;
+    nic.dns_native_timeout=0;
+    dns_native_sent_tick=ticks;
+    dns_native_pending=1;
+    __asm__ volatile("" ::: "memory");
+    outl(io+RTL_TSD0+index*4u,(u32)frame_bytes);
+    next_tx=(index+1u)&3u;
+    nic.packets_tx++;
+    serial("MayOS: DHCP DNS A query sent to leased DNS server\n");
+    return 1;
+}
