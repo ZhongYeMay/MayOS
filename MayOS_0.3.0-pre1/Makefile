@@ -42,7 +42,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: all clean run test test-update linux linux-update dual run-dual test-dual run-uefi test-uefi
+.PHONY: all clean run test test-update test-net linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
 	mkdir -p build
@@ -76,10 +76,13 @@ build/update_manifest_test: tests/update_manifest_test.c kernel/update.c kernel/
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/update_manifest_test.c kernel/update.c -o $@
 test-update: build/update_manifest_test
 	./build/update_manifest_test
+test-net: all
+	$(PYTHON) scripts/net_smoke.py
 test: all test-update
 	$(PYTHON) scripts/smoke.py
 	$(PYTHON) scripts/ui_smoke.py
 	$(PYTHON) scripts/settings_smoke.py
+	$(PYTHON) scripts/net_smoke.py
 	$(PYTHON) scripts/easter_smoke.py
 # An explicit Linux build resolves latest stable at kernel.org. `dual` reuses
 # verified local payloads; run `linux-update` when a newer stable is wanted.
