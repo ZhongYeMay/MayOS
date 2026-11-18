@@ -49,9 +49,14 @@ CARGO ?= cargo
 RUST_TARGET ?= x86_64-unknown-none
 # The strict Ed25519 verifier is an OPTIONAL Rust module. Never interpret
 # cryptographic verification under an arbitrary key as release trust.
+MAYOS_RELEASE_PUBKEY_HEX ?=
+MAYOS_ALLOW_TEST_RELEASE_KEY ?= 0
 ifeq ($(MAYOS_RELEASE_SIGNATURE),1)
 override MAYOS_RUST := 1
 CFLAGS += -DMAYOS_RELEASE_SIGNATURE
+build/release_pubkey.h: scripts/pin_release_public_key.py | build
+	MAYOS_ALLOW_TEST_RELEASE_KEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY) $(PYTHON) scripts/pin_release_public_key.py --public-key "$(MAYOS_RELEASE_PUBKEY_HEX)" --output $@
+build/update.o: build/release_pubkey.h
 endif
 RUST_LIB :=
 ifeq ($(MAYOS_RUST),1)
@@ -59,7 +64,7 @@ CFLAGS += -DMAYOS_RUST_CORE
 RUST_LIB := build/libmaykernel_rust.a
 ifeq ($(MAYOS_RELEASE_SIGNATURE),1)
 build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/Cargo.toml | build
-	CARGO_TARGET_DIR=$(CURDIR)/build/cargo $(CARGO) build --manifest-path rust/maykernel_policy/Cargo.toml --target $(RUST_TARGET) --release --no-default-features --features release-signature
+	CARGO_TARGET_DIR=$(CURDIR)/build/cargo RUSTFLAGS="-C panic=abort -C no-redzone=yes -C relocation-model=static" $(CARGO) build --manifest-path rust/maykernel_policy/Cargo.toml --target $(RUST_TARGET) --release --no-default-features --features release-signature
 	cp build/cargo/$(RUST_TARGET)/release/libmaykernel_policy.a $@
 else
 build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs | build
@@ -170,6 +175,10 @@ test-rust-host: build/rust_manifest_tests
 .PHONY: test-ed25519-host
 test-ed25519-host:
 	$(CARGO) test --manifest-path rust/maykernel_policy/Cargo.toml --no-default-features --features release-signature
+.PHONY: test-ed25519-qemu
+test-ed25519-qemu: all test-ed25519-host
+	@test "$(MAYOS_RELEASE_SIGNATURE)" = "1" || (echo "Set MAYOS_RELEASE_SIGNATURE=1" >&2; exit 1)
+	$(PYTHON) scripts/ed25519_smoke.py
 
 test-rust-qemu: all test-rust-host
 	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for native Rust integration" >&2; exit 1)
