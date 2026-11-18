@@ -29,8 +29,13 @@ def main():
     )
     if value == RFC8032_TEST_KEY:
         contents += "#define MAYOS_RELEASE_TEST_KEY 1\n"
-    args.output.write_text(contents, encoding="ascii")
-    print("PASS: pinned 32-byte public key incorporated; no signing secret handled")
+    # Keep the header's timestamp unchanged for identical trusted input,
+    # but force recompilation of update.o when the pinned key actually rotates.
+    if not args.output.exists() or args.output.read_text(encoding="ascii") != contents:
+        args.output.write_text(contents, encoding="ascii")
+        print("PASS: owner-pinned public key updated; update.o must rebuild")
+    else:
+        print("PASS: unchanged owner-pinned public key; build remains reproducible")
 
 if __name__ == "__main__":
     main()
