@@ -1,6 +1,7 @@
 #ifndef MAYOS_NET_H
 #define MAYOS_NET_H
 #include "core.h"
+#include "net_dhcp.h"
 
 /* MayKernel-only PCI RTL8139 Ethernet bring-up, polled (no IRQ routing).
  * No general-purpose IP configuration or Internet connectivity yet. */
@@ -28,5 +29,10 @@ int may_net_qemu_arp_probe(void);
  * These prove packet handling, not public DNS connectivity or DHCP. */
 int may_net_qemu_udp_probe(void);
 int may_net_qemu_dns_fixture(void);
+/* Start a DHCP lease exchange over the native RTL8139 driver. Initial
+ * negotiation only: no renewal/rebinding, do not persist lease across boots. */
+int may_net_dhcp_start(void);
+const MayDhcpClient *may_net_dhcp_info(void);
+const char *may_net_format_ipv4(const u8 ip[4]);
 
 #endif

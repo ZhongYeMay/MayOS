@@ -67,27 +67,38 @@ int may_ipv4_udp_build(u8 *frame, u32 capacity, const u8 source_mac[6],
     put16(udp + 6, sum ? sum : 0xffffu);
     return (int)wire_bytes;
 }
-int may_ipv4_udp_parse(const u8 *frame, u32 frame_length,
-                       const u8 expected_mac[6], const u8 expected_ip[4],
-                       MayUdpDatagram *result) {
+static int parse_ipv4_udp(const u8 *frame, u32 frame_length,
+                          const u8 expected_mac[6], const u8 expected_ip[4],
+                          MayUdpDatagram *result, int dhcp) {
     if (!frame || !expected_mac || !expected_ip || !result ||
         frame_length < 14u + 20u + 8u ||
         frame[12] != 8 || frame[13] != 0) return 0;
-    for (int i = 0; i < 6; i++)
-        if (frame[i] != expected_mac[i]) return 0;
+    int own_mac = 1, broadcast_mac = 1;
+    for (int i = 0; i < 6; i++) {
+        if (frame[i] != expected_mac[i]) own_mac = 0;
+        if (frame[i] != 0xffu) broadcast_mac = 0;
+    }
+    if (!own_mac && !(dhcp && broadcast_mac)) return 0;
     const u8 *ip = frame + 14;
     if (ip[0] != 0x45 || ip[9] != 17 || !ip[8] ||
         (read16(ip + 6) & 0x3fffu) ||
         read16(ip + 2) < 28u || read16(ip + 2) > 1500u ||
         14u + (u32)read16(ip + 2) > frame_length ||
         may_net_checksum(ip, 20) != 0) return 0;
-    for (int i = 0; i < 4; i++)
-        if (ip[16 + i] != expected_ip[i]) return 0;
+    int own_ip = 1, broadcast_ip = 1;
+    for (int i = 0; i < 4; i++) {
+        if (ip[16 + i] != expected_ip[i]) own_ip = 0;
+        if (ip[16 + i] != 255u) broadcast_ip = 0;
+    }
+    if (!own_ip && !(dhcp && broadcast_ip)) return 0;
     const u8 *udp = ip + 20;
     u16 size = read16(udp + 4);
     if (size < 8u || size != read16(ip + 2) - 20u ||
         !read16(udp) || !read16(udp + 2) ||
-        !read16(udp + 6) || complement(udp_sum(ip, udp, size)) != 0)
+        (!read16(udp + 6) && !dhcp) ||
+        (read16(udp + 6) && complement(udp_sum(ip, udp, size)) != 0))
+        return 0;
+    if (dhcp && (read16(udp) != 67u || read16(udp + 2) != 68u))
         return 0;
     memset(result, 0, sizeof(*result));
     memcpy(result->source_ip, ip + 12, 4);
@@ -97,6 +108,16 @@ int may_ipv4_udp_parse(const u8 *frame, u32 frame_length,
     result->payload = udp + 8;
     result->payload_length = (u16)(size - 8u);
     return 1;
+}
+int may_ipv4_udp_parse(const u8 *frame, u32 frame_length,
+                       const u8 expected_mac[6], const u8 expected_ip[4],
+                       MayUdpDatagram *result) {
+    return parse_ipv4_udp(frame,frame_length,expected_mac,expected_ip,result,0);
+}
+int may_ipv4_udp_parse_dhcp(const u8 *frame, u32 frame_length,
+                            const u8 local_mac[6], const u8 offered_ip[4],
+                            MayUdpDatagram *result) {
+    return parse_ipv4_udp(frame,frame_length,local_mac,offered_ip,result,1);
 }
 int may_dns_query_a(u8 *destination, u32 capacity, const char *hostname,
                     u16 transaction_id) {

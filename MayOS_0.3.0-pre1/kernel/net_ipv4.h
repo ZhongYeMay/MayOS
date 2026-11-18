@@ -20,6 +20,11 @@ int may_ipv4_udp_build(u8 *frame, u32 capacity, const u8 source_mac[6],
 int may_ipv4_udp_parse(const u8 *frame, u32 frame_length,
                        const u8 expected_mac[6], const u8 expected_ip[4],
                        MayUdpDatagram *result);
+/* DHCP allows broadcast destination MAC/IP and zero UDP checksum per RFC 768.
+ * Only accepts UDP source 67 / destination 68; all other parse checks remain. */
+int may_ipv4_udp_parse_dhcp(const u8 *frame, u32 frame_length,
+                            const u8 local_mac[6], const u8 offered_ip[4],
+                            MayUdpDatagram *result);
 int may_dns_query_a(u8 *destination, u32 capacity, const char *hostname,
                     u16 transaction_id);
 int may_dns_reply_a(const u8 *packet, u32 length, u16 transaction_id,
