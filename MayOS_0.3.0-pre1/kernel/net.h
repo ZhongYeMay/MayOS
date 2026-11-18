@@ -15,6 +15,9 @@ typedef struct {
     int gateway_arp_reply;
     int ipv4_udp_reply;
     int dns_fixture_reply;
+    int tcp_fixture_connected;
+    int tcp_fixture_reply;
+    u32 tcp_fixture_bytes;
     u8 dns_fixture_address[4];
 } MayNetInfo;
 
@@ -31,6 +34,7 @@ int may_net_qemu_udp_probe(void);
 int may_net_qemu_dns_fixture(void);
 /* Start a DHCP lease exchange over the native RTL8139 driver. Initial
  * negotiation only: no renewal/rebinding, do not persist lease across boots. */
+int may_net_qemu_tcp_http_probe(void);
 int may_net_dhcp_start(void);
 const MayDhcpClient *may_net_dhcp_info(void);
 const char *may_net_format_ipv4(const u8 ip[4]);
