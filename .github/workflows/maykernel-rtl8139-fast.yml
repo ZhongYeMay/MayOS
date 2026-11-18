@@ -11,6 +11,9 @@ on:
       - 'MayOS_0.3.0-pre1/kernel/net_dhcp.c'
       - 'MayOS_0.3.0-pre1/kernel/net_dhcp.h'
       - 'MayOS_0.3.0-pre1/tests/net_dhcp_test.c'
+      - 'MayOS_0.3.0-pre1/kernel/net_tcp.c'
+      - 'MayOS_0.3.0-pre1/kernel/net_tcp.h'
+      - 'MayOS_0.3.0-pre1/tests/net_tcp_test.c'
       - 'MayOS_0.3.0-pre1/scripts/net_smoke.py'
       - 'MayOS_0.3.0-pre1/kernel/core.c'
       - 'MayOS_0.3.0-pre1/kernel/io.h'
@@ -39,3 +42,5 @@ jobs:
         run: make -C MayOS_0.3.0-pre1 test-net-codec
       - name: Check DHCPv4 handshake and rejection cases
         run: make -C MayOS_0.3.0-pre1 test-dhcp
+      - name: Check TCP IPv4 payload and checksum codec
+        run: make -C MayOS_0.3.0-pre1 test-tcp
