@@ -4,6 +4,7 @@ on:
     paths:
       - 'MayOS_0.3.0-pre1/scripts/package_signed_release.py'
       - 'MayOS_0.3.0-pre1/scripts/test_package_signed_release.py'
+      - 'MayOS_0.3.0-pre1/scripts/verify_signed_release.py'
       - '.github/workflows/mayos-offline-signing.yml'
   workflow_dispatch:
 permissions:
