@@ -49,8 +49,8 @@ mod tests {
     const PUBKEY: &str =
         "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
     const SIGNATURE: &str = concat!(
-        "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901",
-        "55fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100"
+        "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e06522490155",
+        "5fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
     );
     fn hex<const N: usize>(s: &str) -> [u8; N] {
         assert_eq!(s.len(), N * 2);
