@@ -1,23 +1,42 @@
-#include "core.h"
-/* BearSSL's portable C routines can refer to these ISO C operations. These
- * functions are only present in an explicitly opted-in TLS engine build.
- * The default MayKernel build is unchanged. */
+#include <stddef.h>
+
+/*
+ * Explicit ISO C sized compatibility shims for the optional BearSSL build.
+ * BearSSL source is compiled with -Dmemcpy=maybear_memcpy (etc), so it NEVER
+ * calls MayKernel's older 32-bit-length memcpy/memset/strlen ABI.
+ * No heap, libc or system calls. Security code remains fail-closed.
+ */
 #ifdef MAYOS_USE_BEARSSL
-int memcmp(const void *left,const void *right,unsigned long length) {
-    const u8 *a=left,*b=right;
-    for(unsigned long i=0;i<length;i++)
-        if(a[i]!=b[i])return a[i]<b[i]?-1:1;
+void *maybear_memcpy(void *dest,const void *source,size_t n) {
+    unsigned char *d=dest;
+    const unsigned char *s=source;
+    for(size_t i=0;i<n;i++)d[i]=s[i];
+    return dest;
+}
+void *maybear_memset(void *dest,int value,size_t n) {
+    unsigned char *d=dest;
+    for(size_t i=0;i<n;i++)d[i]=(unsigned char)value;
+    return dest;
+}
+void *maybear_memmove(void *dest,const void *source,size_t n) {
+    unsigned char *d=dest;
+    const unsigned char *s=source;
+    if(d==s||!n)return dest;
+    if((size_t)d>(size_t)s && (size_t)d-(size_t)s<n) {
+        while(n){n--;d[n]=s[n];}
+    } else {
+        for(size_t i=0;i<n;i++)d[i]=s[i];
+    }
+    return dest;
+}
+int maybear_memcmp(const void *a,const void *b,size_t n) {
+    const unsigned char *x=a,*y=b;
+    for(size_t i=0;i<n;i++)if(x[i]!=y[i])return x[i]<y[i]?-1:1;
     return 0;
 }
-void *memmove(void *destination,const void *source,unsigned long length) {
-    u8 *dst=destination;
-    const u8 *src=source;
-    if(dst==src||!length)return destination;
-    if((uptr)dst>(uptr)src && (uptr)dst<(uptr)src+length) {
-        while(length) {length--;dst[length]=src[length];}
-    } else {
-        for(unsigned long i=0;i<length;i++)dst[i]=src[i];
-    }
-    return destination;
+size_t maybear_strlen(const char *s) {
+    size_t n=0;
+    while(s[n])n++;
+    return n;
 }
 #endif
