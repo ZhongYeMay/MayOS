@@ -301,6 +301,10 @@ int may_update_authenticate_local(void) {
     auth_state=AUTH_NO_RELEASE_ROOT;
     return 0;
 #else
+    /* Re-parse the exact current MayFS metadata before authenticating it.
+     * Otherwise a stale unsigned check could leave a different SHA-256 in
+     * the cached C struct than the newly signed manifest (TOCTOU flaw). */
+    may_update_check();
     auth_state=AUTH_INVALID_MANIFEST;
     if(update.state!=MAY_UPDATE_CANDIDATE &&
        update.state!=MAY_UPDATE_CURRENT)return 0;
