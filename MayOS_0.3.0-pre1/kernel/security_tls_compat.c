@@ -7,6 +7,16 @@
  * No heap, libc or system calls. Security code remains fail-closed.
  */
 #ifdef MAYOS_USE_BEARSSL
+#include "bearssl.h"
+/*
+ * Refuse host OS seeding: native CSPRNG is not yet available.
+ * BearSSL may inspect this callback, but cannot silently use Linux syscalls
+ * or obtain deterministic "random" bytes. HTTPS stays hard-disabled.
+ */
+br_prng_seeder br_prng_seeder_system(const char **name) {
+    if(name)*name="no MayKernel cryptographic entropy";
+    return 0;
+}
 void *maybear_memcpy(void *dest,const void *source,size_t n) {
     unsigned char *d=dest;
     const unsigned char *s=source;
