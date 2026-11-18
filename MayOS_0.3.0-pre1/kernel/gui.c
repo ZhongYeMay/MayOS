@@ -5,6 +5,7 @@
 #ifndef MAYOS_LINUX
 #include "galgame.h"
 #include "pci.h"
+#include "e1000.h"
 #endif
 #ifdef MAYOS_LINUX
 #include "explorer_history.h"
@@ -907,8 +908,13 @@ static void shell(void) {
         emit(report);
         emit("Explorer: HTTP(S), certificate-verified TLS, HTTP/2 and IPv6 (Linux).");
 #else
-        emit("Network: MayKernel has no native NIC / TCP/IP driver.");
-        emit("Boot Linux for DHCP, DNS, IP diagnostics and HTTP preview.");
+        if (e1000_mac_address()) {
+            emit(e1000_link_up() ? "Ethernet: E1000/E1000e link up"
+                                 : "Ethernet: E1000/E1000e initialized; link down");
+            emit("Native Ethernet frame transport is ready; IP configuration pending.");
+        } else {
+            emit("Network: no supported native Ethernet controller detected.");
+        }
 #endif
     } else if (!strcmp(c, "memstress")) {
 #ifndef MAYOS_LINUX

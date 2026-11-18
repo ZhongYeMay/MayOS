@@ -56,6 +56,7 @@ def main():
         "qemu-xhci,id=generic-xhci",
         "usb-kbd,bus=generic-xhci.0",
         "virtio-net-pci,id=generic-network",
+        "e1000,id=generic-e1000",
         "intel-hda,id=generic-audio",
     ], {
         "class 01:06": "AHCI storage controller",
@@ -63,6 +64,7 @@ def main():
         "xHCI generic controller ready, controllers=1 connected-ports=1":
             "initialized xHCI rings and detected a standards-based USB port",
         "class 02:": "network controller",
+        "E1000 generic Ethernet rings ready": "E1000 DMA receive/transmit rings",
         "class 04:03": "HDA audio controller",
         "MayOS: desktop ready": "desktop boot after enumeration",
     })
