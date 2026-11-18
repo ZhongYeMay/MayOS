@@ -117,9 +117,21 @@ def main():
         vm.cmd("net status")
         vm.wait("QEMU TCP: 3-way handshake complete")
         vm.wait("QEMU HTTP: plaintext fixture response validated")
+        vm.wait("MayOS: TCP diagnostic FIN acknowledged; clean close")
+        vm.cmd("net status")
+        vm.wait("QEMU TCP: clean FIN close confirmed")
         vm.shot("maykernel-rtl8139-tcp-plaintext-fixture")
+        vm.cmd("net tcp-loss-probe")
+        vm.wait("MayOS: TCP diagnostic intentionally dropped first SYN")
+        vm.wait("MayOS: TCP diagnostic segment retransmitted")
+        vm.wait("MayOS: TCP QEMU SYN-ACK validated; handshake established")
+        vm.wait("MayOS: TCP QEMU HTTP test response validated (plaintext fixture)")
+        vm.wait("MayOS: TCP diagnostic FIN acknowledged; clean close")
+        vm.cmd("net status")
+        vm.wait("QEMU TCP retransmissions: 1")
+        vm.shot("maykernel-rtl8139-tcp-loss-retransmission")
         assert "echo" in events and "dns" in events and "tcp" in events, events
-        print("PASS: real QEMU ARP UDP DNS DHCP and native TCP plaintext HTTP fixture", flush=True)
+        print("PASS: real QEMU TCP clean FIN close and intentionally dropped SYN retransmission", flush=True)
     finally:
         if vm is not None:
             vm.stop()
