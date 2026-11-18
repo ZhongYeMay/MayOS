@@ -7,6 +7,7 @@ The DHCP handshake below uses QEMU SLIRP's actual DHCP service.
 """
 import socket
 import threading
+import time
 from smoke import VM
 
 
@@ -117,9 +118,36 @@ def main():
         vm.cmd("net status")
         vm.wait("QEMU TCP: 3-way handshake complete")
         vm.wait("QEMU HTTP: plaintext fixture response validated")
+        vm.wait("MayOS: TCP diagnostic FIN acknowledged; clean close")
+        vm.cmd("net status")
+        vm.wait("QEMU TCP: clean FIN close confirmed")
         vm.shot("maykernel-rtl8139-tcp-plaintext-fixture")
+        # Match newly appended evidence, not identical log lines from
+        # the first successful connection.
+        evidence = (
+            "MayOS: TCP QEMU SYN-ACK validated; handshake established",
+            "MayOS: TCP QEMU HTTP test response validated (plaintext fixture)",
+            "MayOS: TCP diagnostic FIN acknowledged; clean close",
+        )
+        before = vm.log.read_text(errors="replace")
+        previous_counts = [before.count(message) for message in evidence]
+        vm.cmd("net tcp-loss-probe")
+        vm.wait("MayOS: TCP diagnostic intentionally dropped first SYN")
+        vm.wait("MayOS: TCP diagnostic segment retransmitted")
+        until = time.monotonic() + 20
+        while True:
+            log = vm.log.read_text(errors="replace")
+            if all(log.count(message) > previous
+                   for message, previous in zip(evidence, previous_counts)):
+                break
+            assert vm.proc.poll() is None, "QEMU guest exited"
+            assert time.monotonic() < until, "TCP recovery handshake/close timed out"
+            time.sleep(.05)
+        vm.cmd("net status")
+        vm.wait("QEMU TCP retransmissions: 1")
+        vm.shot("maykernel-rtl8139-tcp-loss-retransmission")
         assert "echo" in events and "dns" in events and "tcp" in events, events
-        print("PASS: real QEMU ARP UDP DNS DHCP and native TCP plaintext HTTP fixture", flush=True)
+        print("PASS: real QEMU TCP clean FIN close and intentionally dropped SYN retransmission", flush=True)
     finally:
         if vm is not None:
             vm.stop()

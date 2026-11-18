@@ -26,3 +26,12 @@ make test-net            # real QEMU ARP / UDP / DNS fixture / DHCP / TCP fixtur
 ```
 
 GitHub Actions results must be checked before describing the QEMU TCP exchange as successful. The full safe GitHub update target additionally requires a real DNS resolver, a certified TLS implementation, protected signing keys and failure-safe system installation.
+## Recovery milestone: bounded retry and clean teardown
+
+The QEMU fixture now uses a distinct ephemeral guest source port for each connection to avoid 4-tuple reuse during TCP TIME_WAIT. The native driver retains exactly one outstanding SYN, data or FIN segment and retransmits it after 100 kernel ticks, up to three times. A rejected/missing acknowledgement does not clear the pending retry. All timer differences use wrapping unsigned arithmetic.
+
+To explicitly exercise packet loss, `net tcp-loss-probe` drops the first outbound SYN *inside the guest before DMA*, then uses the timeout/retransmission path to establish a real TCP connection with the localhost fixture. The QEMU smoke test checks an entirely new handshake, response and FIN close, not earlier serial lines.
+
+`net status` reports recovery count, clean-FIN confirmation and timeout. `make test-tcp-retry` covers ACK validity, retry exhaustion and tick rollover. Actual QEMU acceptance must show the retransmit and a subsequent clean FIN/ACK close; until then this remains development-only.
+
+This is still a single test socket without congestion control, selective ACK, general-purpose TCP or TLS; no production HTTPS or GitHub installer claim.
