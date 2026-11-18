@@ -34,7 +34,8 @@ static u8 qemu_gateway_mac[6];
 static int qemu_gateway_mac_valid, udp_probe_active, dns_probe_active;
 static MayDhcpClient dhcp;
 static int dhcp_request_pending;
-static u32 tcp_next_seq,tcp_remote_seq,tcp_captured;
+static u32 tcp_next_seq,tcp_remote_seq,tcp_captured,tcp_probe_serial;
+static u16 tcp_local_port;
 static int tcp_state,tcp_pending_ack,tcp_pending_get,tcp_pending_fin;
 static int tcp_drop_next_syn;
 static u32 tcp_response_tick;
@@ -176,7 +177,7 @@ static int tcp_transmit(u8 flags,const u8 *data,u16 length) {
     if(!(inl(io+RTL_TSD0+index*4u)&(1u<<13)))return 0;
     int count=may_tcp_build(tx_frames[index],sizeof(tx_frames[index]),
         nic.mac,qemu_gateway_mac,qemu_local_ip,qemu_gateway_ip,
-        40100u,10080u,tcp_next_seq,tcp_remote_seq,
+        tcp_local_port,10080u,tcp_next_seq,tcp_remote_seq,
         flags,4096u,data,length,(u16)(tcp_next_seq&0xffffu));
     if(!count)return 0;
     if(flags&(MAY_TCP_SYN|MAY_TCP_PSH|MAY_TCP_FIN)) {
@@ -213,7 +214,7 @@ static void tcp_retransmit_poll(void) {
     if(!(inl(io+RTL_TSD0+index*4u)&(1u<<13)))return;
     int count=may_tcp_build(tx_frames[index],sizeof(tx_frames[index]),
         nic.mac,qemu_gateway_mac,qemu_local_ip,qemu_gateway_ip,
-        40100u,10080u,tcp_retry.first_seq,tcp_remote_seq,
+        tcp_local_port,10080u,tcp_retry.first_seq,tcp_remote_seq,
         tcp_retry.flags,4096u,tcp_retry_payload,tcp_retry.payload_length,
         (u16)(tcp_retry.first_seq&0xffffu));
     if(!count)return;
@@ -226,7 +227,7 @@ static void tcp_retransmit_poll(void) {
     serial("MayOS: TCP diagnostic segment retransmitted\n");
 }
 static void tcp_received(const MayTcpSegment *t) {
-    if(t->source_port!=10080u || t->destination_port!=40100u)return;
+    if(t->source_port!=10080u || t->destination_port!=tcp_local_port)return;
     for(u32 i=0;i<4;i++)if(t->source_ip[i]!=qemu_gateway_ip[i])return;
     if(t->flags&MAY_TCP_RST) {
         may_tcp_retry_cancel(&tcp_retry);
@@ -562,6 +563,9 @@ static int start_tcp_probe(int lose_first_syn) {
     if(!nic.present||!qemu_gateway_mac_valid)return 0;
     may_net_poll();
     if(tcp_state && tcp_state!=4)return 0;
+    /* Each connection needs a fresh four-tuple. Reusing the just-closed
+     * source port can collide with QEMU SLIRP's TCP TIME_WAIT state. */
+    tcp_local_port=(u16)(40100u+(tcp_probe_serial++%1000u));
     tcp_next_seq=0x4d415900u^ticks;
     tcp_remote_seq=0;
     tcp_captured=0;
