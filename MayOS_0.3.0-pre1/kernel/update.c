@@ -1,6 +1,9 @@
 #include "update.h"
 #include "version.h"
 #include "sha256.h"
+#ifdef MAYOS_RUST_CORE
+#include "rust_bridge.h"
+#endif
 
 /* This parser deliberately has no network or block-device write dependency.
  * All input is bounded by File.size, not a trusted NUL terminator. */
@@ -183,6 +186,16 @@ void may_update_check(void) {
         files[index].size == 0 || files[index].size > 2048u)
         return;
     const u8 *data = files[index].data;
+#ifdef MAYOS_RUST_CORE
+    /* Independent no_std Rust safety gate before the legacy C parser.
+     * It never grants trust, installation permission, or network access. */
+    if (mayrs_abi_version() != 1u ||
+        !mayrs_manifest_gate(data, files[index].size)) {
+        serial("MayOS: Rust update manifest gate rejected untrusted metadata\n");
+        return;
+    }
+    serial("MayOS: Rust no_std manifest gate passed (UNTRUSTED)\n");
+#endif
     u32 seen = 0, offset = 0;
     while (offset < files[index].size) {
         char line[160];
