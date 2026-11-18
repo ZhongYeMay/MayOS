@@ -7,12 +7,14 @@ insmod all_video
 insmod cpuid
 insmod gfxterm
 insmod png
+# GRUB cannot activate a serial terminal before the controller exists.
+# Initialize COM1 FIRST; mirror every menu message to VGA and real serial.
+insmod serial
+serial --unit=0 --speed=115200
+terminal_input console serial
 terminal_output gfxterm serial
 set theme=/boot/grub/themes/mayos/theme.txt
 export theme
-
-serial --unit=0 --speed=115200
-terminal_input console serial
 
 if cpuid -l; then
 menuentry "Start MayKernel64" --id mayos {
