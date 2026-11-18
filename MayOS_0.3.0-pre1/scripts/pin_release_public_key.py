@@ -23,11 +23,13 @@ def main():
         parser.error("publicly known RFC 8032 test signing key cannot authenticate releases")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     numbers = ",".join("0x" + value[i:i+2] for i in range(0,64,2))
-    args.output.write_text(
+    contents = (
         "/* Generated from OWNER-PINNED public key. DO NOT embed private keys. */\n"
-        "static const u8 mayos_release_root_key[32] = {" + numbers + "};\n",
-        encoding="ascii"
+        "static const u8 mayos_release_root_key[32] = {" + numbers + "};\n"
     )
+    if value == RFC8032_TEST_KEY:
+        contents += "#define MAYOS_RELEASE_TEST_KEY 1\n"
+    args.output.write_text(contents, encoding="ascii")
     print("PASS: pinned 32-byte public key incorporated; no signing secret handled")
 
 if __name__ == "__main__":
