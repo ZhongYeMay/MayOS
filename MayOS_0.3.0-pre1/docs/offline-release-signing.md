@@ -35,3 +35,16 @@ The test generates ephemeral Ed25519 keys in a temporary directory, signs a smal
 ## Remaining functionality
 
 This packaging feature is **not a system updater**. Current MayFS `Update.bin` is limited to 4096 bytes; it cannot hold a real ISO image. Full GitHub Release transport still requires authenticated HTTPS, streaming/chunked download to a bounded block store, signature trust, monotonic rollback protection, and an A/B installer/bootloader update path. This offline sign step only makes the release metadata format interoperable with the previously tested signature verifier.
+## Read-only verification before any future installation
+
+The inverse operation uses an independently trusted public key stored **outside** the downloaded package. It reads the actual image, checks that exact signed metadata was produced by the trusted key, enforces the nine canonical MayKernel fields, and recalculates the full image digest:
+
+```sh
+python3 scripts/verify_signed_release.py \
+  --image /download/MayOS-preview.iso \
+  --manifest /download/Update.may \
+  --signature /download/Update.sig \
+  --trusted-public-key /trusted/owner-release.pub.pem
+```
+
+The verifier rejects a public key bundled in the same untrusted download directory, malformed metadata, altered signatures, and an ISO whose size or hash differs from the signed manifest. **Read-only verification cannot establish safe disk install readiness**: it does not supply protected trusted boot, anti-rollback, a verified transport or an A/B installer.
