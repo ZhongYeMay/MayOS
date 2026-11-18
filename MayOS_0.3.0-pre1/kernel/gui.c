@@ -11,6 +11,7 @@
 #include "version.h"
 #ifndef MAYOS_LINUX
 #include "update.h"
+#include "rust_bridge.h"
 #include "net.h"
 #include "security_tls.h"
 #include "security_tls_provider.h"
@@ -904,8 +905,18 @@ static void shell(void) {
             may_update_verify_local();
         else if (argc > 1 && !strcmp(argv[1], "auth"))
             may_update_authenticate_local();
-        else if (argc > 1 && strcmp(argv[1], "status")) {
-            emit("Usage: update check|verify|auth|status");
+        else if (argc > 1 && !strcmp(argv[1], "recovery-test")) {
+#ifdef MAYOS_RUST_CORE
+            int passed=mayrs_ab_selftest();
+            emit(passed ? "A/B boot policy PASS (memory only; no installation)"
+                        : "A/B boot policy FAIL (memory only; no installation)");
+            serial(passed ? "MayOS: Rust A/B recovery policy self-test PASSED\n"
+                          : "MayOS: Rust A/B recovery policy self-test FAILED\n");
+#else
+            emit("A/B boot policy: requires optional Rust kernel build");
+#endif
+        } else if (argc > 1 && strcmp(argv[1], "status")) {
+            emit("Usage: update check|verify|auth|recovery-test|status");
             return;
         }
         emit(may_update_status());
