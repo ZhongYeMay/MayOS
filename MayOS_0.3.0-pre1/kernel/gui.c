@@ -12,6 +12,7 @@
 #ifndef MAYOS_LINUX
 #include "update.h"
 #include "net.h"
+#include "security_tls.h"
 #endif
 #define MAYOS_RELEASE MAYOS_VERSION
 #ifdef MAYOS_LINUX
@@ -787,6 +788,7 @@ static void shell(void) {
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
         emit("theme light|dark  net status|dhcp|resolve DOMAIN|qemu-probe|udp-probe|dns-probe|tcp-probe|tcp-loss-probe");
+        emit("tls status|check <host> (native MayKernel HTTPS security check)");
         emit("reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
@@ -919,6 +921,33 @@ static void shell(void) {
         emit("No download/install until native network and safe installer exist.");
 #else
         emit("Native MayKernel update check requires the MayKernel boot option.");
+#endif
+    } else if (!strcmp(c, "tls")) {
+#ifdef MAYOS_LINUX
+        emit("TLS preflight: MayKernel-native only");
+#else
+        const MayTlsSecurityReport *state=may_tls_security_report();
+        if(argc>1 && !strcmp(argv[1],"check")) {
+            if(argc<3)emit("Usage: tls check api.github.com");
+            else {
+                int reason=may_tls_update_preflight(argv[2]);
+                emit(may_tls_block_reason(reason));
+                serial("MayOS: TLS preflight fail-closed (no HTTPS request sent)\n");
+            }
+        } else if(argc>1 && strcmp(argv[1],"status")) {
+            emit("Usage: tls status|check <host>");
+        }
+        emit("MayKernel HTTPS: DISABLED (no TLS provider linked)");
+        emit(state->hardware_entropy_observed
+            ? "CPU RDRAND: sampled (NOT a cryptographic DRBG)"
+            : "CPU RDRAND: unavailable or health check failed");
+        emit(state->rtc_observed
+            ? "CMOS clock: observed but UNTRUSTED"
+            : "CMOS clock: unavailable or invalid");
+        emit("Trusted TLS time: unavailable");
+        emit("Trusted CA roots: not installed");
+        emit("X.509 chain + hostname validation: not implemented");
+        emit("No HTTPS, no GitHub download, no system installation");
 #endif
     } else if (!strcmp(c, "net") || !strcmp(c, "network")) {
 #ifdef MAYOS_LINUX
