@@ -1,4 +1,5 @@
 #include "security_tls.h"
+#include "security_tls_provider.h"
 
 static MayTlsSecurityReport security;
 int may_tls_update_host_allowed(const char *name) {
@@ -22,6 +23,8 @@ void may_tls_security_init(void) {
     security.certificate_roots_ready=0;
     security.x509_engine_ready=0;
     security.authenticated_handshake=0;
+    /* Optional TLS engine object compilation does not establish trust. */
+    (void)may_tls_provider_probe();
     serial(security.hardware_entropy_observed
         ? "MayOS: CPU entropy instruction sampled (NOT a TLS CSPRNG)\n"
         : "MayOS: no validated CPU entropy source for TLS\n");

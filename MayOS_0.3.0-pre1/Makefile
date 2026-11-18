@@ -24,7 +24,20 @@ FS_POWERLOSS_SELFTEST ?= 0
 ifeq ($(FS_POWERLOSS_SELFTEST),1)
 CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
 endif
-OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/update.o build/net.o build/net_ipv4.o build/net_dhcp.o build/sha256.o build/net_tcp.o build/net_tcp_retry.o build/security_clock.o build/security_entropy.o build/security_tls.o
+OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/update.o build/net.o build/net_ipv4.o build/net_dhcp.o build/sha256.o build/net_tcp.o build/net_tcp_retry.o build/security_clock.o build/security_entropy.o build/security_tls.o build/security_tls_provider.o
+
+# This is an OPTIONAL vendor-link TEST, not an HTTPS enable switch.
+# BEARSSL_SOURCE must be a locally checked-out, pinned upstream source tree.
+# Default MayKernel build uses no third-party TLS provider and blocks HTTPS.
+BEARSSL_SOURCE ?=
+BEARSSL_LIB :=
+ifneq ($(strip $(BEARSSL_SOURCE)),)
+CFLAGS += -DMAYOS_USE_BEARSSL -I$(BEARSSL_SOURCE)/inc
+OBJECTS += build/security_tls_compat.o
+BEARSSL_LIB := build/libbearssl.a
+build/libbearssl.a: scripts/build_bearssl_freestanding.sh $(BEARSSL_SOURCE)/inc/bearssl.h | build
+	bash scripts/build_bearssl_freestanding.sh "$(BEARSSL_SOURCE)" $@
+endif
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
@@ -42,6 +55,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
+.PHONY: test-bearssl-qemu
 .PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
@@ -63,7 +77,8 @@ build/net_dhcp.o: kernel/net_dhcp.h
 build/net_tcp.o: kernel/net_tcp.h kernel/net_ipv4.h
 build/net_tcp_retry.o: kernel/net_tcp_retry.h
 build/net_ipv4.o: kernel/net_ipv4.h
-build/security_tls.o: kernel/security_tls.h kernel/security_clock.h kernel/security_entropy.h
+build/security_tls.o: kernel/security_tls.h kernel/security_tls_provider.h kernel/security_clock.h kernel/security_entropy.h
+build/security_tls_provider.o: kernel/security_tls_provider.h kernel/security_tls.h
 build/security_clock.o: kernel/security_clock.h kernel/io.h
 build/security_entropy.o: kernel/security_entropy.h
 build/galgame.o: kernel/galgame.h
@@ -71,8 +86,8 @@ build/boot64.o: kernel/boot64.S | build
 	$(CC) -m64 -c $< -o $@
 build/%.o: kernel/%.c kernel/core.h kernel/io.h kernel/version.h build/font.h
 	$(CC) $(CFLAGS) -c $< -o $@
-build/mayos.elf: $(OBJECTS) kernel/linker64.ld
-	$(LD) -m elf_x86_64 -T kernel/linker64.ld -o $@ $(OBJECTS)
+build/mayos.elf: $(OBJECTS) $(BEARSSL_LIB) kernel/linker64.ld
+	$(LD) -m elf_x86_64 -T kernel/linker64.ld -o $@ $(OBJECTS) $(BEARSSL_LIB)
 	$(GRUB_FILE) --is-x86-multiboot $@
 build/mayos.iso: build/mayos.elf boot/grub/grub.cfg scripts/dual_iso.py
 	$(PYTHON) scripts/dual_iso.py --custom-only --firmware "$(BOOT_FIRMWARE)" --grub-mkrescue '$(GRUB_MKRESCUE)'
@@ -92,8 +107,8 @@ build/update_verify_test: tests/update_verify_test.c kernel/update.c kernel/upda
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/update_verify_test.c kernel/update.c kernel/sha256.c -o $@
 test-update-verify: build/update_verify_test
 	./build/update_verify_test
-build/security_tls_test: tests/security_tls_test.c kernel/security_tls.c kernel/security_clock.c kernel/security_entropy.c kernel/core.h kernel/io.h kernel/security_tls.h | build
-	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/security_tls_test.c kernel/security_tls.c kernel/security_clock.c kernel/security_entropy.c -o $@
+build/security_tls_test: tests/security_tls_test.c kernel/security_tls.c kernel/security_tls_provider.c kernel/security_clock.c kernel/security_entropy.c kernel/core.h kernel/io.h kernel/security_tls.h | build
+	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/security_tls_test.c kernel/security_tls.c kernel/security_tls_provider.c kernel/security_clock.c kernel/security_entropy.c -o $@
 test-security: build/security_tls_test
 	./build/security_tls_test
 build/net_ipv4_test: tests/net_ipv4_test.c kernel/net_ipv4.c kernel/net_ipv4.h kernel/core.h | build
@@ -114,6 +129,9 @@ test-dhcp: build/net_dhcp_test
 	./build/net_dhcp_test
 test-tls-qemu: all test-security
 	$(PYTHON) scripts/tls_smoke.py
+test-bearssl-qemu: all test-security
+	@test -n "$(BEARSSL_SOURCE)" || (echo "Provide pinned BEARSSL_SOURCE checkout" >&2; exit 1)
+	$(PYTHON) scripts/tls_provider_smoke.py
 test-net: all test-net-codec test-dhcp test-tcp test-tcp-retry test-security
 	$(PYTHON) scripts/net_smoke.py
 	$(PYTHON) scripts/tls_smoke.py

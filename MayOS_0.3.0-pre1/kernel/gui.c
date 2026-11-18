@@ -13,6 +13,7 @@
 #include "update.h"
 #include "net.h"
 #include "security_tls.h"
+#include "security_tls_provider.h"
 #endif
 #define MAYOS_RELEASE MAYOS_VERSION
 #ifdef MAYOS_LINUX
@@ -938,7 +939,10 @@ static void shell(void) {
         } else if(argc>1 && strcmp(argv[1],"status")) {
             emit("Usage: tls status|check <host>");
         }
-        emit("MayKernel HTTPS: DISABLED (no TLS provider linked)");
+        emit("MayKernel HTTPS: DISABLED (no authenticated TLS handshake)");
+        emit(may_tls_provider_is_linked()
+            ? "BearSSL TLS engine: linked for isolated testing ONLY"
+            : "BearSSL TLS engine: not linked in this build");
         emit(state->hardware_entropy_observed
             ? "CPU RDRAND: sampled (NOT a cryptographic DRBG)"
             : "CPU RDRAND: unavailable or health check failed");
