@@ -43,3 +43,15 @@ The two QEMU boots use isolated 8 MiB test disks containing checksummed MayFS sn
 5. Integrate and verify a mature TLS engine with trustworthy entropy, time and CA certificates; no custom unaudited TLS protocol.
 
 PR for this phase must not merge until pinned Rust + C QEMU CI passes.
+## Phase M2: Rust + C + upstream TLS-engine compatibility
+
+The opt-in integration build also supports linking Rust no_std, native C, and the officially pinned BearSSL engine **into the same ELF64 kernel**:
+
+```sh
+make clean
+make MAYOS_RUST=1 BEARSSL_SOURCE=/absolute/path/to/pinned/vendor/bearssl test-rust-bearssl-qemu
+```
+
+CI must show both symbols inside final mayos.elf: mayrs_manifest_gate (Rust) and br_ssl_client_init_full (BearSSL). A separate QEMU smoke must run the Rust metadata gate and display BearSSL provider linkage while HTTPS is still blocked because trusted DRBG/time/CA/X.509 verification are not available.
+
+This compatibility test does NOT mean HTTPS, TLS authentication, GitHub downloads or installation work. The pinned BearSSL snapshot remains experimental and unapproved for production.
