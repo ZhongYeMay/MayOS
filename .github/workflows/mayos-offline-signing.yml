@@ -1,0 +1,27 @@
+name: MayOS offline Ed25519 release packaging validation
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/scripts/package_signed_release.py'
+      - 'MayOS_0.3.0-pre1/scripts/test_package_signed_release.py'
+      - '.github/workflows/mayos-offline-signing.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-release-signing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record local OpenSSL and Python versions
+        run: |
+          openssl version -a
+          python3 --version
+      - name: Generate temporary keys and verify MayOS detached signatures
+        run: python3 MayOS_0.3.0-pre1/scripts/test_package_signed_release.py
+      - name: Assert repository contains no generated signing secret
+        run: |
+          test ! -e MayOS_0.3.0-pre1/private-key.pem
+          test ! -e MayOS_0.3.0-pre1/Update.sig
+          echo "PASS: no CI signing secret or forged signed image committed"
