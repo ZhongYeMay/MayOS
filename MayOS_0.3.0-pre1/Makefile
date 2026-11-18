@@ -42,7 +42,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security linux linux-update dual run-dual test-dual run-uefi test-uefi
+.PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
 	mkdir -p build
@@ -112,13 +112,17 @@ build/net_dhcp_test: tests/net_dhcp_test.c kernel/net_dhcp.c kernel/net_dhcp.h k
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/net_dhcp_test.c kernel/net_dhcp.c -o $@
 test-dhcp: build/net_dhcp_test
 	./build/net_dhcp_test
-test-net: all test-net-codec test-dhcp test-tcp test-tcp-retry
+test-tls-qemu: all test-security
+	$(PYTHON) scripts/tls_smoke.py
+test-net: all test-net-codec test-dhcp test-tcp test-tcp-retry test-security
 	$(PYTHON) scripts/net_smoke.py
+	$(PYTHON) scripts/tls_smoke.py
 test: all test-update test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security
 	$(PYTHON) scripts/smoke.py
 	$(PYTHON) scripts/ui_smoke.py
 	$(PYTHON) scripts/settings_smoke.py
 	$(PYTHON) scripts/net_smoke.py
+	$(PYTHON) scripts/tls_smoke.py
 	$(PYTHON) scripts/easter_smoke.py
 # An explicit Linux build resolves latest stable at kernel.org. `dual` reuses
 # verified local payloads; run `linux-update` when a newer stable is wanted.
