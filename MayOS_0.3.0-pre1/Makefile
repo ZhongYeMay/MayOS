@@ -24,7 +24,7 @@ FS_POWERLOSS_SELFTEST ?= 0
 ifeq ($(FS_POWERLOSS_SELFTEST),1)
 CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
 endif
-OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/update.o build/net.o build/net_ipv4.o build/net_dhcp.o build/sha256.o
+OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/update.o build/net.o build/net_ipv4.o build/net_dhcp.o build/sha256.o build/net_tcp.o
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
@@ -42,7 +42,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-sha256 test-update-verify linux linux-update dual run-dual test-dual run-uefi test-uefi
+.PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-sha256 test-update-verify linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
 	mkdir -p build
@@ -58,8 +58,9 @@ build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h 
 build/update.o: kernel/update.h kernel/version.h kernel/sha256.h
 build/sha256.o: kernel/sha256.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/net.h
-build/net.o: kernel/net.h kernel/net_ipv4.h kernel/net_dhcp.h kernel/io.h
+build/net.o: kernel/net.h kernel/net_ipv4.h kernel/net_dhcp.h kernel/net_tcp.h kernel/io.h
 build/net_dhcp.o: kernel/net_dhcp.h
+build/net_tcp.o: kernel/net_tcp.h kernel/net_ipv4.h
 build/net_ipv4.o: kernel/net_ipv4.h
 build/galgame.o: kernel/galgame.h
 build/boot64.o: kernel/boot64.S | build
@@ -91,13 +92,17 @@ build/net_ipv4_test: tests/net_ipv4_test.c kernel/net_ipv4.c kernel/net_ipv4.h k
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/net_ipv4_test.c kernel/net_ipv4.c -o $@
 test-net-codec: build/net_ipv4_test
 	./build/net_ipv4_test
+build/net_tcp_test: tests/net_tcp_test.c kernel/net_tcp.c kernel/net_ipv4.c kernel/net_tcp.h kernel/net_ipv4.h kernel/core.h | build
+	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/net_tcp_test.c kernel/net_tcp.c kernel/net_ipv4.c -o $@
+test-tcp: build/net_tcp_test
+	./build/net_tcp_test
 build/net_dhcp_test: tests/net_dhcp_test.c kernel/net_dhcp.c kernel/net_dhcp.h kernel/core.h | build
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/net_dhcp_test.c kernel/net_dhcp.c -o $@
 test-dhcp: build/net_dhcp_test
 	./build/net_dhcp_test
-test-net: all test-net-codec test-dhcp
+test-net: all test-net-codec test-dhcp test-tcp
 	$(PYTHON) scripts/net_smoke.py
-test: all test-update test-net-codec test-dhcp test-sha256 test-update-verify
+test: all test-update test-net-codec test-dhcp test-tcp test-sha256 test-update-verify
 	$(PYTHON) scripts/smoke.py
 	$(PYTHON) scripts/ui_smoke.py
 	$(PYTHON) scripts/settings_smoke.py

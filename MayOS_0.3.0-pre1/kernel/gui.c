@@ -786,7 +786,7 @@ static void shell(void) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
-        emit("theme light|dark  net status|dhcp|qemu-probe|udp-probe|dns-probe  update check|verify|status");
+        emit("theme light|dark  net status|dhcp|qemu-probe|udp-probe|dns-probe|tcp-probe  update check|verify|status");
         emit("reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
@@ -938,11 +938,14 @@ static void shell(void) {
         } else if (argc > 1 && !strcmp(argv[1], "udp-probe")) {
             if (!may_net_qemu_udp_probe())
                 emit("UDP probe: send ARP probe first; RTL8139 may be busy");
+        } else if (argc > 1 && !strcmp(argv[1], "tcp-probe")) {
+            if (!may_net_qemu_tcp_http_probe())
+                emit("TCP QEMU test: send ARP probe first; NIC may be busy");
         } else if (argc > 1 && !strcmp(argv[1], "dns-probe")) {
             if (!may_net_qemu_dns_fixture())
                 emit("DNS fixture: send ARP probe first; RTL8139 may be busy");
         } else if (argc > 1 && strcmp(argv[1], "status"))
-            emit("Usage: net status|dhcp|qemu-probe|udp-probe|dns-probe");
+            emit("Usage: net status|dhcp|qemu-probe|udp-probe|dns-probe|tcp-probe");
         may_net_poll();
         const MayNetInfo *nic = may_net_info();
         if (nic->present) {
@@ -959,6 +962,12 @@ static void shell(void) {
             emit(nic->dns_fixture_reply
                 ? "QEMU synthetic DNS A response: validated"
                 : "QEMU synthetic DNS A response: not confirmed");
+            emit(nic->tcp_fixture_connected
+                ? "QEMU TCP: 3-way handshake complete"
+                : "QEMU TCP: not connected");
+            emit(nic->tcp_fixture_reply
+                ? "QEMU HTTP: plaintext fixture response validated"
+                : "QEMU HTTP: no validated test response");
             const MayDhcpClient *lease=may_net_dhcp_info();
             if (lease->state==MAY_DHCP_BOUND) {
                 emit("DHCP: bound");
@@ -979,7 +988,7 @@ static void shell(void) {
                 emit("DHCP: rejected by server");
         } else
             emit("Network: no supported RTL8139 PCI adapter.");
-        emit("MayKernel: DHCP initial lease only; no renewals/TCP/HTTPS.");
+        emit("MayKernel: TCP localhost fixture only; no TLS/HTTPS/updates.");
         emit("UDP/DNS probes require a local QEMU host test fixture.");
 #endif
     } else if (!strcmp(c, "memstress")) {
