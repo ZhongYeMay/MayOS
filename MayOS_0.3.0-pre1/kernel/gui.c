@@ -11,6 +11,7 @@
 #include "version.h"
 #ifndef MAYOS_LINUX
 #include "update.h"
+#include "net.h"
 #endif
 #define MAYOS_RELEASE MAYOS_VERSION
 #ifdef MAYOS_LINUX
@@ -785,7 +786,7 @@ static void shell(void) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
-        emit("theme light|dark  net status  update check|status");
+        emit("theme light|dark  net status|qemu-probe  update check|status");
         emit("reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
@@ -923,8 +924,23 @@ static void shell(void) {
         emit(report);
         emit("Explorer: HTTP(S), certificate-verified TLS, HTTP/2 and IPv6 (Linux).");
 #else
-        emit("Network: MayKernel has no native NIC / TCP/IP driver.");
-        emit("Boot Linux for DHCP, DNS, IP diagnostics and HTTP preview.");
+        if (argc > 1 && !strcmp(argv[1], "qemu-probe")) {
+            if (!may_net_qemu_arp_probe())
+                emit("QEMU ARP probe: NIC unavailable or transmit busy");
+        } else if (argc > 1 && strcmp(argv[1], "status"))
+            emit("Usage: net status|qemu-probe");
+        may_net_poll();
+        const MayNetInfo *nic = may_net_info();
+        if (nic->present) {
+            emit("Network: RTL8139 PCI Ethernet ready (polled, L2 only).");
+            emitnum("RX frames: ", nic->packets_rx, "");
+            emitnum("TX frames: ", nic->packets_tx, "");
+            emit(nic->gateway_arp_reply
+                ? "QEMU gateway ARP: reply received"
+                : "QEMU gateway ARP: not confirmed");
+        } else
+            emit("Network: no supported RTL8139 PCI adapter.");
+        emit("MayKernel: no DHCP, IPv4, TCP/IP, DNS or HTTPS yet.");
 #endif
     } else if (!strcmp(c, "memstress")) {
 #ifndef MAYOS_LINUX
@@ -2535,6 +2551,9 @@ void kernel_main(u32 magic, u32 info) {
             last = ticks / 50;
             dirty = 1;
         }
+#ifndef MAYOS_LINUX
+        may_net_poll(); /* bounded polling, no IRQ or user-space dependency */
+#endif
         if (animation_step(mx, my)) dirty = 1;
         if (dirty)
             render();
