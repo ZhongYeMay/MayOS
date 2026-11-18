@@ -6,6 +6,8 @@ on:
       - 'MayOS_0.3.0-pre1/kernel/rust_bridge.h'
       - 'MayOS_0.3.0-pre1/kernel/update.c'
       - 'MayOS_0.3.0-pre1/scripts/rust_smoke.py'
+      - 'MayOS_0.3.0-pre1/scripts/rust_video.py'
+      - 'MayOS_0.3.0-pre1/scripts/rust_bearssl_smoke.py'
       - 'MayOS_0.3.0-pre1/Makefile'
       - '.github/workflows/maykernel-rust-hybrid.yml'
   workflow_dispatch:
@@ -44,11 +46,13 @@ jobs:
           bash scripts/configure-ci-apt-mirror.sh
           sudo apt-get install -y --no-install-recommends \
             gcc binutils make python3 python3-pil fonts-noto-cjk \
-            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools qemu-system-x86
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools qemu-system-x86 ffmpeg
       - name: Build actual Rust+C MayKernel and run two MayFS boot scenarios
         run: |
           make -C MayOS_0.3.0-pre1 MAYOS_RUST=1 test-rust-qemu
           nm -g MayOS_0.3.0-pre1/build/mayos.elf | grep ' mayrs_manifest_gate$'
+      - name: Capture actual Rust C kernel QEMU screen and encode test MP4
+        run: make -C MayOS_0.3.0-pre1 MAYOS_RUST=1 test-rust-video
       - name: Upload actual Rust C kernel screen captures and serial logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -60,6 +64,8 @@ jobs:
             MayOS_0.3.0-pre1/build/maykernel-rust-*.png
             MayOS_0.3.0-pre1/build/maykernel-rust-*.log
             MayOS_0.3.0-pre1/build/maykernel-rust-*-qemu.log
+            MayOS_0.3.0-pre1/build/MayOS-Rust-C-native-QEMU-test.mp4
+            MayOS_0.3.0-pre1/build/rust-video-*.log
   rust-bearssl-coexist:
     runs-on: ubuntu-24.04
     needs: rust-c-qemu
