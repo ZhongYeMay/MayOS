@@ -43,17 +43,31 @@ endif
 # release and QEMU workflows unchanged until the Rust path is fully accepted.
 # Requires rustup target add x86_64-unknown-none (no userspace, no allocator).
 MAYOS_RUST ?= 0
+MAYOS_RELEASE_SIGNATURE ?= 0
 RUSTC ?= rustc
+CARGO ?= cargo
 RUST_TARGET ?= x86_64-unknown-none
+# The strict Ed25519 verifier is an OPTIONAL Rust module. Never interpret
+# cryptographic verification under an arbitrary key as release trust.
+ifeq ($(MAYOS_RELEASE_SIGNATURE),1)
+override MAYOS_RUST := 1
+CFLAGS += -DMAYOS_RELEASE_SIGNATURE
+endif
 RUST_LIB :=
 ifeq ($(MAYOS_RUST),1)
 CFLAGS += -DMAYOS_RUST_CORE
 RUST_LIB := build/libmaykernel_rust.a
+ifeq ($(MAYOS_RELEASE_SIGNATURE),1)
+build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/Cargo.toml | build
+	CARGO_TARGET_DIR=$(CURDIR)/build/cargo $(CARGO) build --manifest-path rust/maykernel_policy/Cargo.toml --target $(RUST_TARGET) --release --no-default-features --features release-signature
+	cp build/cargo/$(RUST_TARGET)/release/libmaykernel_policy.a $@
+else
 build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs | build
 	$(RUSTC) --edition=2021 --crate-name maykernel_policy \
 	  --crate-type staticlib --target $(RUST_TARGET) -C panic=abort \
 	  -C opt-level=s -C codegen-units=1 -C relocation-model=static \
 	  -C no-redzone=yes $< -o $@
+endif
 endif
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
@@ -152,6 +166,11 @@ build/rust_manifest_tests: rust/maykernel_policy/src/lib.rs | build
 	$(RUSTC) --edition=2021 --crate-name maykernel_policy --test $< -o $@
 test-rust-host: build/rust_manifest_tests
 	./build/rust_manifest_tests
+# The tests use the published RFC 8032 signature vector, not a release key.
+.PHONY: test-ed25519-host
+test-ed25519-host:
+	$(CARGO) test --manifest-path rust/maykernel_policy/Cargo.toml --no-default-features --features release-signature
+
 test-rust-qemu: all test-rust-host
 	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for native Rust integration" >&2; exit 1)
 	$(PYTHON) scripts/rust_smoke.py
