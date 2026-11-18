@@ -6,7 +6,8 @@ void *memset(void *dst,int v,u32 n) {
 }
 void *memcpy(void *dst,const void *src,u32 n) {
     u8 *d=dst; const u8 *s=src;
-    for(u32 i=0;i<n;i++) d[i]=s[i]; return dst;
+    for(u32 i=0;i<n;i++) d[i]=s[i];
+    return dst;
 }
 static u8 mac[6]={0x52,0x54,0x00,0x12,0x34,0x56};
 static const u8 server[4]={10,0,2,2};
