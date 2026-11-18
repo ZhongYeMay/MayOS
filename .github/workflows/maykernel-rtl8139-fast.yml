@@ -1,0 +1,29 @@
+name: Compile native MayKernel RTL8139 driver
+
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/kernel/net.c'
+      - 'MayOS_0.3.0-pre1/kernel/net.h'
+      - 'MayOS_0.3.0-pre1/kernel/core.c'
+      - 'MayOS_0.3.0-pre1/kernel/io.h'
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - '.github/workflows/maykernel-rtl8139-fast.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freestanding-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile native hardware driver with kernel flags
+        run: |
+          cd MayOS_0.3.0-pre1
+          mkdir -p build
+          gcc -m64 -DMAYOS_X86_64 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie -fno-pic -fno-stack-protector -fno-builtin -fno-strict-aliasing -fno-asynchronous-unwind-tables -mno-red-zone -mgeneral-regs-only -Ikernel -c kernel/net.c -o build/net.o
+          file build/net.o
+          readelf -h build/net.o | grep -F 'ELF64'
+          readelf -h build/net.o | grep -F 'Advanced Micro Devices X86-64'

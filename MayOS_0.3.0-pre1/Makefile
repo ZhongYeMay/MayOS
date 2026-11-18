@@ -24,7 +24,7 @@ FS_POWERLOSS_SELFTEST ?= 0
 ifeq ($(FS_POWERLOSS_SELFTEST),1)
 CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
 endif
-OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/update.o
+OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/update.o build/net.o
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
@@ -42,7 +42,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: all clean run test test-update linux linux-update dual run-dual test-dual run-uefi test-uefi
+.PHONY: all clean run test test-update test-net linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
 	mkdir -p build
@@ -54,9 +54,10 @@ build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 # No external font or browser runtime is required in the finished ISO.
 build/material_icons.h: assets/material_symbols.py | build
 	$(PYTHON) assets/material_symbols.py
-build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/update.h
+build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/update.h kernel/net.h
 build/update.o: kernel/update.h kernel/version.h
-build/core.o: kernel/framebuffer.h kernel/boot64.S
+build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/net.h
+build/net.o: kernel/net.h kernel/io.h
 build/galgame.o: kernel/galgame.h
 build/boot64.o: kernel/boot64.S | build
 	$(CC) -m64 -c $< -o $@
@@ -75,10 +76,13 @@ build/update_manifest_test: tests/update_manifest_test.c kernel/update.c kernel/
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/update_manifest_test.c kernel/update.c -o $@
 test-update: build/update_manifest_test
 	./build/update_manifest_test
+test-net: all
+	$(PYTHON) scripts/net_smoke.py
 test: all test-update
 	$(PYTHON) scripts/smoke.py
 	$(PYTHON) scripts/ui_smoke.py
 	$(PYTHON) scripts/settings_smoke.py
+	$(PYTHON) scripts/net_smoke.py
 	$(PYTHON) scripts/easter_smoke.py
 # An explicit Linux build resolves latest stable at kernel.org. `dual` reuses
 # verified local payloads; run `linux-update` when a newer stable is wanted.
