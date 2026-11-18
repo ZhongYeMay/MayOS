@@ -63,11 +63,11 @@ ifeq ($(MAYOS_RUST),1)
 CFLAGS += -DMAYOS_RUST_CORE
 RUST_LIB := build/libmaykernel_rust.a
 ifeq ($(MAYOS_RELEASE_SIGNATURE),1)
-build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/Cargo.toml build/config-flags.txt | build
+build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/Cargo.toml build/config-flags.txt | build
 	CARGO_TARGET_DIR=$(CURDIR)/build/cargo RUSTFLAGS='-C panic=abort -C no-redzone=yes -C relocation-model=static --cfg curve25519_dalek_backend="serial"' $(CARGO) build --locked --manifest-path rust/maykernel_policy/Cargo.toml --target $(RUST_TARGET) --release --no-default-features --features release-signature
 	cp build/cargo/$(RUST_TARGET)/release/libmaykernel_policy.a $@
 else
-build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs build/config-flags.txt | build
+build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/ab_policy.rs build/config-flags.txt | build
 	$(RUSTC) --edition=2021 --crate-name maykernel_policy \
 	  --crate-type staticlib --target $(RUST_TARGET) -C panic=abort \
 	  -C opt-level=s -C codegen-units=1 -C relocation-model=static \
@@ -111,7 +111,7 @@ build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 # No external font or browser runtime is required in the finished ISO.
 build/material_icons.h: assets/material_symbols.py | build
 	$(PYTHON) assets/material_symbols.py
-build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/update.h kernel/net.h kernel/security_tls.h
+build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/update.h kernel/net.h kernel/security_tls.h kernel/rust_bridge.h
 build/update.o: kernel/update.h kernel/version.h kernel/sha256.h kernel/rust_bridge.h
 build/sha256.o: kernel/sha256.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/net.h kernel/security_tls.h
@@ -174,7 +174,7 @@ test-tls-qemu: all test-security
 	$(PYTHON) scripts/tls_smoke.py
 # Rust host unit tests run with std only in the test harness. The target
 # MayKernel library remains no_std with no allocator.
-build/rust_manifest_tests: rust/maykernel_policy/src/lib.rs | build
+build/rust_manifest_tests: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/ab_policy.rs | build
 	$(RUSTC) --edition=2021 --crate-name maykernel_policy --test $< -o $@
 test-rust-host: build/rust_manifest_tests
 	./build/rust_manifest_tests
