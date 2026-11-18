@@ -98,6 +98,19 @@ int main(void) {
     if (!expect(MAY_UPDATE_INVALID)) return 12;
 
     load(good);
+    if (!change("2026-11-18", "2026-02-30") ||
+        !expect(MAY_UPDATE_INVALID)) return 15;
+    load(good);
+    if (!change("2026-11-18", "2028-02-29") ||
+        !expect(MAY_UPDATE_CANDIDATE)) return 16;
+    load(good);
+    if (!change("2026-11-18", "2100-02-29") ||
+        !expect(MAY_UPDATE_INVALID)) return 17;
+    load(good);
+    if (!change("name=MayOS", "name=FakeO") ||
+        !expect(MAY_UPDATE_INVALID)) return 18;
+
+    load(good);
     files[4].size = 2049;
     if (!expect(MAY_UPDATE_INVALID)) return 13;
     load(good);
