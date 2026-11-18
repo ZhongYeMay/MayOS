@@ -210,14 +210,18 @@ class BootVM:
                 width, height = screenshot.size
                 lower_half = screenshot.convert('L').crop((0, height // 2, width, height))
                 lit_pixels = sum(lower_half.histogram()[65:])
-                if width <= 800 and height <= 600 and lit_pixels > 500:
+                # GRUB can use the requested 1280x720 graphics mode.
+                # Requiring VGA <=800x600 incorrectly fails a real HD menu.
+                if lit_pixels > 500:
                     # Complete the last text-cell redraw before saving the
                     # user-facing screenshot (the menu is already visible).
                     time.sleep(.4)
                     self.shot(name)
                     return
             if time.monotonic() >= deadline:
-                raise AssertionError(f'GRUB menu was not visible on VGA; see {path}')
+                raise AssertionError(
+                    f'GRUB menu not visually confirmed at {width}x{height}, '
+                    f'bright lower-half pixels={lit_pixels}; see {path}')
             self.pump()
             time.sleep(.15)
 
