@@ -902,12 +902,15 @@ static void shell(void) {
             may_update_check();
         else if (argc > 1 && !strcmp(argv[1], "verify"))
             may_update_verify_local();
+        else if (argc > 1 && !strcmp(argv[1], "auth"))
+            may_update_authenticate_local();
         else if (argc > 1 && strcmp(argv[1], "status")) {
-            emit("Usage: update check|verify|status");
+            emit("Usage: update check|verify|auth|status");
             return;
         }
         emit(may_update_status());
         emit(may_update_verify_status());
+        emit(may_update_auth_status());
         const MayUpdateInfo *info = may_update_info();
         if (info->state == MAY_UPDATE_CANDIDATE ||
             info->state == MAY_UPDATE_CURRENT) {
@@ -919,7 +922,8 @@ static void shell(void) {
             emit(info->changelog);
             emit("SHA-256 in manifest is NOT an authenticated image hash.");
         }
-        emit("HTTPS BLOCKED until trusted TLS + release signatures exist.");
+        emit("HTTPS remains BLOCKED: native trusted TLS not implemented.");
+        emit("Ed25519 auth needs owner-pinned key + .sig + matching image.");
         emit("No download/install; rollback-capable installer not ready.");
 #else
         emit("Native MayKernel update check requires the MayKernel boot option.");

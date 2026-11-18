@@ -1,0 +1,18 @@
+[package]
+name = "maykernel_policy"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["staticlib"]
+
+[features]
+default = []
+release-signature = ["dep:ed25519-dalek"]
+
+[dependencies]
+# RustCrypto, supports no_std. Exact direct version; Cargo.lock pins transitive crates.
+ed25519-dalek = { version = "=2.2.0", default-features = false, optional = true }

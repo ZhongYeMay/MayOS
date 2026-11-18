@@ -43,17 +43,36 @@ endif
 # release and QEMU workflows unchanged until the Rust path is fully accepted.
 # Requires rustup target add x86_64-unknown-none (no userspace, no allocator).
 MAYOS_RUST ?= 0
+MAYOS_RELEASE_SIGNATURE ?= 0
 RUSTC ?= rustc
+CARGO ?= cargo
 RUST_TARGET ?= x86_64-unknown-none
+# The strict Ed25519 verifier is an OPTIONAL Rust module. Never interpret
+# cryptographic verification under an arbitrary key as release trust.
+MAYOS_RELEASE_PUBKEY_HEX ?=
+MAYOS_ALLOW_TEST_RELEASE_KEY ?= 0
+ifeq ($(MAYOS_RELEASE_SIGNATURE),1)
+override MAYOS_RUST := 1
+CFLAGS += -DMAYOS_RELEASE_SIGNATURE
+build/release_pubkey.h: scripts/pin_release_public_key.py FORCE | build
+	MAYOS_ALLOW_TEST_RELEASE_KEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY) $(PYTHON) scripts/pin_release_public_key.py --public-key "$(MAYOS_RELEASE_PUBKEY_HEX)" --output $@
+build/update.o: build/release_pubkey.h
+endif
 RUST_LIB :=
 ifeq ($(MAYOS_RUST),1)
 CFLAGS += -DMAYOS_RUST_CORE
 RUST_LIB := build/libmaykernel_rust.a
-build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs | build
+ifeq ($(MAYOS_RELEASE_SIGNATURE),1)
+build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/Cargo.toml build/config-flags.txt | build
+	CARGO_TARGET_DIR=$(CURDIR)/build/cargo RUSTFLAGS='-C panic=abort -C no-redzone=yes -C relocation-model=static --cfg curve25519_dalek_backend="serial"' $(CARGO) build --locked --manifest-path rust/maykernel_policy/Cargo.toml --target $(RUST_TARGET) --release --no-default-features --features release-signature
+	cp build/cargo/$(RUST_TARGET)/release/libmaykernel_policy.a $@
+else
+build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs build/config-flags.txt | build
 	$(RUSTC) --edition=2021 --crate-name maykernel_policy \
 	  --crate-type staticlib --target $(RUST_TARGET) -C panic=abort \
 	  -C opt-level=s -C codegen-units=1 -C relocation-model=static \
 	  -C no-redzone=yes $< -o $@
+endif
 endif
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
@@ -75,8 +94,15 @@ endif
 .PHONY: test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video
 .PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
+# Build flags and pinned key are part of the artifact identity. Never reuse
+# signed-mode objects or stale root keys after switching configurations.
+.PHONY: FORCE
+FORCE:
 build:
 	mkdir -p build
+build/config-flags.txt: FORCE | build
+	@printf '%s\n' '$(CFLAGS)' 'RUST=$(MAYOS_RUST)' 'SIGNATURE=$(MAYOS_RELEASE_SIGNATURE)' 'KEY=$(MAYOS_RELEASE_PUBKEY_HEX)' 'TESTKEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY)' > $@.tmp
+	@if ! cmp -s $@.tmp $@; then mv $@.tmp $@; else rm -f $@.tmp; fi
 build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
 	$(PYTHON) scripts/font.py
 build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
@@ -101,7 +127,7 @@ build/security_entropy.o: kernel/security_entropy.h
 build/galgame.o: kernel/galgame.h
 build/boot64.o: kernel/boot64.S | build
 	$(CC) -m64 -c $< -o $@
-build/%.o: kernel/%.c kernel/core.h kernel/io.h kernel/version.h build/font.h
+build/%.o: kernel/%.c kernel/core.h kernel/io.h kernel/version.h build/font.h build/config-flags.txt
 	$(CC) $(CFLAGS) -c $< -o $@
 build/mayos.elf: $(OBJECTS) $(RUST_LIB) $(BEARSSL_LIB) kernel/linker64.ld
 	$(LD) -m elf_x86_64 -T kernel/linker64.ld -o $@ $(OBJECTS) $(RUST_LIB) $(BEARSSL_LIB)
@@ -152,6 +178,15 @@ build/rust_manifest_tests: rust/maykernel_policy/src/lib.rs | build
 	$(RUSTC) --edition=2021 --crate-name maykernel_policy --test $< -o $@
 test-rust-host: build/rust_manifest_tests
 	./build/rust_manifest_tests
+# The tests use the published RFC 8032 signature vector, not a release key.
+.PHONY: test-ed25519-host
+test-ed25519-host:
+	$(CARGO) test --locked --manifest-path rust/maykernel_policy/Cargo.toml --no-default-features --features release-signature
+.PHONY: test-ed25519-qemu
+test-ed25519-qemu: all test-ed25519-host
+	@test "$(MAYOS_RELEASE_SIGNATURE)" = "1" || (echo "Set MAYOS_RELEASE_SIGNATURE=1" >&2; exit 1)
+	$(PYTHON) scripts/ed25519_smoke.py
+
 test-rust-qemu: all test-rust-host
 	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for native Rust integration" >&2; exit 1)
 	$(PYTHON) scripts/rust_smoke.py
@@ -195,4 +230,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/*.a build/rust_manifest_tests build/font.h build/cat_image.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/*.a build/rust_manifest_tests build/config-flags.txt build/release_pubkey.h build/font.h build/cat_image.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h
