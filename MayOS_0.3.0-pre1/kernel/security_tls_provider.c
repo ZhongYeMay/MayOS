@@ -1,7 +1,9 @@
 #include "security_tls_provider.h"
-#include "core.h"
 #ifdef MAYOS_USE_BEARSSL
 #include "bearssl.h"
+/* This translation unit uses BearSSL's standard-C ABI, not the kernel's
+ * legacy u32-sized memory function declarations. */
+extern void serial(const char *message);
 
 /*
  * Statically allocated to avoid heap/allocator assumptions. We intentionally
@@ -14,8 +16,7 @@ static br_x509_minimal_context x509;
 static int linked;
 int may_tls_provider_probe(void) {
     if(linked)return 1;
-    memset(&client,0,sizeof(client));
-    memset(&x509,0,sizeof(x509));
+    /* Static BSS contexts are initially zeroed at kernel bootstrap. */
     br_ssl_client_init_full(&client,&x509,0,0);
     br_ssl_engine_set_versions(&client.eng,BR_TLS12,BR_TLS12);
     linked=1;
