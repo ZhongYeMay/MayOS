@@ -92,8 +92,7 @@ def main() -> None:
         ]:
             try:
                 manifest_bytes(image=image, **kwargs)
-            except (ValueError, TypeError):
-                # TypeError must never accidentally represent a positive test.
+            except ValueError:
                 pass
             else:
                 raise AssertionError(f"accepted malformed release metadata {kwargs}")
