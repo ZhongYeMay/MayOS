@@ -39,6 +39,23 @@ build/libbearssl.a: scripts/build_bearssl_freestanding.sh $(BEARSSL_SOURCE)/inc/
 	bash scripts/build_bearssl_freestanding.sh "$(BEARSSL_SOURCE)" $@
 endif
 
+# Optional Rust/C hybrid kernel build. Default C mode keeps all existing
+# release and QEMU workflows unchanged until the Rust path is fully accepted.
+# Requires rustup target add x86_64-unknown-none (no userspace, no allocator).
+MAYOS_RUST ?= 0
+RUSTC ?= rustc
+RUST_TARGET ?= x86_64-unknown-none
+RUST_LIB :=
+ifeq ($(MAYOS_RUST),1)
+CFLAGS += -DMAYOS_RUST_CORE
+RUST_LIB := build/libmaykernel_rust.a
+build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs | build
+	$(RUSTC) --edition=2021 --crate-name maykernel_policy \
+	  --crate-type staticlib --target $(RUST_TARGET) -C panic=abort \
+	  -C opt-level=s -C codegen-units=1 -C relocation-model=static \
+	  -C no-redzone=yes $< -o $@
+endif
+
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
 # Set SUMMER_SITE=/absolute/path/to/galgame/site to include all 12 original assets.
@@ -55,7 +72,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: test-bearssl-qemu
+.PHONY: test-bearssl-qemu test-rust-host test-rust-qemu
 .PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
@@ -69,7 +86,7 @@ build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 build/material_icons.h: assets/material_symbols.py | build
 	$(PYTHON) assets/material_symbols.py
 build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/update.h kernel/net.h kernel/security_tls.h
-build/update.o: kernel/update.h kernel/version.h kernel/sha256.h
+build/update.o: kernel/update.h kernel/version.h kernel/sha256.h kernel/rust_bridge.h
 build/sha256.o: kernel/sha256.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/net.h kernel/security_tls.h
 build/net.o: kernel/net.h kernel/net_ipv4.h kernel/net_dhcp.h kernel/net_tcp.h kernel/net_tcp_retry.h kernel/io.h
@@ -86,8 +103,8 @@ build/boot64.o: kernel/boot64.S | build
 	$(CC) -m64 -c $< -o $@
 build/%.o: kernel/%.c kernel/core.h kernel/io.h kernel/version.h build/font.h
 	$(CC) $(CFLAGS) -c $< -o $@
-build/mayos.elf: $(OBJECTS) $(BEARSSL_LIB) kernel/linker64.ld
-	$(LD) -m elf_x86_64 -T kernel/linker64.ld -o $@ $(OBJECTS) $(BEARSSL_LIB)
+build/mayos.elf: $(OBJECTS) $(RUST_LIB) $(BEARSSL_LIB) kernel/linker64.ld
+	$(LD) -m elf_x86_64 -T kernel/linker64.ld -o $@ $(OBJECTS) $(RUST_LIB) $(BEARSSL_LIB)
 	$(GRUB_FILE) --is-x86-multiboot $@
 build/mayos.iso: build/mayos.elf boot/grub/grub.cfg scripts/dual_iso.py
 	$(PYTHON) scripts/dual_iso.py --custom-only --firmware "$(BOOT_FIRMWARE)" --grub-mkrescue '$(GRUB_MKRESCUE)'
@@ -129,6 +146,16 @@ test-dhcp: build/net_dhcp_test
 	./build/net_dhcp_test
 test-tls-qemu: all test-security
 	$(PYTHON) scripts/tls_smoke.py
+# Rust host unit tests run with std only in the test harness. The target
+# MayKernel library remains no_std with no allocator.
+build/rust_manifest_tests: rust/maykernel_policy/src/lib.rs | build
+	$(RUSTC) --edition=2021 --crate-name maykernel_policy --test $< -o $@
+test-rust-host: build/rust_manifest_tests
+	./build/rust_manifest_tests
+test-rust-qemu: all test-rust-host
+	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for native Rust integration" >&2; exit 1)
+	$(PYTHON) scripts/rust_smoke.py
+
 test-bearssl-qemu: all test-security
 	@test -n "$(BEARSSL_SOURCE)" || (echo "Provide pinned BEARSSL_SOURCE checkout" >&2; exit 1)
 	$(PYTHON) scripts/tls_provider_smoke.py
@@ -161,4 +188,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/font.h build/cat_image.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/*.a build/rust_manifest_tests build/font.h build/cat_image.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h
