@@ -24,7 +24,7 @@ FS_POWERLOSS_SELFTEST ?= 0
 ifeq ($(FS_POWERLOSS_SELFTEST),1)
 CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
 endif
-OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/update.o build/net.o build/net_ipv4.o build/net_dhcp.o
+OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/update.o build/net.o build/net_ipv4.o build/net_dhcp.o build/sha256.o
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
@@ -42,7 +42,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: all clean run test test-update test-net test-net-codec test-dhcp linux linux-update dual run-dual test-dual run-uefi test-uefi
+.PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-sha256 test-update-verify linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
 	mkdir -p build
@@ -55,7 +55,8 @@ build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 build/material_icons.h: assets/material_symbols.py | build
 	$(PYTHON) assets/material_symbols.py
 build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/update.h kernel/net.h
-build/update.o: kernel/update.h kernel/version.h
+build/update.o: kernel/update.h kernel/version.h kernel/sha256.h
+build/sha256.o: kernel/sha256.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/net.h
 build/net.o: kernel/net.h kernel/net_ipv4.h kernel/net_dhcp.h kernel/io.h
 build/net_dhcp.o: kernel/net_dhcp.h
@@ -74,10 +75,18 @@ build/mayos-disk.img: | build
 	truncate -s 8M $@
 run: all
 	$(QEMU) -cpu max $(if $(QEMU_DATA_DIR),-L $(QEMU_DATA_DIR)) -m 128 -vga std -cdrom build/mayos.iso -drive file=build/mayos-disk.img,format=raw,if=ide,index=0 -boot d -serial file:build/serial.log -no-reboot
-build/update_manifest_test: tests/update_manifest_test.c kernel/update.c kernel/update.h kernel/version.h kernel/core.h | build
-	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/update_manifest_test.c kernel/update.c -o $@
+build/update_manifest_test: tests/update_manifest_test.c kernel/update.c kernel/update.h kernel/sha256.c kernel/version.h kernel/core.h | build
+	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/update_manifest_test.c kernel/update.c kernel/sha256.c -o $@
 test-update: build/update_manifest_test
 	./build/update_manifest_test
+build/sha256_test: tests/sha256_test.c kernel/sha256.c kernel/sha256.h kernel/core.h | build
+	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/sha256_test.c kernel/sha256.c -o $@
+test-sha256: build/sha256_test
+	./build/sha256_test
+build/update_verify_test: tests/update_verify_test.c kernel/update.c kernel/update.h kernel/sha256.c kernel/sha256.h kernel/core.h | build
+	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/update_verify_test.c kernel/update.c kernel/sha256.c -o $@
+test-update-verify: build/update_verify_test
+	./build/update_verify_test
 build/net_ipv4_test: tests/net_ipv4_test.c kernel/net_ipv4.c kernel/net_ipv4.h kernel/core.h | build
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/net_ipv4_test.c kernel/net_ipv4.c -o $@
 test-net-codec: build/net_ipv4_test
@@ -88,7 +97,7 @@ test-dhcp: build/net_dhcp_test
 	./build/net_dhcp_test
 test-net: all test-net-codec test-dhcp
 	$(PYTHON) scripts/net_smoke.py
-test: all test-update test-net-codec test-dhcp
+test: all test-update test-net-codec test-dhcp test-sha256 test-update-verify
 	$(PYTHON) scripts/smoke.py
 	$(PYTHON) scripts/ui_smoke.py
 	$(PYTHON) scripts/settings_smoke.py
