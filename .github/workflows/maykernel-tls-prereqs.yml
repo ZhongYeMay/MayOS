@@ -1,0 +1,34 @@
+name: MayKernel TLS security prerequisite validation
+
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/kernel/security_*.c'
+      - 'MayOS_0.3.0-pre1/kernel/security_*.h'
+      - 'MayOS_0.3.0-pre1/tests/security_tls_test.c'
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - '.github/workflows/maykernel-tls-prereqs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tls-fail-closed-policy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile security modules as freestanding ELF64 kernel objects
+        run: |
+          cd MayOS_0.3.0-pre1
+          mkdir -p build
+          for file in security_tls security_entropy security_clock; do
+            gcc -m64 -DMAYOS_X86_64 -std=gnu11 -O2 -Wall -Wextra -Werror \
+              -ffreestanding -fno-pie -fno-pic -fno-stack-protector \
+              -fno-builtin -fno-strict-aliasing -fno-asynchronous-unwind-tables \
+              -mno-red-zone -mgeneral-regs-only -Ikernel \
+              -c "kernel/$file.c" -o "build/$file.o"
+            readelf -h "build/$file.o" | grep -F 'ELF64'
+          done
+      - name: Run deterministic TLS denial and hostile hostname tests
+        run: make -C MayOS_0.3.0-pre1 test-security

@@ -24,7 +24,7 @@ FS_POWERLOSS_SELFTEST ?= 0
 ifeq ($(FS_POWERLOSS_SELFTEST),1)
 CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
 endif
-OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/update.o build/net.o build/net_ipv4.o build/net_dhcp.o build/sha256.o build/net_tcp.o build/net_tcp_retry.o
+OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/update.o build/net.o build/net_ipv4.o build/net_dhcp.o build/sha256.o build/net_tcp.o build/net_tcp_retry.o build/security_clock.o build/security_entropy.o build/security_tls.o
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
@@ -42,7 +42,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify linux linux-update dual run-dual test-dual run-uefi test-uefi
+.PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
 	mkdir -p build
@@ -54,15 +54,18 @@ build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 # No external font or browser runtime is required in the finished ISO.
 build/material_icons.h: assets/material_symbols.py | build
 	$(PYTHON) assets/material_symbols.py
-build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/update.h kernel/net.h
+build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/update.h kernel/net.h kernel/security_tls.h
 build/update.o: kernel/update.h kernel/version.h kernel/sha256.h
 build/sha256.o: kernel/sha256.h
-build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/net.h
+build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/net.h kernel/security_tls.h
 build/net.o: kernel/net.h kernel/net_ipv4.h kernel/net_dhcp.h kernel/net_tcp.h kernel/net_tcp_retry.h kernel/io.h
 build/net_dhcp.o: kernel/net_dhcp.h
 build/net_tcp.o: kernel/net_tcp.h kernel/net_ipv4.h
 build/net_tcp_retry.o: kernel/net_tcp_retry.h
 build/net_ipv4.o: kernel/net_ipv4.h
+build/security_tls.o: kernel/security_tls.h kernel/security_clock.h kernel/security_entropy.h
+build/security_clock.o: kernel/security_clock.h kernel/io.h
+build/security_entropy.o: kernel/security_entropy.h
 build/galgame.o: kernel/galgame.h
 build/boot64.o: kernel/boot64.S | build
 	$(CC) -m64 -c $< -o $@
@@ -89,6 +92,10 @@ build/update_verify_test: tests/update_verify_test.c kernel/update.c kernel/upda
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/update_verify_test.c kernel/update.c kernel/sha256.c -o $@
 test-update-verify: build/update_verify_test
 	./build/update_verify_test
+build/security_tls_test: tests/security_tls_test.c kernel/security_tls.c kernel/security_clock.c kernel/security_entropy.c kernel/core.h kernel/io.h kernel/security_tls.h | build
+	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/security_tls_test.c kernel/security_tls.c kernel/security_clock.c kernel/security_entropy.c -o $@
+test-security: build/security_tls_test
+	./build/security_tls_test
 build/net_ipv4_test: tests/net_ipv4_test.c kernel/net_ipv4.c kernel/net_ipv4.h kernel/core.h | build
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/net_ipv4_test.c kernel/net_ipv4.c -o $@
 test-net-codec: build/net_ipv4_test
@@ -105,13 +112,17 @@ build/net_dhcp_test: tests/net_dhcp_test.c kernel/net_dhcp.c kernel/net_dhcp.h k
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/net_dhcp_test.c kernel/net_dhcp.c -o $@
 test-dhcp: build/net_dhcp_test
 	./build/net_dhcp_test
-test-net: all test-net-codec test-dhcp test-tcp test-tcp-retry
+test-tls-qemu: all test-security
+	$(PYTHON) scripts/tls_smoke.py
+test-net: all test-net-codec test-dhcp test-tcp test-tcp-retry test-security
 	$(PYTHON) scripts/net_smoke.py
-test: all test-update test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify
+	$(PYTHON) scripts/tls_smoke.py
+test: all test-update test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security
 	$(PYTHON) scripts/smoke.py
 	$(PYTHON) scripts/ui_smoke.py
 	$(PYTHON) scripts/settings_smoke.py
 	$(PYTHON) scripts/net_smoke.py
+	$(PYTHON) scripts/tls_smoke.py
 	$(PYTHON) scripts/easter_smoke.py
 # An explicit Linux build resolves latest stable at kernel.org. `dual` reuses
 # verified local payloads; run `linux-update` when a newer stable is wanted.
