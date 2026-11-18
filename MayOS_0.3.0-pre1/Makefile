@@ -64,7 +64,7 @@ CFLAGS += -DMAYOS_RUST_CORE
 RUST_LIB := build/libmaykernel_rust.a
 ifeq ($(MAYOS_RELEASE_SIGNATURE),1)
 build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/Cargo.toml | build
-	CARGO_TARGET_DIR=$(CURDIR)/build/cargo RUSTFLAGS='-C panic=abort -C no-redzone=yes -C relocation-model=static --cfg curve25519_dalek_backend="serial"' $(CARGO) build --manifest-path rust/maykernel_policy/Cargo.toml --target $(RUST_TARGET) --release --no-default-features --features release-signature
+	CARGO_TARGET_DIR=$(CURDIR)/build/cargo RUSTFLAGS='-C panic=abort -C no-redzone=yes -C relocation-model=static --cfg curve25519_dalek_backend="serial"' $(CARGO) build --locked --manifest-path rust/maykernel_policy/Cargo.toml --target $(RUST_TARGET) --release --no-default-features --features release-signature
 	cp build/cargo/$(RUST_TARGET)/release/libmaykernel_policy.a $@
 else
 build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs | build
@@ -174,7 +174,7 @@ test-rust-host: build/rust_manifest_tests
 # The tests use the published RFC 8032 signature vector, not a release key.
 .PHONY: test-ed25519-host
 test-ed25519-host:
-	$(CARGO) test --manifest-path rust/maykernel_policy/Cargo.toml --no-default-features --features release-signature
+	$(CARGO) test --locked --manifest-path rust/maykernel_policy/Cargo.toml --no-default-features --features release-signature
 .PHONY: test-ed25519-qemu
 test-ed25519-qemu: all test-ed25519-host
 	@test "$(MAYOS_RELEASE_SIGNATURE)" = "1" || (echo "Set MAYOS_RELEASE_SIGNATURE=1" >&2; exit 1)
