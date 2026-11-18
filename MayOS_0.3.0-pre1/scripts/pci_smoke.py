@@ -54,11 +54,14 @@ def main():
     run_case("legacy-mixed", "pc", [
         "ich9-ahci,id=generic-ahci",
         "qemu-xhci,id=generic-xhci",
+        "usb-kbd,bus=generic-xhci.0",
         "virtio-net-pci,id=generic-network",
         "intel-hda,id=generic-audio",
     ], {
         "class 01:06": "AHCI storage controller",
         "class 0c:03:30": "xHCI USB controller",
+        "xHCI generic controller ready, controllers=1 connected-ports=1":
+            "initialized xHCI rings and detected a standards-based USB port",
         "class 02:": "network controller",
         "class 04:03": "HDA audio controller",
         "MayOS: desktop ready": "desktop boot after enumeration",
