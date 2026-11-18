@@ -2,7 +2,8 @@
 """Real MayKernel/QEMU RTL8139 ARP + IPv4 UDP + DNS-A fixture acceptance.
 
 The host loopback server provides deterministic, synthetic packets; this does
-NOT exercise public DNS, DHCP, Internet connectivity, or GitHub updates.
+NOT exercise public DNS, Internet connectivity, or GitHub updates.
+The DHCP handshake below uses QEMU SLIRP's actual DHCP service.
 """
 import socket
 import threading
@@ -63,9 +64,18 @@ def main():
         vm.cmd("net status")
         vm.wait("QEMU IPv4 UDP echo: validated")
         vm.wait("QEMU synthetic DNS A response: validated")
-        vm.shot("maykernel-rtl8139-ipv4-udp-dns")
+        vm.cmd("net dhcp")
+        vm.wait("MayOS: DHCP DISCOVER broadcast sent")
+        vm.wait("MayOS: DHCP OFFER received and validated")
+        vm.wait("MayOS: DHCP REQUEST broadcast sent")
+        vm.wait("MayOS: DHCP ACK accepted; lease acquired")
+        vm.cmd("net status")
+        vm.wait("DHCP: bound")
+        vm.wait("Assigned IPv4:")
+        vm.wait("Lease (seconds):")
+        vm.shot("maykernel-rtl8139-ipv4-udp-dns-dhcp")
         assert "echo" in events and "dns" in events, events
-        print("PASS: real QEMU RTL8139 ARP, IPv4 UDP echo, synthetic DNS A round-trip", flush=True)
+        print("PASS: real QEMU RTL8139 ARP IPv4 UDP DNS fixture and DHCP lease exchange", flush=True)
     finally:
         if vm is not None:
             vm.stop()
