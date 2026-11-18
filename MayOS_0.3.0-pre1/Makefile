@@ -24,7 +24,7 @@ FS_POWERLOSS_SELFTEST ?= 0
 ifeq ($(FS_POWERLOSS_SELFTEST),1)
 CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
 endif
-OBJECTS := build/boot64.o build/core.o build/pci.o build/fs.o build/gui.o build/galgame.o
+OBJECTS := build/boot64.o build/core.o build/acpi.o build/pci.o build/fs.o build/gui.o build/galgame.o
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
@@ -56,6 +56,7 @@ build/material_icons.h: assets/material_symbols.py | build
 	$(PYTHON) assets/material_symbols.py
 build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S
+build/acpi.o: kernel/acpi.h
 build/pci.o: kernel/pci.h kernel/io.h
 build/galgame.o: kernel/galgame.h
 build/boot64.o: kernel/boot64.S | build

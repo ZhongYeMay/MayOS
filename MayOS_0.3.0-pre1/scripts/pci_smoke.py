@@ -10,18 +10,16 @@ BUILD = ROOT / "build"
 QEMU = os.environ.get("QEMU", "qemu-system-x86_64")
 
 
-def main():
-    log = BUILD / "test-pci-topology.log"
+def run_case(name, machine, devices, required):
+    log = BUILD / f"test-pci-{name}.log"
     command = [
-        QEMU, "-machine", "pc", "-accel", "tcg", "-cpu", "max", "-m", "256",
+        QEMU, "-machine", machine, "-accel", "tcg", "-cpu", "max", "-m", "256",
         "-vga", "std", "-display", "none", "-cdrom", str(BUILD / "mayos.iso"),
         "-boot", "d", "-serial", f"file:{log}", "-no-reboot", "-no-shutdown",
         "-nic", "none",
-        "-device", "ich9-ahci,id=generic-ahci",
-        "-device", "qemu-xhci,id=generic-xhci",
-        "-device", "virtio-net-pci,id=generic-network",
-        "-device", "intel-hda,id=generic-audio",
     ]
+    for device in devices:
+        command += ["-device", device]
     if os.environ.get("QEMU_DATA_DIR"):
         command += ["-L", os.environ["QEMU_DATA_DIR"]]
     log.unlink(missing_ok=True)
@@ -29,13 +27,6 @@ def main():
                                stderr=subprocess.PIPE, text=True)
     try:
         deadline = time.monotonic() + 35
-        required = {
-            "class 01:06": "AHCI storage controller",
-            "class 0c:03:30": "xHCI USB controller",
-            "class 02:": "network controller",
-            "class 04:03": "HDA audio controller",
-            "MayOS: desktop ready": "desktop boot after enumeration",
-        }
         while time.monotonic() < deadline:
             text = log.read_text(errors="replace") if log.exists() else ""
             if all(token in text for token in required):
@@ -48,7 +39,7 @@ def main():
             missing = [description for token, description in required.items()
                        if token not in text]
             raise AssertionError(f"PCI topology probe timed out; missing {missing}:\n{text}")
-        print("PASS: generic PCI enumeration classified IDE/AHCI/xHCI/network/audio and booted")
+        print(f"PASS: {name} PCI topology")
     finally:
         if process.poll() is None:
             process.terminate()
@@ -57,6 +48,27 @@ def main():
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=5)
+
+
+def main():
+    run_case("legacy-mixed", "pc", [
+        "ich9-ahci,id=generic-ahci",
+        "qemu-xhci,id=generic-xhci",
+        "virtio-net-pci,id=generic-network",
+        "intel-hda,id=generic-audio",
+    ], {
+        "class 01:06": "AHCI storage controller",
+        "class 0c:03:30": "xHCI USB controller",
+        "class 02:": "network controller",
+        "class 04:03": "HDA audio controller",
+        "MayOS: desktop ready": "desktop boot after enumeration",
+    })
+    run_case("pcie-ecam", "q35", [], {
+        "MCFG ranges=1": "ACPI PCIe MCFG range",
+        "class 01:06": "q35 AHCI controller through ECAM",
+        "MayOS: desktop ready": "desktop boot through PCIe enumeration",
+    })
+    print("PASS: generic PCI/PCIe discovery covers legacy config and ACPI ECAM")
 
 
 if __name__ == "__main__":

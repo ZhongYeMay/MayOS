@@ -2,6 +2,7 @@
 #include "io.h"
 #include "framebuffer.h"
 #include "pci.h"
+#include "acpi.h"
 void *memset(void *p, int v, u32 n) {
     u8 *d = p;
     while (n--)
@@ -411,6 +412,7 @@ void hardware_init(u32 magic, u32 info) {
     cpu_name[48] = 0;
     ps2_init();
     timer_init();
+    acpi_init();
     pci_init();
 #ifdef MAYOS_EXCEPTION_SELFTEST
     serial("MayOS: intentional invalid-opcode exception self-test\n");

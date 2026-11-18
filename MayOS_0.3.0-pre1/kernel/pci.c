@@ -1,5 +1,6 @@
 #include "pci.h"
 #include "io.h"
+#include "acpi.h"
 
 static PciDevice devices[PCI_MAX_DEVICES];
 static int device_count;
@@ -10,6 +11,8 @@ static u32 pci_address(u8 bus, u8 slot, u8 function, u8 offset) {
 }
 
 u32 pci_config_read32(u8 bus, u8 slot, u8 function, u8 offset) {
+    volatile u32 *ecam = acpi_pci_config_address(bus, slot, function, offset);
+    if (ecam) return *ecam;
     outl(0xcf8, pci_address(bus, slot, function, offset));
     return inl(0xcfc);
 }
@@ -126,9 +129,8 @@ static void enumerate_function(u8 bus, u8 slot, u8 function) {
 
 void pci_init(void) {
     device_count = 0;
-    /* Configuration mechanism #1 is standardized for conventional PCI and
-       remains available on PCIe systems through the host bridge.  Scanning
-       all buses also handles firmware-configured bridges without ACPI MCFG. */
+    /* Prefer ACPI MCFG ECAM for PCIe. Configuration mechanism #1 remains the
+       standards-defined fallback for conventional PCI and older firmware. */
     for (u32 bus = 0; bus < 256; bus++)
         for (u32 slot = 0; slot < 32; slot++) {
             u16 vendor = pci_config_read16((u8)bus, (u8)slot, 0, 0);
