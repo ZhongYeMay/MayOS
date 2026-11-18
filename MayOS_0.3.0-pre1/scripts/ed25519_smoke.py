@@ -56,6 +56,13 @@ def run_case(tag, signature, payload, message, accepted):
         if accepted:
             vm.wait("MayOS: local Ed25519 manifest signature and image digest verified; NO INSTALL")
         vm.shot(f"maykernel-ed25519-{tag}")
+        if accepted:
+            # A successful earlier check must never authorize a subsequently
+            # edited manifest; auth MUST re-parse signed input before use.
+            vm.cmd("write Documents/Update.may invalid-metadata")
+            vm.cmd("update auth")
+            vm.wait("Authenticity: valid update metadata required first")
+            vm.shot("maykernel-ed25519-stale-check-rejected")
     finally:
         vm.stop()
 
@@ -85,7 +92,7 @@ def main():
     )
     print(
         "PASS: real MayKernel QEMU verifies test-only Ed25519 manifest "
-        "and SHA-256 image; rejects signature and payload tampering; no install",
+        "and SHA-256 image; rejects signatures, image tampering and stale manifests; no install",
         flush=True
     )
 
