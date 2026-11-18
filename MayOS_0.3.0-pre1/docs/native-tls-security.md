@@ -69,3 +69,14 @@ A separate **opt-in native build** is available. It does not enable HTTPS.
 - The default build, including all normal ISO/release tasks, does **not** fetch or include BearSSL and reports it as absent.
 
 **Unresolved issues:** a correctly seeded DRBG and entropy reseeding, trustworthy certificate-validation time, managed CA roots, certificate and SAN verification, a transport socket/stream abstraction, TLS record I/O, robust TCP and negative tests. BearSSL mainly supports TLS 1.2, not TLS 1.3; the pin used here is for portability trials only, not a recommendation to ship obsolete code.
+
+## Verified experimental native link (2026-11-18)
+
+- [Real QEMU workflow SUCCESS](https://github.com/ZhongYeMay/MayOS/actions/runs/44332859250).
+- [QEMU screenshot and serial test evidence](https://github.com/ZhongYeMay/MayOS/actions/runs/44332859250/artifacts/14441075104).
+- 293 upstream source files compiled freestanding; Unix system RNG backend excluded deliberately.
+- Separate native `size_t` wrappers prevent ABI mismatches with MayKernel's legacy `u32` memory helper signatures.
+- Source checkout verified against pinned git commit, archive linked as real ELF64. QEMU booted MayKernel and initialized `br_ssl_client_init_full`.
+- QEMU explicitly confirmed `PASS: genuine BearSSL native ELF64 init in QEMU; authenticated HTTPS remains blocked`.
+
+**This is NOT a TLS handshake or certificate verification success.** Neither trusted entropy nor trusted wall time nor CA roots have been provisioned. The native provider is opt-in and the default build remains fail-closed. Do not promote the current BearSSL revision as a secure distribution without a new audit and updated vendor source.
