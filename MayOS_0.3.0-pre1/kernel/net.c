@@ -1,5 +1,6 @@
 #include "net.h"
 #include "io.h"
+#include "net_ipv4.h"
 
 /* The RTL8139 is deliberately opt-in by PCI device ID. Unrecognized network
  * hardware remains untouched. A single polling driver avoids changing PIC/IDT.
@@ -25,6 +26,11 @@ static MayNetInfo nic;
 static u32 rx_cursor, next_tx;
 static u8 rx_ring[RTL_RX_ALLOC] __attribute__((aligned(256)));
 static u8 tx_frames[4][RTL_TX_ALLOC] __attribute__((aligned(16)));
+static u8 ipv4_receive[RTL_TX_ALLOC];
+static u8 qemu_gateway_mac[6];
+static int qemu_gateway_mac_valid, udp_probe_active, dns_probe_active;
+static const u8 qemu_local_ip[4] = {10, 0, 2, 15};
+static const u8 qemu_gateway_ip[4] = {10, 0, 2, 2};
 
 static u32 pci_read(u8 bus, u8 slot, u8 func, u8 offset) {
     u32 address = 0x80000000u |
@@ -93,6 +99,8 @@ static int rtl_setup(u8 bus, u8 slot, u8 func) {
         return 0;
     }
     rx_cursor = next_tx = 0;
+    qemu_gateway_mac_valid = 0;
+    udp_probe_active = dns_probe_active = 0;
     outw(io + RTL_IMR, 0); /* polling only; don't fire unhandled IRQs */
     outw(io + RTL_ISR, 0xffffu);
     outl(io + RTL_RBSTART, (u32)(uptr)rx_ring);
@@ -103,7 +111,7 @@ static int rtl_setup(u8 bus, u8 slot, u8 func) {
         outl(io + RTL_TSAD0 + i * 4u, (u32)(uptr)tx_frames[i]);
     outb(io + RTL_CMD, 0x0c); /* receiver + transmitter */
     nic.present = 1;
-    serial("MayOS: RTL8139 native PCI Ethernet ready (polling, no IP stack)\n");
+    serial("MayOS: RTL8139 native PCI Ethernet ready (polling, IPv4 UDP preview)\n");
     return 1;
 }
 void may_net_init(void) {
@@ -129,6 +137,45 @@ const MayNetInfo *may_net_info(void) { return &nic; }
 /* Only accept an ARP response corresponding to the built-in QEMU gateway
  * diagnostic. Don't treat arbitrary LAN packets as successful probes. */
 static void receive_frame(u32 offset, u32 frame_len) {
+    /* Full frame is copied from the circular RTL8139 DMA ring so the pure
+     * parser cannot accidentally read wrapped or stale receive data. */
+    if (frame_len >= 42u && frame_len <= sizeof(ipv4_receive) &&
+        ring_byte(offset + 12u) == 8u && ring_byte(offset + 13u) == 0u) {
+        for (u32 i = 0; i < frame_len; i++)
+            ipv4_receive[i] = ring_byte(offset + i);
+        MayUdpDatagram message;
+        if (may_ipv4_udp_parse(ipv4_receive, frame_len, nic.mac,
+                               qemu_local_ip, &message)) {
+            int gateway = 1;
+            for (int i = 0; i < 4; i++)
+                if (message.source_ip[i] != qemu_gateway_ip[i]) gateway = 0;
+            if (gateway && message.source_port == 10053u &&
+                udp_probe_active && message.destination_port == 40000u) {
+                static const char ack[] = "MAYOS-UDP-ACK";
+                if (message.payload_length == sizeof(ack) - 1u) {
+                    u32 i;
+                    for (i = 0; i < sizeof(ack) - 1u; i++)
+                        if (message.payload[i] != (u8)ack[i]) break;
+                    if (i == sizeof(ack) - 1u) {
+                        nic.ipv4_udp_reply = 1;
+                        udp_probe_active = 0;
+                        serial("MayOS: RTL8139 IPv4 UDP echo validated from QEMU host\n");
+                    }
+                }
+            } else if (gateway && message.source_port == 10053u &&
+                       dns_probe_active && message.destination_port == 40001u) {
+                u8 address[4];
+                if (may_dns_reply_a(message.payload, message.payload_length,
+                                    0x4d41u, address)) {
+                    memcpy(nic.dns_fixture_address, address, 4u);
+                    nic.dns_fixture_reply = 1;
+                    dns_probe_active = 0;
+                    serial("MayOS: RTL8139 DNS fixture response validated over IPv4 UDP\n");
+                }
+            }
+        }
+        return;
+    }
     if (frame_len < 42u) return;
     if (ring_byte(offset + 12u) != 0x08 ||
         ring_byte(offset + 13u) != 0x06) return;
@@ -150,6 +197,14 @@ static void receive_frame(u32 offset, u32 frame_len) {
         if (ring_byte(offset + 28u + (u32)i) != gateway[i] ||
             ring_byte(offset + 38u + (u32)i) != client[i]) return;
     }
+    int mac_matches = 1;
+    for (int i = 0; i < 6; i++)
+        if (ring_byte(offset + 6u + (u32)i) !=
+            ring_byte(offset + 22u + (u32)i)) mac_matches = 0;
+    if (!mac_matches || (ring_byte(offset + 22u) & 1u)) return;
+    for (int i = 0; i < 6; i++)
+        qemu_gateway_mac[i] = ring_byte(offset + 22u + (u32)i);
+    qemu_gateway_mac_valid = 1;
     if (!nic.gateway_arp_reply) {
         nic.gateway_arp_reply = 1;
         serial("MayOS: RTL8139 ARP reply received from QEMU gateway 10.0.2.2\n");
@@ -202,6 +257,7 @@ int may_net_qemu_arp_probe(void) {
     packet[28] = 10; packet[29] = 0; packet[30] = 2; packet[31] = 15;
     packet[38] = 10; packet[39] = 0; packet[40] = 2; packet[41] = 2;
     nic.gateway_arp_reply = 0;
+    qemu_gateway_mac_valid = 0;
     /* A serial fence ensures the DMA-visible buffer is populated first. */
     __asm__ volatile("" ::: "memory");
     outl(io + RTL_TSD0 + index * 4u, 60u);
@@ -209,4 +265,52 @@ int may_net_qemu_arp_probe(void) {
     nic.packets_tx++;
     serial("MayOS: RTL8139 QEMU ARP probe sent to 10.0.2.2\n");
     return 1;
+}
+
+
+/* Both probes intentionally use a fixed, non-routable QEMU host fixture.
+ * They are not a public resolver, Internet interface, nor an update API. */
+static int send_ipv4_probe(int dns) {
+    if (!nic.present || !qemu_gateway_mac_valid) return 0;
+    may_net_poll();
+    u32 index = next_tx;
+    const u16 io = nic.io_base;
+    if (!(inl(io + RTL_TSD0 + index * 4u) & (1u << 13))) return 0;
+    static const u8 echo_request[] = "MAYOS-UDP-PROBE";
+    u8 dns_request[280];
+    const u8 *data = echo_request;
+    u16 data_size = (u16)(sizeof(echo_request) - 1u);
+    if (dns) {
+        int n = may_dns_query_a(dns_request, sizeof(dns_request),
+                                "example.test", 0x4d41u);
+        if (!n) return 0;
+        data = dns_request;
+        data_size = (u16)n;
+    }
+    int frame_size = may_ipv4_udp_build(
+        tx_frames[index], sizeof(tx_frames[index]),
+        nic.mac, qemu_gateway_mac, qemu_local_ip, qemu_gateway_ip,
+        dns ? 40001u : 40000u, 10053u,
+        data, data_size, dns ? 0x4d41u : 0x4d40u);
+    if (!frame_size) return 0;
+    if (dns) {
+        nic.dns_fixture_reply = 0;
+        dns_probe_active = 1;
+    } else {
+        nic.ipv4_udp_reply = 0;
+        udp_probe_active = 1;
+    }
+    __asm__ volatile("" ::: "memory");
+    outl(io + RTL_TSD0 + index * 4u, (u32)frame_size);
+    next_tx = (index + 1u) & 3u;
+    nic.packets_tx++;
+    serial(dns ? "MayOS: RTL8139 DNS fixture request sent over IPv4 UDP\n"
+               : "MayOS: RTL8139 IPv4 UDP echo probe sent to QEMU host\n");
+    return 1;
+}
+int may_net_qemu_udp_probe(void) {
+    return send_ipv4_probe(0);
+}
+int may_net_qemu_dns_fixture(void) {
+    return send_ipv4_probe(1);
 }
