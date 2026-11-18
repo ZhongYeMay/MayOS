@@ -72,7 +72,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu
+.PHONY: test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video
 .PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
@@ -155,6 +155,9 @@ test-rust-host: build/rust_manifest_tests
 test-rust-qemu: all test-rust-host
 	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for native Rust integration" >&2; exit 1)
 	$(PYTHON) scripts/rust_smoke.py
+test-rust-video: all
+	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for native Rust video" >&2; exit 1)
+	$(PYTHON) scripts/rust_video.py
 test-rust-bearssl-qemu: all test-rust-host
 	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for Rust/BearSSL hybrid test" >&2; exit 1)
 	@test -n "$(BEARSSL_SOURCE)" || (echo "Set BEARSSL_SOURCE to pinned upstream checkout" >&2; exit 1)
