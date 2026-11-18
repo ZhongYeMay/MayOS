@@ -15,6 +15,9 @@ class VM:
             if storage=='ahci':
                 args+=['-drive',f'file={disk},format=raw,if=none,id=mayfs',
                        '-device','ide-hd,drive=mayfs,bus=ide.0']
+            elif storage=='nvme':
+                args+=['-drive',f'file={disk},format=raw,if=none,id=mayfs',
+                       '-device','nvme,drive=mayfs,serial=MAYOS-NVME']
             else:args+=['-drive',f'file={disk},format=raw,if=ide,index=0']
         if os.environ.get('QEMU_DATA_DIR'):args+=['-L',os.environ['QEMU_DATA_DIR']]
         self.proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=(BUILD/f'{tag}-qemu.log').open('w'))

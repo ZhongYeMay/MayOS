@@ -4,6 +4,7 @@
 #include "io.h"
 #include "pci.h"
 #include "ahci.h"
+#include "nvme.h"
 #endif
 
 /* MayFS uses a checksummed fixed-size snapshot on primary IDE master. */
@@ -19,6 +20,7 @@ int disk_ready;
 #ifndef MAYOS_LINUX
 static u32 disk_sectors;
 static int storage_ahci;
+static int storage_nvme;
 static u16 ata_command_base = 0x1f0, ata_control_base = 0x3f6;
 static int backup_enabled;
 static int active_slot;
@@ -76,6 +78,8 @@ static int ata_sector(u32 lba, void *buf, int write) {
 }
 static int sector(u32 lba, void *buf, int write) {
     if (lba >= FS_TOTAL_SECTORS || lba >= disk_sectors) return 0;
+    if (storage_nvme)
+        return write ? nvme_write_sector(lba, buf) : nvme_read_sector(lba, buf);
     if (storage_ahci)
         return write ? ahci_write_sector(lba, buf) : ahci_read_sector(lba, buf);
     return ata_sector(lba, buf, write);
@@ -175,6 +179,7 @@ static int write_snapshot(u32 slot) {
     }
     if (!sector(base, fs_image, 1))
         return 0;
+    if (storage_nvme) return nvme_flush();
     if (storage_ahci) return ahci_flush();
     outb((u16)(ata_command_base + 7), 0xe7); /* ATA FLUSH CACHE */
     return ata_wait(0);
@@ -302,8 +307,12 @@ void fs_init(void) {
     int valid = 0;
     serial("MayOS Linux: RAM filesystem; no block devices opened\n");
 #else
-    storage_ahci = ahci_init();
-    if (storage_ahci) {
+    storage_nvme = nvme_init();
+    storage_ahci = !storage_nvme && ahci_init();
+    if (storage_nvme) {
+        u64 sectors = nvme_sector_count();
+        disk_sectors = sectors > 0xffffffffu ? 0xffffffffu : (u32)sectors;
+    } else if (storage_ahci) {
         u64 sectors = ahci_sector_count();
         disk_sectors = sectors > 0xffffffffu ? 0xffffffffu : (u32)sectors;
     } else {
