@@ -4,6 +4,7 @@
 #include "material_icons.h"
 #ifndef MAYOS_LINUX
 #include "galgame.h"
+#include "pci.h"
 #endif
 #ifdef MAYOS_LINUX
 #include "explorer_history.h"
@@ -782,7 +783,7 @@ static void shell(void) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
-        emit("theme light|dark  net status  reboot  shutdown");
+        emit("theme light|dark  net status  lspci  reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
         out_count = 0;
@@ -887,6 +888,17 @@ static void shell(void) {
         emitnum("Uptime: ", ticks / 100, " seconds");
         emit(disk_ready ? "Disk: ATA / MayFS" : "Disk: RAM fallback");
         emit(cpu_name);
+#endif
+    } else if (!strcmp(c, "lspci")) {
+#ifdef MAYOS_LINUX
+        emit("lspci: use the Linux pciutils package when included in the image");
+#else
+        emitnum("PCI devices: ", (u32)pci_device_count(), "");
+        for (int i = 0; i < pci_device_count(); i++) {
+            char description[96];
+            pci_describe(pci_device_at(i), description, sizeof(description));
+            emit(description);
+        }
 #endif
     } else if (!strcmp(c, "net") || !strcmp(c, "network")) {
 #ifdef MAYOS_LINUX
