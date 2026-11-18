@@ -2,6 +2,7 @@
 #include "io.h"
 #include "net_ipv4.h"
 #include "net_dhcp.h"
+#include "net_tcp.h"
 
 /* The RTL8139 is deliberately opt-in by PCI device ID. Unrecognized network
  * hardware remains untouched. A single polling driver avoids changing PIC/IDT.
@@ -32,6 +33,9 @@ static u8 qemu_gateway_mac[6];
 static int qemu_gateway_mac_valid, udp_probe_active, dns_probe_active;
 static MayDhcpClient dhcp;
 static int dhcp_request_pending;
+static u32 tcp_next_seq,tcp_remote_seq,tcp_captured;
+static int tcp_state,tcp_pending_ack,tcp_pending_get;
+static u8 tcp_capture[256];
 static const u8 qemu_local_ip[4] = {10, 0, 2, 15};
 static const u8 qemu_gateway_ip[4] = {10, 0, 2, 2};
 
@@ -105,6 +109,8 @@ static int rtl_setup(u8 bus, u8 slot, u8 func) {
     qemu_gateway_mac_valid = 0;
     dhcp_request_pending = 0;
     memset(&dhcp, 0, sizeof(dhcp));
+    tcp_state=tcp_pending_ack=tcp_pending_get=0;
+    tcp_next_seq=tcp_remote_seq=tcp_captured=0;
     udp_probe_active = dns_probe_active = 0;
     outw(io + RTL_IMR, 0); /* polling only; don't fire unhandled IRQs */
     outw(io + RTL_ISR, 0xffffu);
@@ -153,6 +159,79 @@ const char *may_net_format_ipv4(const u8 ip[4]) {
     result[pos]=0;
     return result;
 }
+/* QEMU localhost diagnostic: no retransmission, congestion control,
+ * production HTTP or encryption. Only sends to already ARP-confirmed gateway. */
+static int tcp_transmit(u8 flags,const u8 *data,u16 length) {
+    if(!nic.present||!qemu_gateway_mac_valid)return 0;
+    u32 index=next_tx;
+    u16 io=nic.io_base;
+    if(!(inl(io+RTL_TSD0+index*4u)&(1u<<13)))return 0;
+    int count=may_tcp_build(tx_frames[index],sizeof(tx_frames[index]),
+        nic.mac,qemu_gateway_mac,qemu_local_ip,qemu_gateway_ip,
+        40100u,10080u,tcp_next_seq,tcp_remote_seq,
+        flags,4096u,data,length,(u16)(tcp_next_seq&0xffffu));
+    if(!count)return 0;
+    __asm__ volatile("" ::: "memory");
+    outl(io+RTL_TSD0+index*4u,(u32)count);
+    next_tx=(index+1u)&3u;
+    nic.packets_tx++;
+    tcp_next_seq+=(u32)length+
+                  ((flags&MAY_TCP_SYN)?1u:0u)+((flags&MAY_TCP_FIN)?1u:0u);
+    return 1;
+}
+static void tcp_received(const MayTcpSegment *t) {
+    if(t->source_port!=10080u || t->destination_port!=40100u)return;
+    for(u32 i=0;i<4;i++)if(t->source_ip[i]!=qemu_gateway_ip[i])return;
+    if(t->flags&MAY_TCP_RST) {
+        tcp_state=0;
+        serial("MayOS: TCP QEMU fixture connection reset\n");
+        return;
+    }
+    if(tcp_state==1) {
+        if((t->flags&(MAY_TCP_SYN|MAY_TCP_ACK))==
+                       (MAY_TCP_SYN|MAY_TCP_ACK) &&
+           t->ack==tcp_next_seq) {
+            tcp_remote_seq=t->seq+1u;
+            tcp_state=2;
+            tcp_pending_ack=1;
+            tcp_pending_get=1;
+            nic.tcp_fixture_connected=1;
+            serial("MayOS: TCP QEMU SYN-ACK validated; handshake established\n");
+        }
+        return;
+    }
+    if(tcp_state!=2 || !(t->flags&MAY_TCP_ACK) ||
+       t->seq!=tcp_remote_seq || t->ack>tcp_next_seq)return;
+    if(t->payload_length) {
+        u32 n=t->payload_length;
+        tcp_remote_seq+=n;
+        tcp_pending_ack=1;
+        nic.tcp_fixture_bytes+=n;
+        for(u32 i=0;i<n && tcp_captured<sizeof(tcp_capture);i++)
+            tcp_capture[tcp_captured++]=t->payload[i];
+        static const char prefix[]="HTTP/1.1 200";
+        static const char marker[]="MAYOS-OK";
+        int good=tcp_captured>=sizeof(prefix)-1u;
+        for(u32 i=0;good && i<sizeof(prefix)-1u;i++)
+            if(tcp_capture[i]!=(u8)prefix[i])good=0;
+        if(good && !nic.tcp_fixture_reply)
+            for(u32 i=0;i+sizeof(marker)-1u<=tcp_captured;i++) {
+                u32 j=0;
+                while(j<sizeof(marker)-1u &&
+                      tcp_capture[i+j]==(u8)marker[j])j++;
+                if(j==sizeof(marker)-1u) {
+                    nic.tcp_fixture_reply=1;
+                    serial("MayOS: TCP QEMU HTTP test response validated (plaintext fixture)\n");
+                    break;
+                }
+            }
+    }
+    if(t->flags&MAY_TCP_FIN) {
+        tcp_remote_seq++;
+        tcp_pending_ack=1;
+    }
+}
+
 static int dhcp_transmit(int request) {
     if (!nic.present) return 0;
     u32 index=next_tx;
@@ -200,6 +279,12 @@ static void receive_frame(u32 offset, u32 frame_len) {
         ring_byte(offset + 12u) == 8u && ring_byte(offset + 13u) == 0u) {
         for (u32 i = 0; i < frame_len; i++)
             ipv4_receive[i] = ring_byte(offset + i);
+        MayTcpSegment segment;
+        if (may_tcp_parse(ipv4_receive,frame_len,nic.mac,
+                          qemu_local_ip,&segment)) {
+            tcp_received(&segment);
+            return;
+        }
         MayUdpDatagram message;
         if (may_ipv4_udp_parse_dhcp(ipv4_receive,frame_len,nic.mac,
                                      qemu_local_ip,&message)) {
@@ -310,6 +395,17 @@ void may_net_poll(void) {
     }
     if (dhcp_request_pending && dhcp_transmit(1))
         dhcp_request_pending=0;
+    if (tcp_pending_ack && tcp_transmit(MAY_TCP_ACK,0,0))
+        tcp_pending_ack=0;
+    if (tcp_pending_get) {
+        static const char request[]=
+            "GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+        if(tcp_transmit(MAY_TCP_ACK|MAY_TCP_PSH,(const u8 *)request,
+                        sizeof(request)-1u)) {
+            tcp_pending_get=0;
+            serial("MayOS: TCP QEMU plaintext test request sent\n");
+        }
+    }
 }
 int may_net_qemu_arp_probe(void) {
     if (!nic.present) return 0;
@@ -389,4 +485,23 @@ int may_net_qemu_udp_probe(void) {
 }
 int may_net_qemu_dns_fixture(void) {
     return send_ipv4_probe(1);
+}
+
+int may_net_qemu_tcp_http_probe(void) {
+    if(!nic.present||!qemu_gateway_mac_valid)return 0;
+    may_net_poll();
+    tcp_next_seq=0x4d415900u^ticks;
+    tcp_remote_seq=0;
+    tcp_captured=0;
+    tcp_state=1;
+    tcp_pending_ack=tcp_pending_get=0;
+    nic.tcp_fixture_connected=0;
+    nic.tcp_fixture_reply=0;
+    nic.tcp_fixture_bytes=0;
+    if(!tcp_transmit(MAY_TCP_SYN,0,0)) {
+        tcp_state=0;
+        return 0;
+    }
+    serial("MayOS: TCP QEMU SYN sent to localhost fixture\n");
+    return 1;
 }
