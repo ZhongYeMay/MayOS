@@ -3,6 +3,7 @@
 #ifndef MAYOS_LINUX
 #include "io.h"
 #include "pci.h"
+#include "ahci.h"
 #endif
 
 /* MayFS uses a checksummed fixed-size snapshot on primary IDE master. */
@@ -17,6 +18,7 @@ File files[FS_MAX];
 int disk_ready;
 #ifndef MAYOS_LINUX
 static u32 disk_sectors;
+static int storage_ahci;
 static u16 ata_command_base = 0x1f0, ata_control_base = 0x3f6;
 static int backup_enabled;
 static int active_slot;
@@ -48,7 +50,7 @@ static int ata_wait(int data) {
     }
     return 0;
 }
-static int sector(u32 lba, void *buf, int write) {
+static int ata_sector(u32 lba, void *buf, int write) {
     if (lba >= FS_TOTAL_SECTORS || lba >= disk_sectors)
         return 0;
     outb((u16)(ata_command_base + 6), 0xe0 | ((lba >> 24) & 15));
@@ -71,6 +73,12 @@ static int sector(u32 lba, void *buf, int write) {
             p[i] = inw(ata_command_base);
     }
     return ata_wait(0);
+}
+static int sector(u32 lba, void *buf, int write) {
+    if (lba >= FS_TOTAL_SECTORS || lba >= disk_sectors) return 0;
+    if (storage_ahci)
+        return write ? ahci_write_sector(lba, buf) : ahci_read_sector(lba, buf);
+    return ata_sector(lba, buf, write);
 }
 static u32 ata_capacity(void) {
     u16 identify[256];
@@ -167,6 +175,7 @@ static int write_snapshot(u32 slot) {
     }
     if (!sector(base, fs_image, 1))
         return 0;
+    if (storage_ahci) return ahci_flush();
     outb((u16)(ata_command_base + 7), 0xe7); /* ATA FLUSH CACHE */
     return ata_wait(0);
 }
@@ -293,12 +302,18 @@ void fs_init(void) {
     int valid = 0;
     serial("MayOS Linux: RAM filesystem; no block devices opened\n");
 #else
-    pci_ide_primary_ports(&ata_command_base, &ata_control_base);
-    if (ata_command_base) {
-        char port[12]; number(port, ata_command_base);
-        serial("MayOS: ATA primary command port="); serial(port); serial("\n");
+    storage_ahci = ahci_init();
+    if (storage_ahci) {
+        u64 sectors = ahci_sector_count();
+        disk_sectors = sectors > 0xffffffffu ? 0xffffffffu : (u32)sectors;
+    } else {
+        pci_ide_primary_ports(&ata_command_base, &ata_control_base);
+        if (ata_command_base) {
+            char port[12]; number(port, ata_command_base);
+            serial("MayOS: ATA primary command port="); serial(port); serial("\n");
+        }
+        disk_sectors = ata_capacity();
     }
-    disk_sectors = ata_capacity();
     disk_ready = disk_sectors >= FS_SECTORS;
     backup_enabled = 0;
     active_slot = 0;

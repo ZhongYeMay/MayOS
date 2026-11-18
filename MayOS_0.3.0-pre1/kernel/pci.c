@@ -27,6 +27,28 @@ u8 pci_config_read8(u8 bus, u8 slot, u8 function, u8 offset) {
     return (u8)(value >> ((offset & 3u) * 8));
 }
 
+void pci_config_write32(u8 bus, u8 slot, u8 function, u8 offset, u32 value) {
+    volatile u32 *ecam = acpi_pci_config_address(bus, slot, function, offset);
+    if (ecam) { *ecam = value; return; }
+    outl(0xcf8, pci_address(bus, slot, function, offset));
+    outl(0xcfc, value);
+}
+
+void pci_config_write16(u8 bus, u8 slot, u8 function, u8 offset, u16 value) {
+    u8 aligned = offset & 0xfcu;
+    u32 shift = (offset & 2u) * 8;
+    u32 current = pci_config_read32(bus, slot, function, aligned);
+    pci_config_write32(bus, slot, function, aligned,
+                       (current & ~(0xffffu << shift)) | ((u32)value << shift));
+}
+
+void pci_enable_memory_busmaster(const PciDevice *device) {
+    if (!device) return;
+    u16 command = pci_config_read16(device->bus, device->slot, device->function, 0x04);
+    command |= 0x0006; /* memory-space decode and bus mastering */
+    pci_config_write16(device->bus, device->slot, device->function, 0x04, command);
+}
+
 static void serial_hex(u32 value, int digits) {
     static const char hex[] = "0123456789abcdef";
     char out[9];
