@@ -1,6 +1,10 @@
 #include "update.h"
 #include "version.h"
 #include "sha256.h"
+#ifdef MAYOS_RELEASE_SIGNATURE
+#include "rust_bridge.h"
+#include "release_pubkey.h"
+#endif
 #ifdef MAYOS_RUST_CORE
 #include "rust_bridge.h"
 #endif
@@ -9,6 +13,13 @@
  * All input is bounded by File.size, not a trusted NUL terminator. */
 static MayUpdateInfo update;
 static int verify_state;
+/* This is an observation only. No updater/install code is enabled. */
+static int auth_state;
+enum {
+    AUTH_NOT_CHECKED=0, AUTH_NO_RELEASE_ROOT, AUTH_INVALID_MANIFEST,
+    AUTH_MISSING_SIGNATURE, AUTH_BAD_SIGNATURE_FILE,
+    AUTH_SIGNATURE_MISMATCH, AUTH_IMAGE_MISMATCH, AUTH_VALID
+};
 
 static int printable_copy(char *dst, u32 cap, const char *value) {
     u32 n = 0;
@@ -176,6 +187,7 @@ static int parse_pair(char *line, u32 *seen) {
 void may_update_check(void) {
     memset(&update, 0, sizeof(update));
     verify_state=MAY_VERIFY_NOT_CHECKED;
+    auth_state=AUTH_NOT_CHECKED;
     int index = fs_find(1, "Update.may");
     if (index < 0) {
         update.state = MAY_UPDATE_MISSING;
@@ -280,5 +292,67 @@ const char *may_update_verify_status(void) {
             return "Verify: SHA-256 matches UNTRUSTED manifest; NOT signed";
         default:
             return "Verify: no local image has been checked";
+    }
+}
+
+
+int may_update_authenticate_local(void) {
+#ifndef MAYOS_RELEASE_SIGNATURE
+    auth_state=AUTH_NO_RELEASE_ROOT;
+    return 0;
+#else
+    auth_state=AUTH_INVALID_MANIFEST;
+    if(update.state!=MAY_UPDATE_CANDIDATE &&
+       update.state!=MAY_UPDATE_CURRENT)return 0;
+    int manifest=fs_find(1,"Update.may");
+    if(manifest<0 || !files[manifest].used || files[manifest].dir ||
+       files[manifest].size==0 || files[manifest].size>2048u)
+        return 0;
+    auth_state=AUTH_MISSING_SIGNATURE;
+    int signature=fs_find(1,"Update.sig");
+    if(signature<0)return 0;
+    auth_state=AUTH_BAD_SIGNATURE_FILE;
+    if(!files[signature].used || files[signature].dir ||
+       files[signature].size!=64u)return 0;
+
+    auth_state=AUTH_SIGNATURE_MISMATCH;
+    /* The key is configured by the OS build owner, never read from MayFS.
+     * The whole manifest, including the image hash, is authenticated.
+     * The Rust library implements strict Ed25519 verification and is
+     * compiled only in an explicitly opted-in signed-test build. */
+    if(!mayrs_ed25519_verify(mayos_release_root_key,
+                            files[signature].data,
+                            files[manifest].data,files[manifest].size))
+        return 0;
+    auth_state=AUTH_IMAGE_MISMATCH;
+    /* Rehash the actual MayFS payload now; signature covers ONLY metadata. */
+    if(!may_update_verify_local())return 0;
+    auth_state=AUTH_VALID;
+    serial("MayOS: local Ed25519 manifest signature and image digest verified; NO INSTALL\n");
+    return 1;
+#endif
+}
+const char *may_update_auth_status(void) {
+    switch(auth_state) {
+        case AUTH_NO_RELEASE_ROOT:
+            return "Authenticity: disabled (no owner-pinned release key)";
+        case AUTH_INVALID_MANIFEST:
+            return "Authenticity: valid update metadata required first";
+        case AUTH_MISSING_SIGNATURE:
+            return "Authenticity: Documents/Update.sig missing";
+        case AUTH_BAD_SIGNATURE_FILE:
+            return "Authenticity: detached signature must be exactly 64 bytes";
+        case AUTH_SIGNATURE_MISMATCH:
+            return "Authenticity: Ed25519 signature REJECTED";
+        case AUTH_IMAGE_MISMATCH:
+            return "Authenticity: signed metadata OK, image digest/size invalid";
+        case AUTH_VALID:
+#ifdef MAYOS_RELEASE_TEST_KEY
+            return "Authenticity: TEST KEY match ONLY (not official), install DISABLED";
+#else
+            return "Authenticity: configured key + image verified, install DISABLED";
+#endif
+        default:
+            return "Authenticity: not checked; install DISABLED";
     }
 }
