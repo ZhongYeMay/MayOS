@@ -12,6 +12,7 @@ import sys
 import tempfile
 
 from package_signed_release import manifest_bytes
+from verify_signed_release import verified_metadata
 
 
 HERE = Path(__file__).resolve().parent
@@ -59,6 +60,24 @@ def main() -> None:
         run("openssl", "pkeyutl", "-verify", "-rawin", "-pubin",
             "-inkey", str(pubkey), "-in", str(out / "Update.may"),
             "-sigfile", str(out / "Update.sig"))
+        # Independent release verifier must use separately trusted key and
+        # the exact hash of the actual artifact, not just a valid signature.
+        assert verified_metadata(
+            manifest=out / "Update.may", signature=out / "Update.sig",
+            image=image, public_key=pubkey,
+        ) == content
+        # Key from the same untrusted package must never be accepted as root.
+        bundled_key = out / "bundled.pub.pem"
+        bundled_key.write_bytes(pubkey.read_bytes())
+        try:
+            verified_metadata(manifest=out / "Update.may",
+                              signature=out / "Update.sig",
+                              image=image, public_key=bundled_key)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("accepted untrusted bundled public key")
+        bundled_key.unlink()
         # Wrong signature fails cryptographic validation.
         corrupt = root / "tampered.sig"
         corrupt.write_bytes(bytes([sig[0] ^ 1]) + sig[1:])
@@ -66,6 +85,13 @@ def main() -> None:
                   "-inkey", str(pubkey), "-in", str(out / "Update.may"),
                   "-sigfile", str(corrupt), check=False)
         assert bad.returncode != 0
+        try:
+            verified_metadata(manifest=out / "Update.may", signature=corrupt,
+                              image=image, public_key=pubkey)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("verifier accepted modified detached signature")
         # Changing even one byte of manifest invalidates signature.
         changed = root / "tampered.may"
         changed.write_bytes(content.replace(b"eta_minutes=7\n", b"eta_minutes=8\n"))
@@ -76,6 +102,14 @@ def main() -> None:
         # Image modification breaks SHA-256 commitment inside signed manifest.
         image.write_bytes(b"abd")
         assert hashlib.sha256(image.read_bytes()).hexdigest().encode() not in content
+        try:
+            verified_metadata(manifest=out / "Update.may",
+                              signature=out / "Update.sig",
+                              image=image, public_key=pubkey)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("verifier accepted modified image with genuine signed metadata")
         # Signed release directory cannot be reused and mixed with old files.
         rejected = run(
             sys.executable, str(TOOL), "--image", str(image),
@@ -97,6 +131,7 @@ def main() -> None:
             else:
                 raise AssertionError(f"accepted malformed release metadata {kwargs}")
         print("PASS: offline Ed25519 Release packaging; signed bytes, image digest, tamper rejection")
+        print("PASS: separate read-only verifier rejects untrusted key, signature and ISO tampering")
         print("PASS: private key kept out of published files; invalid manifest and stale output rejected")
         print("NOTICE: test image=3 bytes; real ISO streaming install remains unimplemented")
 
