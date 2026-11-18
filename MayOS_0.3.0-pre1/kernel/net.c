@@ -1,6 +1,7 @@
 #include "net.h"
 #include "io.h"
 #include "net_ipv4.h"
+#include "net_dhcp.h"
 
 /* The RTL8139 is deliberately opt-in by PCI device ID. Unrecognized network
  * hardware remains untouched. A single polling driver avoids changing PIC/IDT.
@@ -29,6 +30,8 @@ static u8 tx_frames[4][RTL_TX_ALLOC] __attribute__((aligned(16)));
 static u8 ipv4_receive[RTL_TX_ALLOC];
 static u8 qemu_gateway_mac[6];
 static int qemu_gateway_mac_valid, udp_probe_active, dns_probe_active;
+static MayDhcpClient dhcp;
+static int dhcp_request_pending;
 static const u8 qemu_local_ip[4] = {10, 0, 2, 15};
 static const u8 qemu_gateway_ip[4] = {10, 0, 2, 2};
 
@@ -100,6 +103,8 @@ static int rtl_setup(u8 bus, u8 slot, u8 func) {
     }
     rx_cursor = next_tx = 0;
     qemu_gateway_mac_valid = 0;
+    dhcp_request_pending = 0;
+    memset(&dhcp, 0, sizeof(dhcp));
     udp_probe_active = dns_probe_active = 0;
     outw(io + RTL_IMR, 0); /* polling only; don't fire unhandled IRQs */
     outw(io + RTL_ISR, 0xffffu);
@@ -133,6 +138,58 @@ void may_net_init(void) {
     serial("MayOS: no supported RTL8139 PCI Ethernet adapter\n");
 }
 const MayNetInfo *may_net_info(void) { return &nic; }
+const MayDhcpClient *may_net_dhcp_info(void) { return &dhcp; }
+
+const char *may_net_format_ipv4(const u8 ip[4]) {
+    static char result[16];
+    u32 pos=0;
+    for (u32 i=0;i<4;i++) {
+        char number_buffer[12];
+        number(number_buffer,ip[i]);
+        for(u32 j=0;number_buffer[j] && pos<14u;j++)
+            result[pos++]=number_buffer[j];
+        if(i!=3u)result[pos++]='.';
+    }
+    result[pos]=0;
+    return result;
+}
+static int dhcp_transmit(int request) {
+    if (!nic.present) return 0;
+    u32 index=next_tx;
+    u16 io=nic.io_base;
+    if (!(inl(io+RTL_TSD0+index*4u) & (1u<<13))) return 0;
+    u8 packet[300];
+    int payload_bytes=request
+        ? may_dhcp_request(&dhcp,packet,sizeof(packet))
+        : may_dhcp_discover(&dhcp,packet,sizeof(packet));
+    if (!payload_bytes) return 0;
+    const u8 zero[4]={0,0,0,0};
+    const u8 all_ip[4]={255,255,255,255};
+    const u8 broadcast[6]={255,255,255,255,255,255};
+    int frame_bytes=may_ipv4_udp_build(tx_frames[index],
+                sizeof(tx_frames[index]),nic.mac,broadcast,zero,all_ip,
+                68u,67u,packet,(u16)payload_bytes,
+                (u16)(0x4d00u+(request?3u:1u)));
+    if (!frame_bytes) return 0;
+    __asm__ volatile("" ::: "memory");
+    outl(io+RTL_TSD0+index*4u,(u32)frame_bytes);
+    next_tx=(index+1u)&3u;
+    nic.packets_tx++;
+    serial(request ? "MayOS: DHCP REQUEST broadcast sent\n"
+                   : "MayOS: DHCP DISCOVER broadcast sent\n");
+    return 1;
+}
+int may_net_dhcp_start(void) {
+    if (!nic.present) return 0;
+    /* Per-session non-secret transaction ID. DHCP messages are not
+     * authenticated; only a verified TLS update channel can be trusted. */
+    may_dhcp_begin(&dhcp,nic.mac,0x4d41594fu^ticks);
+    dhcp_request_pending=0;
+    if (dhcp_transmit(0))return 1;
+    dhcp.state=MAY_DHCP_IDLE;
+    return 0;
+}
+
 
 /* Only accept an ARP response corresponding to the built-in QEMU gateway
  * diagnostic. Don't treat arbitrary LAN packets as successful probes. */
@@ -144,6 +201,23 @@ static void receive_frame(u32 offset, u32 frame_len) {
         for (u32 i = 0; i < frame_len; i++)
             ipv4_receive[i] = ring_byte(offset + i);
         MayUdpDatagram message;
+        if (may_ipv4_udp_parse_dhcp(ipv4_receive,frame_len,nic.mac,
+                                     qemu_local_ip,&message)) {
+            int event=may_dhcp_receive(&dhcp,message.payload,
+                                      message.payload_length,
+                                      message.source_ip);
+            if(event==1) {
+                dhcp_request_pending=1;
+                serial("MayOS: DHCP OFFER received and validated\n");
+            } else if(event==2) {
+                serial("MayOS: DHCP ACK accepted; lease acquired ");
+                serial(may_net_format_ipv4(dhcp.address));
+                serial("\n");
+            } else if(event==-1) {
+                serial("MayOS: DHCP NAK; lease rejected\n");
+            }
+            return;
+        }
         if (may_ipv4_udp_parse(ipv4_receive, frame_len, nic.mac,
                                qemu_local_ip, &message)) {
             int gateway = 1;
@@ -234,6 +308,8 @@ void may_net_poll(void) {
         rx_cursor &= (RTL_RING_BYTES - 1u);
         outw(io + RTL_CAPR, (u16)(rx_cursor - 16u));
     }
+    if (dhcp_request_pending && dhcp_transmit(1))
+        dhcp_request_pending=0;
 }
 int may_net_qemu_arp_probe(void) {
     if (!nic.present) return 0;
