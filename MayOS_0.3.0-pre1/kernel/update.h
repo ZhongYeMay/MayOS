@@ -40,5 +40,11 @@ enum {
 int may_update_verify_local(void);
 const char *may_update_verify_status(void);
 
+/* Authenticates exact bounded Update.may bytes by a build-pinned Ed25519
+ * release key, AND checks Update.bin against its declared SHA-256.
+ * This DOES NOT install or download. Disabled without owner-pinned root. */
+int may_update_authenticate_local(void);
+const char *may_update_auth_status(void);
+
 
 #endif
