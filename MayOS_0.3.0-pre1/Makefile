@@ -55,6 +55,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
+.PHONY: test-bearssl-qemu
 .PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 build:
@@ -128,6 +129,9 @@ test-dhcp: build/net_dhcp_test
 	./build/net_dhcp_test
 test-tls-qemu: all test-security
 	$(PYTHON) scripts/tls_smoke.py
+test-bearssl-qemu: all test-security
+	@test -n "$(BEARSSL_SOURCE)" || (echo "Provide pinned BEARSSL_SOURCE checkout" >&2; exit 1)
+	$(PYTHON) scripts/tls_provider_smoke.py
 test-net: all test-net-codec test-dhcp test-tcp test-tcp-retry test-security
 	$(PYTHON) scripts/net_smoke.py
 	$(PYTHON) scripts/tls_smoke.py
