@@ -37,6 +37,35 @@ def fixture_server(sock, shutdown, events):
             events.add("dns")
 
 
+
+def tcp_fixture_server(listener, shutdown, events):
+    listener.settimeout(0.25)
+    while not shutdown.is_set():
+        try:
+            connection, _ = listener.accept()
+        except socket.timeout:
+            continue
+        except OSError:
+            return
+        with connection:
+            connection.settimeout(5)
+            data = b""
+            try:
+                while b"\r\n\r\n" not in data and len(data) < 4096:
+                    chunk = connection.recv(1024)
+                    if not chunk:
+                        break
+                    data += chunk
+                if data.startswith(b"GET /health HTTP/1.1\r\n"):
+                    body = b"MAYOS-OK"
+                    reply = (b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\n"
+                             b"Connection: close\r\n\r\n" + body)
+                    connection.sendall(reply)
+                    events.add("tcp")
+            except OSError:
+                continue
+
+
 def main():
     server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server.bind(("127.0.0.1", 10053))
@@ -45,6 +74,13 @@ def main():
     thread = threading.Thread(target=fixture_server,
                               args=(server, shutdown, events), daemon=True)
     thread.start()
+    tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    tcp_server.bind(("127.0.0.1", 10080))
+    tcp_server.listen(2)
+    tcp_thread = threading.Thread(target=tcp_fixture_server,
+                                  args=(tcp_server, shutdown, events), daemon=True)
+    tcp_thread.start()
     vm = None
     try:
         vm = VM(None, "maykernel-rtl8139-arp", nic=True)
@@ -73,15 +109,25 @@ def main():
         vm.wait("DHCP: bound")
         vm.wait("Assigned IPv4:")
         vm.wait("Lease (seconds):")
-        vm.shot("maykernel-rtl8139-ipv4-udp-dns-dhcp")
-        assert "echo" in events and "dns" in events, events
-        print("PASS: real QEMU RTL8139 ARP IPv4 UDP DNS fixture and DHCP lease exchange", flush=True)
+        vm.cmd("net tcp-probe")
+        vm.wait("MayOS: TCP QEMU SYN sent to localhost fixture")
+        vm.wait("MayOS: TCP QEMU SYN-ACK validated; handshake established")
+        vm.wait("MayOS: TCP QEMU plaintext test request sent")
+        vm.wait("MayOS: TCP QEMU HTTP test response validated (plaintext fixture)")
+        vm.cmd("net status")
+        vm.wait("QEMU TCP: 3-way handshake complete")
+        vm.wait("QEMU HTTP: plaintext fixture response validated")
+        vm.shot("maykernel-rtl8139-tcp-plaintext-fixture")
+        assert "echo" in events and "dns" in events and "tcp" in events, events
+        print("PASS: real QEMU ARP UDP DNS DHCP and native TCP plaintext HTTP fixture", flush=True)
     finally:
         if vm is not None:
             vm.stop()
         shutdown.set()
         server.close()
+        tcp_server.close()
         thread.join(timeout=2)
+        tcp_thread.join(timeout=2)
 
 
 if __name__ == "__main__":
