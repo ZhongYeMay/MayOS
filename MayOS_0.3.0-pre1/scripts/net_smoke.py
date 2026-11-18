@@ -110,6 +110,14 @@ def main():
         vm.wait("DHCP: bound")
         vm.wait("Assigned IPv4:")
         vm.wait("Lease (seconds):")
+        # Use QEMU's real DHCP-provided resolver (typically 10.0.2.3:53).
+        # Unlike the synthetic fixture this requires an actual DNS A reply.
+        vm.cmd("net resolve localhost")
+        vm.wait("MayOS: DHCP DNS A query sent to leased DNS server")
+        vm.wait("MayOS: DHCP DNS server returned a matched A record")
+        vm.cmd("net status")
+        vm.wait("DNS (DHCP resolver): A answer received")
+        vm.shot("maykernel-dhcp-dns-resolver-live")
         vm.cmd("net tcp-probe")
         vm.wait("MayOS: TCP QEMU SYN sent to localhost fixture")
         vm.wait("MayOS: TCP QEMU SYN-ACK validated; handshake established")
@@ -147,7 +155,7 @@ def main():
         vm.wait("QEMU TCP retransmissions: 1")
         vm.shot("maykernel-rtl8139-tcp-loss-retransmission")
         assert "echo" in events and "dns" in events and "tcp" in events, events
-        print("PASS: real QEMU TCP clean FIN close and intentionally dropped SYN retransmission", flush=True)
+        print("PASS: real QEMU DHCP DNS A answer and TCP dropped SYN recovery with clean FIN close", flush=True)
     finally:
         if vm is not None:
             vm.stop()

@@ -15,6 +15,9 @@ typedef struct {
     int gateway_arp_reply;
     int ipv4_udp_reply;
     int dns_fixture_reply;
+    int dns_native_reply;
+    int dns_native_timeout;
+    u8 dns_native_address[4];
     int tcp_fixture_connected;
     int tcp_fixture_reply;
     int tcp_fixture_closed;
@@ -35,6 +38,9 @@ int may_net_qemu_arp_probe(void);
  * These prove packet handling, not public DNS connectivity or DHCP. */
 int may_net_qemu_udp_probe(void);
 int may_net_qemu_dns_fixture(void);
+/* Send an actual DNS A lookup to DHCP's DNS server. This transport offers
+ * no authenticity (DNS is untrusted); results must never authorize updates. */
+int may_net_dns_lookup(const char *hostname);
 /* Start a DHCP lease exchange over the native RTL8139 driver. Initial
  * negotiation only: no renewal/rebinding, do not persist lease across boots. */
 int may_net_qemu_tcp_http_probe(void);
