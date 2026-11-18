@@ -10,12 +10,12 @@ from pathlib import Path
 GUI = Path(__file__).resolve().parents[1] / "kernel" / "gui.c"
 source = GUI.read_text(encoding="utf-8")
 function_hashes = {
-    "static void rect(": 0x54B4C11C,
+    "static void rect(": 0x4CAE2640,
     "static void border(": 0x4E06F312,
     "static void roundrect(": 0x91EE82FD,
     "static void circle(": 0x0217F223,
-    "static int text(": 0x36BDBD85,
-    "static int large_text(": 0x8849B15F,
+    "static int text(": 0x12005297,
+    "static int large_text(": 0x7DBBD581,
 }
 
 
@@ -52,14 +52,12 @@ assert "surface_high = dark ? 0x18181b : 0xf0f0f2;" in source
 assert "line = dark ? 0x303033 : 0xd9d9dd;" in source
 assert "static void soft_roundrect(" in source
 assert "static int heading_text(" in source
-assert 'heading_text(42, 4, "MayOS", ink);' in source
-assert 'text(101, 8, "Settings", muted);' in source
-assert 'text(164, 8, "File", muted);' in source
-assert 'text(205, 8, "Edit", muted);' in source
-assert 'text(244, 8, "View", muted);' in source
-assert 'text(286, 8, "Window", muted);' in source
-assert 'text(348, 8, "Help", muted);' in source
-assert 'text(907, 8, "Tue Jan 28  10:24", muted);' in source
+# Match the approved responsive menu; the 2026-11-16 desktop no longer
+# uses fixed text coordinates or a hardcoded sample clock string.
+assert 'int menu_x = text(46, 6, "MayOS", ink) + 22;' in source
+assert 'const char *menus[] = {"Settings", "File", "Edit", "View", "Window", "Help"};' in source
+assert 'for (int i = 0; i < 6; i++) menu_x = text(menu_x, 6, menus[i], muted) + 22;' in source
+assert '#define TOP_STATUS_LEFT 964' in source
 assert 'heading_text(x + 20, y + 49, "Settings", ink);' in source
 assert '"Privacy & Security", "Updates", "About MayOS"' in source
 assert 'heading_text(cx, cy - 8, "About MayOS", ink);' in source
@@ -86,7 +84,7 @@ assert "static void cursor(void)" in source
 assert "#include \"material_icons.h\"" in source
 assert "#if MAYOS_MATERIAL_ICONS" in source
 assert "accent = dark ? dark_primary[accent_choice] : light_primary[accent_choice];" in source
-assert "0xe2e2e7" in source
+assert "0xececef" in source
 # Version is centralized; updating it must not count as a redesign.
 version_header = (GUI.parent / "version.h").read_text(encoding="utf-8")
 assert '#define MAYOS_VERSION "0.5.0-pre2-dev"' in version_header
@@ -98,8 +96,8 @@ assert 'const char *shapes[] = {"■ 黑色方块", "□ 白色方块", "自定�
 assert "roundrect(14, 60, 76, 508, panel);" not in source
 assert "static void desktop(void)" in source
 assert "static void taskbar(void)" in source
-assert "int left = 382, top = H - 92;" in source
+assert "int left = DOCK_LEFT, top = H - 80;" in source
 assert "int upper = 128 - x / 3 + (x * x) / 4200;" in source
-assert '{177, 133, 640, 450, 0, 0, 0, 0, 0, 0, 0, "Settings"}' in source
+assert '{228, 128, 824, 436, 0, 0, 0, 0, 0, 0, 0, "Settings"}' in source
 assert "settings_tab = 6" in source
 print("PASS: exact approved monochrome Settings reference, menu, wallpaper, About card and four-icon Dock")
