@@ -40,9 +40,6 @@ static void pci_write(u8 bus, u8 slot, u8 func, u8 offset, u32 value) {
     outl(0xcf8, address);
     outl(0xcfc, value);
 }
-static u16 le16(const u8 *src) {
-    return (u16)((u16)src[0] | (u16)((u16)src[1] << 8));
-}
 static u8 ring_byte(u32 address) {
     return rx_ring[address & (RTL_RING_BYTES - 1u)];
 }
@@ -57,7 +54,7 @@ static int rtl_setup(u8 bus, u8 slot, u8 func) {
         return 0;
     }
     u32 base = bar & ~3u;
-    if (!base || base + 0x60u > 0x10000u ||
+    if (!base || base > 0x10000u - 0x60u ||
         !address_32bit(rx_ring) ||
         !address_32bit(&rx_ring[RTL_RX_ALLOC - 1]) ||
         !address_32bit(tx_frames) ||
