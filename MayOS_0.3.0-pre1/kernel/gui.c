@@ -786,7 +786,7 @@ static void shell(void) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
-        emit("theme light|dark  net status|dhcp|qemu-probe|udp-probe|dns-probe|tcp-probe");
+        emit("theme light|dark  net status|dhcp|qemu-probe|udp-probe|dns-probe|tcp-probe  update check|verify|status");
         emit("reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
