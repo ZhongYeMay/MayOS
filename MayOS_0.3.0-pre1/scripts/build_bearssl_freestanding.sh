@@ -26,6 +26,11 @@ mkdir -p "$work"
 files=0
 while IFS= read -r -d '' file; do
   relative="$(printf '%s' "$file" | sed "s|^$source_dir/src/||")"
+  # Never link Unix /dev/urandom, getentropy or syscalls into MayKernel.
+  # A separate native seeder explicitly returns NULL (entropy unavailable).
+  if [[ "$relative" == "rand/sysrng.c" ]]; then
+    continue
+  fi
   object="$work/$(printf '%s' "$relative" | sed 's/\.c$/.o/')"
   mkdir -p "$(dirname "$object")"
   gcc -std=c99 -O2 -m64 -ffreestanding -fno-builtin \
