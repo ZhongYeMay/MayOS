@@ -30,5 +30,15 @@ typedef struct {
 void may_update_check(void);
 const MayUpdateInfo *may_update_info(void);
 const char *may_update_status(void);
+/* Integrity checking for a local MayFS Update.bin against Update.may.
+ * A matching checksum is NOT a trusted release signature. */
+enum {
+    MAY_VERIFY_NOT_CHECKED=0, MAY_VERIFY_NOT_READY,
+    MAY_VERIFY_FILE_MISSING, MAY_VERIFY_SIZE_MISMATCH,
+    MAY_VERIFY_HASH_MISMATCH, MAY_VERIFY_HASH_MATCH
+};
+int may_update_verify_local(void);
+const char *may_update_verify_status(void);
+
 
 #endif

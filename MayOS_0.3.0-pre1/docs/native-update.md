@@ -38,3 +38,13 @@ make test           # MayKernel ISO + 原有 BIOS QEMU 回归及解析器测试
 ```
 
 本文件不属于发布说明。没有通过真实 ISO / QEMU 回归之前，不发布新的稳定版本。
+
+## 第二阶段：真实本地文件 SHA-256 完整性验证
+
+自研 MayKernel 已新增 freestanding SHA-256（支持分块输入）；使用 FIPS 标准摘要向量和 64/1000 字节跨块测试。
+
+在 MayFS 的 `Documents` 文件夹中，除 `Update.may` 外可放入 `Update.bin`。运行 `update check` 检查元数据，再执行 `update verify`，或在 Settings → Updates 点击 **Verify local image**。内核读取 `Update.bin` 的真实字节，校验大小并计算 SHA-256，与清单中记载的值逐字节比较。
+
+重要安全边界：`Update.may` 仍是**未签名、不可信元数据**；SHA-256 一致只证明本地文件与这份元数据吻合，**不证明来自项目官方，也不允许安装**。目前 MayFS 每个文件最多 4096 字节，因此只能校验测试样本，不能作为完整 ISO 下载或安装通道。
+
+新增测试：`make test-sha256`、`make test-update-verify`，并纳入 `make test`。拒绝未知元数据、丢失文件、长度不一致、内容篡改。任何安装必须等签名校验、大文件流式缓存、断电回滚和 QEMU 故障注入全部完成。

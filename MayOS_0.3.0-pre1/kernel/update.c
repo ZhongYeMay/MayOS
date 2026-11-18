@@ -1,9 +1,11 @@
 #include "update.h"
 #include "version.h"
+#include "sha256.h"
 
 /* This parser deliberately has no network or block-device write dependency.
  * All input is bounded by File.size, not a trusted NUL terminator. */
 static MayUpdateInfo update;
+static int verify_state;
 
 static int printable_copy(char *dst, u32 cap, const char *value) {
     u32 n = 0;
@@ -170,6 +172,7 @@ static int parse_pair(char *line, u32 *seen) {
 
 void may_update_check(void) {
     memset(&update, 0, sizeof(update));
+    verify_state=MAY_VERIFY_NOT_CHECKED;
     int index = fs_find(1, "Update.may");
     if (index < 0) {
         update.state = MAY_UPDATE_MISSING;
@@ -217,5 +220,52 @@ const char *may_update_status(void) {
         case MAY_UPDATE_CURRENT: return "No newer version in local manifest";
         case MAY_UPDATE_CANDIDATE: return "Newer version found (UNVERIFIED metadata)";
         default: return "Not checked - local only; GitHub unavailable";
+    }
+}
+
+
+int may_update_verify_local(void) {
+    verify_state=MAY_VERIFY_NOT_READY;
+    if (update.state!=MAY_UPDATE_CANDIDATE &&
+        update.state!=MAY_UPDATE_CURRENT) return 0;
+    int index=fs_find(1,"Update.bin");
+    if (index<0) {
+        verify_state=MAY_VERIFY_FILE_MISSING;
+        return 0;
+    }
+    verify_state=MAY_VERIFY_SIZE_MISMATCH;
+    if (!files[index].used || files[index].dir ||
+        files[index].size!=update.size_bytes ||
+        files[index].size>FILE_CAP) return 0;
+    MaySha256 sha;
+    u8 digest[32];
+    char hex[65];
+    may_sha256_init(&sha);
+    may_sha256_update(&sha,files[index].data,files[index].size);
+    may_sha256_final(&sha,digest);
+    may_sha256_hex(digest,hex);
+    u8 difference=0;
+    for(u32 i=0;i<64u;i++) {
+        char expected=update.sha256[i];
+        if(expected>='A' && expected<='F')expected=(char)(expected-'A'+'a');
+        difference|=(u8)(hex[i]^expected);
+    }
+    verify_state=difference ? MAY_VERIFY_HASH_MISMATCH : MAY_VERIFY_HASH_MATCH;
+    return verify_state==MAY_VERIFY_HASH_MATCH;
+}
+const char *may_update_verify_status(void) {
+    switch(verify_state) {
+        case MAY_VERIFY_NOT_READY:
+            return "Verify: run update check first (valid local manifest)";
+        case MAY_VERIFY_FILE_MISSING:
+            return "Verify: Documents/Update.bin was not found";
+        case MAY_VERIFY_SIZE_MISMATCH:
+            return "Verify: local file size differs from untrusted metadata";
+        case MAY_VERIFY_HASH_MISMATCH:
+            return "Verify: SHA-256 mismatch; file was not accepted";
+        case MAY_VERIFY_HASH_MATCH:
+            return "Verify: SHA-256 matches UNTRUSTED manifest; NOT signed";
+        default:
+            return "Verify: no local image has been checked";
     }
 }

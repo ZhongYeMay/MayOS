@@ -58,6 +58,9 @@ def main():
         vm.click(552, 369) # Check local manifest button
         vm.wait('MayOS: local update manifest checked')
         vm.shot('settings-updates-invalid-manifest')
+        vm.click(780, 369) # Verify image while manifest is invalid: must refuse
+        vm.wait('MayOS: local update image integrity checked')
+        vm.shot('settings-updates-verify-refused')
     finally:
         vm.stop()
     print('PASS: native Updates page, shell commands and invalid manifest safety', flush=True)
