@@ -1,0 +1,62 @@
+name: MayKernel isolated large-image streaming ATA QEMU
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/kernel/update_stage_codec.*'
+      - 'MayOS_0.3.0-pre1/kernel/update_stage_disk.*'
+      - 'MayOS_0.3.0-pre1/kernel/gui.c'
+      - 'MayOS_0.3.0-pre1/tests/update_stage_codec_test.c'
+      - 'MayOS_0.3.0-pre1/scripts/update_stage_smoke.py'
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - '.github/workflows/maykernel-stage-large-qemu.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bounded-stream-codec:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prove host header codec bounds and dual-mirror recovery
+        run: make -C MayOS_0.3.0-pre1 test-stage-codec
+      - name: Ensure default MayKernel build excludes the raw disk stage writer
+        run: |
+          if grep -Eq '^MAYOS_STAGE_DISK_DIAGNOSTIC \?= 1' MayOS_0.3.0-pre1/Makefile; then
+            echo "ERROR: stage writer enabled by default" >&2
+            exit 1
+          fi
+          echo "PASS: raw staging writer requires explicit opt-in"
+  actual-kernel-ata-staging:
+    needs: bounded-stream-codec
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin Rust bare-metal compiler for mixed Rust/C MayKernel build
+        run: |
+          rustup toolchain install 1.85.1 --profile minimal --target x86_64-unknown-none
+          rustup default 1.85.1
+      - name: Install signed Ubuntu GRUB and QEMU dependencies
+        run: |
+          bash scripts/configure-ci-apt-mirror.sh
+          sudo apt-get install -y --no-install-recommends \
+            gcc binutils make python3 python3-pil fonts-noto-cjk \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools qemu-system-x86
+      - name: Build and boot actual MayKernel to stream 64 KiB across cold reboots
+        run: |
+          make -C MayOS_0.3.0-pre1 MAYOS_STAGE_DISK_DIAGNOSTIC=1 test-stage-qemu
+          nm -g MayOS_0.3.0-pre1/build/mayos.elf | grep ' may_stage_diag_append$'
+          nm -g MayOS_0.3.0-pre1/build/mayos.elf | grep ' mayrs_manifest_gate$'
+          echo "PASS: stage codec and Rust C mixed kernel linked in real ELF64"
+      - name: Upload real QEMU screens and serial evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel-real-ata-large-image-reboot-evidence
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            MayOS_0.3.0-pre1/build/stage-*.png
+            MayOS_0.3.0-pre1/build/stage-*.log
+            MayOS_0.3.0-pre1/build/stage-*-qemu.log

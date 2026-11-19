@@ -70,6 +70,14 @@ OBJECTS += build/ab_journal_disk.o
 RUST_AB_CFG := --cfg 'feature="ab-disk-diagnostic"'
 RUST_AB_FEATURE :=,ab-disk-diagnostic
 endif
+# Non-release streaming-store diagnostic, confined to a marked 8MiB QEMU
+# disk. User builds contain neither raw staging writer nor shell controls.
+MAYOS_STAGE_DISK_DIAGNOSTIC ?= 0
+ifeq ($(MAYOS_STAGE_DISK_DIAGNOSTIC),1)
+override MAYOS_RUST := 1
+CFLAGS += -DMAYOS_STAGE_DISK_DIAGNOSTIC
+OBJECTS += build/update_stage_codec.o build/update_stage_disk.o
+endif
 RUST_LIB :=
 ifeq ($(MAYOS_RUST),1)
 CFLAGS += -DMAYOS_RUST_CORE
@@ -103,7 +111,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video test-ab-journal-qemu
+.PHONY: test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video test-ab-journal-qemu test-stage-codec test-stage-qemu
 .PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 # Build flags and pinned key are part of the artifact identity. Never reuse
@@ -113,7 +121,7 @@ FORCE:
 build:
 	mkdir -p build
 build/config-flags.txt: FORCE | build
-	@printf '%s\n' '$(CFLAGS)' 'RUST=$(MAYOS_RUST)' 'SIGNATURE=$(MAYOS_RELEASE_SIGNATURE)' 'KEY=$(MAYOS_RELEASE_PUBKEY_HEX)' 'TESTKEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY)' 'ABDIAG=$(MAYOS_AB_DISK_DIAGNOSTIC)' > $@.tmp
+	@printf '%s\n' '$(CFLAGS)' 'RUST=$(MAYOS_RUST)' 'SIGNATURE=$(MAYOS_RELEASE_SIGNATURE)' 'KEY=$(MAYOS_RELEASE_PUBKEY_HEX)' 'TESTKEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY)' 'ABDIAG=$(MAYOS_AB_DISK_DIAGNOSTIC)' 'STAGEDIAG=$(MAYOS_STAGE_DISK_DIAGNOSTIC)' > $@.tmp
 	@if ! cmp -s $@.tmp $@; then mv $@.tmp $@; else rm -f $@.tmp; fi
 build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
 	$(PYTHON) scripts/font.py
@@ -125,6 +133,8 @@ build/material_icons.h: assets/material_symbols.py | build
 	$(PYTHON) assets/material_symbols.py
 build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/update.h kernel/net.h kernel/security_tls.h kernel/rust_bridge.h
 build/ab_journal_disk.o: kernel/rust_bridge.h
+build/update_stage_codec.o: kernel/update_stage_codec.h
+build/update_stage_disk.o: kernel/update_stage_codec.h kernel/sha256.h
 build/update.o: kernel/update.h kernel/version.h kernel/sha256.h kernel/rust_bridge.h
 build/sha256.o: kernel/sha256.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/net.h kernel/security_tls.h
@@ -200,6 +210,13 @@ test-ed25519-qemu: all test-ed25519-host
 	@test "$(MAYOS_RELEASE_SIGNATURE)" = "1" || (echo "Set MAYOS_RELEASE_SIGNATURE=1" >&2; exit 1)
 	$(PYTHON) scripts/ed25519_smoke.py
 
+build/update_stage_codec_test: tests/update_stage_codec_test.c kernel/update_stage_codec.c kernel/update_stage_codec.h kernel/core.h | build
+	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/update_stage_codec_test.c kernel/update_stage_codec.c -o $@
+test-stage-codec: build/update_stage_codec_test
+	./build/update_stage_codec_test
+test-stage-qemu: all test-stage-codec
+	@test "$(MAYOS_STAGE_DISK_DIAGNOSTIC)" = "1" || (echo "Set MAYOS_STAGE_DISK_DIAGNOSTIC=1 for isolated disk fixture" >&2; exit 1)
+	$(PYTHON) scripts/update_stage_smoke.py
 test-ab-journal-qemu: all test-rust-host
 	@test "$(MAYOS_AB_DISK_DIAGNOSTIC)" = "1" || (echo "Set MAYOS_AB_DISK_DIAGNOSTIC=1" >&2; exit 1)
 	$(PYTHON) scripts/ab_journal_smoke.py
@@ -246,4 +263,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/*.a build/rust_manifest_tests build/config-flags.txt build/release_pubkey.h build/font.h build/cat_image.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/*.a build/rust_manifest_tests build/update_stage_codec_test build/config-flags.txt build/release_pubkey.h build/font.h build/cat_image.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h
