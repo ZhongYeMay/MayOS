@@ -11,6 +11,7 @@
 #include "version.h"
 #ifndef MAYOS_LINUX
 #include "update.h"
+#include "update_stage_disk.h"
 #include "rust_bridge.h"
 #include "net.h"
 #include "security_tls.h"
@@ -906,6 +907,28 @@ static void shell(void) {
         else if (argc > 1 && !strcmp(argv[1], "auth"))
             may_update_authenticate_local();
         else if (argc > 1 &&
+            (!strcmp(argv[1], "stage-begin") ||
+             !strcmp(argv[1], "stage-half") ||
+             !strcmp(argv[1], "stage-rest") ||
+             !strcmp(argv[1], "stage-verify") ||
+             !strcmp(argv[1], "stage-status"))) {
+#ifdef MAYOS_STAGE_DISK_DIAGNOSTIC
+            int result=0;
+            if(!strcmp(argv[1],"stage-begin"))
+                result=may_stage_diag_fixture_begin();
+            else if(!strcmp(argv[1],"stage-half"))
+                result=may_stage_diag_fixture_append(8u);
+            else if(!strcmp(argv[1],"stage-rest"))
+                result=may_stage_diag_fixture_append(16u);
+            else if(!strcmp(argv[1],"stage-verify"))
+                result=may_stage_diag_verify();
+            else result=may_stage_diag_status();
+            emit(result ? "QEMU large-image staging diagnostic PASS (NO INSTALL)"
+                        : "QEMU large-image staging diagnostic REJECTED/FAILED");
+#else
+            emit("Large-image streaming: production path disabled (no secure transport)");
+#endif
+        } else if (argc > 1 &&
             (!strcmp(argv[1], "journal-status") ||
              !strcmp(argv[1], "journal-init") ||
              !strcmp(argv[1], "journal-stage"))) {
@@ -929,7 +952,7 @@ static void shell(void) {
             emit("A/B boot policy: requires optional Rust kernel build");
 #endif
         } else if (argc > 1 && strcmp(argv[1], "status")) {
-            emit("Usage: update check|verify|auth|recovery-test|journal-status|journal-init|journal-stage|status");
+            emit("Usage: update check|verify|auth|recovery-test|stage-begin|stage-half|stage-rest|stage-verify|stage-status|status");
             return;
         }
         emit(may_update_status());
