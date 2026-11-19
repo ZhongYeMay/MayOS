@@ -58,20 +58,32 @@ build/release_pubkey.h: scripts/pin_release_public_key.py FORCE | build
 	MAYOS_ALLOW_TEST_RELEASE_KEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY) $(PYTHON) scripts/pin_release_public_key.py --public-key "$(MAYOS_RELEASE_PUBKEY_HEX)" --output $@
 build/update.o: build/release_pubkey.h
 endif
+# An intentionally non-release, opt-in ATA write diagnostic on an 8MiB
+# MayFS test disk with an explicit marker. No real A/B partition installer.
+MAYOS_AB_DISK_DIAGNOSTIC ?= 0
+RUST_AB_CFG :=
+RUST_AB_FEATURE :=
+ifeq ($(MAYOS_AB_DISK_DIAGNOSTIC),1)
+override MAYOS_RUST := 1
+CFLAGS += -DMAYOS_AB_DISK_DIAGNOSTIC
+OBJECTS += build/ab_journal_disk.o
+RUST_AB_CFG := --cfg 'feature="ab-disk-diagnostic"'
+RUST_AB_FEATURE :=,ab-disk-diagnostic
+endif
 RUST_LIB :=
 ifeq ($(MAYOS_RUST),1)
 CFLAGS += -DMAYOS_RUST_CORE
 RUST_LIB := build/libmaykernel_rust.a
 ifeq ($(MAYOS_RELEASE_SIGNATURE),1)
-build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/Cargo.toml build/config-flags.txt | build
-	CARGO_TARGET_DIR=$(CURDIR)/build/cargo RUSTFLAGS='-C panic=abort -C no-redzone=yes -C relocation-model=static --cfg curve25519_dalek_backend="serial"' $(CARGO) build --locked --manifest-path rust/maykernel_policy/Cargo.toml --target $(RUST_TARGET) --release --no-default-features --features release-signature
+build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs rust/maykernel_policy/Cargo.toml build/config-flags.txt | build
+	CARGO_TARGET_DIR=$(CURDIR)/build/cargo RUSTFLAGS='-C panic=abort -C no-redzone=yes -C relocation-model=static --cfg curve25519_dalek_backend="serial"' $(CARGO) build --locked --manifest-path rust/maykernel_policy/Cargo.toml --target $(RUST_TARGET) --release --no-default-features --features release-signature$(RUST_AB_FEATURE)
 	cp build/cargo/$(RUST_TARGET)/release/libmaykernel_policy.a $@
 else
-build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/ab_policy.rs build/config-flags.txt | build
+build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs build/config-flags.txt | build
 	$(RUSTC) --edition=2021 --crate-name maykernel_policy \
 	  --crate-type staticlib --target $(RUST_TARGET) -C panic=abort \
 	  -C opt-level=s -C codegen-units=1 -C relocation-model=static \
-	  -C no-redzone=yes $< -o $@
+	  -C no-redzone=yes $(RUST_AB_CFG) $< -o $@
 endif
 endif
 
@@ -91,7 +103,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video
+.PHONY: test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video test-ab-journal-qemu
 .PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 # Build flags and pinned key are part of the artifact identity. Never reuse
@@ -101,7 +113,7 @@ FORCE:
 build:
 	mkdir -p build
 build/config-flags.txt: FORCE | build
-	@printf '%s\n' '$(CFLAGS)' 'RUST=$(MAYOS_RUST)' 'SIGNATURE=$(MAYOS_RELEASE_SIGNATURE)' 'KEY=$(MAYOS_RELEASE_PUBKEY_HEX)' 'TESTKEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY)' > $@.tmp
+	@printf '%s\n' '$(CFLAGS)' 'RUST=$(MAYOS_RUST)' 'SIGNATURE=$(MAYOS_RELEASE_SIGNATURE)' 'KEY=$(MAYOS_RELEASE_PUBKEY_HEX)' 'TESTKEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY)' 'ABDIAG=$(MAYOS_AB_DISK_DIAGNOSTIC)' > $@.tmp
 	@if ! cmp -s $@.tmp $@; then mv $@.tmp $@; else rm -f $@.tmp; fi
 build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
 	$(PYTHON) scripts/font.py
@@ -112,6 +124,7 @@ build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 build/material_icons.h: assets/material_symbols.py | build
 	$(PYTHON) assets/material_symbols.py
 build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/update.h kernel/net.h kernel/security_tls.h kernel/rust_bridge.h
+build/ab_journal_disk.o: kernel/rust_bridge.h
 build/update.o: kernel/update.h kernel/version.h kernel/sha256.h kernel/rust_bridge.h
 build/sha256.o: kernel/sha256.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/net.h kernel/security_tls.h
@@ -174,7 +187,7 @@ test-tls-qemu: all test-security
 	$(PYTHON) scripts/tls_smoke.py
 # Rust host unit tests run with std only in the test harness. The target
 # MayKernel library remains no_std with no allocator.
-build/rust_manifest_tests: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/ab_policy.rs | build
+build/rust_manifest_tests: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs | build
 	$(RUSTC) --edition=2021 --crate-name maykernel_policy --test $< -o $@
 test-rust-host: build/rust_manifest_tests
 	./build/rust_manifest_tests
@@ -187,6 +200,9 @@ test-ed25519-qemu: all test-ed25519-host
 	@test "$(MAYOS_RELEASE_SIGNATURE)" = "1" || (echo "Set MAYOS_RELEASE_SIGNATURE=1" >&2; exit 1)
 	$(PYTHON) scripts/ed25519_smoke.py
 
+test-ab-journal-qemu: all test-rust-host
+	@test "$(MAYOS_AB_DISK_DIAGNOSTIC)" = "1" || (echo "Set MAYOS_AB_DISK_DIAGNOSTIC=1" >&2; exit 1)
+	$(PYTHON) scripts/ab_journal_smoke.py
 test-rust-qemu: all test-rust-host
 	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for native Rust integration" >&2; exit 1)
 	$(PYTHON) scripts/rust_smoke.py

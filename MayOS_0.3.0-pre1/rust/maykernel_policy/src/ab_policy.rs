@@ -2,6 +2,9 @@
 //! No filesystem writes, bootloader selection or installer in this module.
 //! Data must be committed atomically by a future bootloader-compatible store.
 //! FNV checksums detect accidental corruption, NOT malicious modification.
+#[cfg(any(test, feature = "ab-disk-diagnostic"))]
+mod disk;
+
 const MAGIC: u32 = 0x4d41_4231; // MAB1
 const FORMAT: u32 = 1;
 const NONE: u32 = 2;
