@@ -62,14 +62,33 @@ static int setup_rings(void) {
     return (r8(0x4c) & 2u) && (r8(0x5c) & 2u);
 }
 
+static int immediate_verb(u32 command, u32 *response) {
+    for (u32 timeout = 0; timeout < HDA_TIMEOUT; timeout++)
+        if (!(r16(0x68) & 1u)) break;
+        else if (timeout + 1 == HDA_TIMEOUT) return 0;
+    w16(0x68, 1u << 1); /* Clear stale Immediate Result Valid. */
+    w32(0x60, command);
+    w16(0x68, 1u); /* Immediate Command Busy: launch. */
+    for (u32 timeout = 0; timeout < HDA_TIMEOUT; timeout++) {
+        u16 status = r16(0x68);
+        if (status & (1u << 1)) {
+            *response = r32(0x64);
+            w16(0x68, 1u << 1);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int hda_verb(u8 codec, u8 node, u16 verb, u8 payload, u32 *response) {
     if (!registers || codec > 14 || node > 127 || !response) return 0;
     u16 next = (u16)((corb_write + 1u) % ring_entries);
-    corb[next] = ((u32)codec << 28) | ((u32)node << 20) |
-                 ((u32)(verb & 0x0fffu) << 8) | payload;
+    u32 encoded = ((u32)codec << 28) | ((u32)node << 20) |
+                  ((u32)(verb & 0x0fffu) << 8) | payload;
+    corb[next] = encoded;
     __asm__ volatile("mfence" ::: "memory");
     corb_write = next; w16(0x48, corb_write);
-    for (u32 timeout = 0; timeout < HDA_TIMEOUT; timeout++) {
+    for (u32 timeout = 0; timeout < HDA_TIMEOUT / 100u; timeout++) {
         u16 hardware = r16(0x58) & 0xffu;
         if (hardware == rirb_read) continue;
         rirb_read = (u16)((rirb_read + 1u) % ring_entries);
@@ -78,7 +97,7 @@ int hda_verb(u8 codec, u8 node, u16 verb, u8 payload, u32 *response) {
         *response = (u32)entry;
         return 1;
     }
-    return 0;
+    return immediate_verb(encoded, response);
 }
 
 static int parameter(u8 codec, u8 node, u8 id, u32 *response) {
