@@ -73,7 +73,8 @@ pub unsafe extern "C" fn mayrs_ab_disk_synthetic_stage(
     let Some(epoch)=j.accepted_epoch.checked_add(1) else {return 0};
     // TEST ONLY: authenticate=true is synthetic and never available in a
     // production kernel; no image, slot or bootloader gets modified.
-    if !stage(&mut j,1-j.active_slot,true,epoch) {return 0}
+    let candidate_slot=1-j.active_slot;
+    if !stage(&mut j,candidate_slot,true,epoch) {return 0}
     encode(&j,&mut buf);
     unsafe {core::ptr::copy_nonoverlapping(buf.as_ptr(),out,BYTES);}
     1
