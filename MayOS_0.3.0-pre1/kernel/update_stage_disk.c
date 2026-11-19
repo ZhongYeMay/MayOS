@@ -193,7 +193,7 @@ int may_stage_diag_verify(void) {
     u32 target=active_lba==MAY_STAGE_HEADER_A?
                MAY_STAGE_HEADER_B:MAY_STAGE_HEADER_A;
     if(!write_header(target,&next))return 0;
-    serial("MayOS: 65536-byte staging fixture SHA-256 verified from ATA disk; NO INSTALL\n");
+    serial("MayOS: staged image SHA-256 verified from ATA disk; NO INSTALL\n");
     return 1;
 }
 int may_stage_diag_status(void) {
