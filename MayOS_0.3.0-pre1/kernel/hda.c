@@ -85,10 +85,10 @@ static int parameter(u8 codec, u8 node, u8 id, u32 *response) {
     return hda_verb(codec, node, 0x0f00, id, response);
 }
 
-static void enumerate_codec(u8 codec) {
+static int enumerate_codec(u8 codec) {
     u32 vendor, nodes;
     if (!parameter(codec, 0, 0x00, &vendor) || vendor == 0xffffffffu ||
-        !parameter(codec, 0, 0x04, &nodes)) return;
+        !parameter(codec, 0, 0x04, &nodes)) return 0;
     codecs_ready++;
     u8 first = (u8)(nodes >> 16), count = (u8)nodes;
     for (u32 group = first; group < (u32)first + count; group++) {
@@ -108,6 +108,7 @@ static void enumerate_codec(u8 codec) {
             }
         }
     }
+    return 1;
 }
 
 int hda_init(void) {
@@ -135,6 +136,10 @@ int hda_init(void) {
     }
     for (u8 codec = 0; codec < 15; codec++)
         if (codecs & (1u << codec)) enumerate_codec(codec);
+    /* Some controllers do not latch STATESTS when firmware leaves WAKEEN
+       disabled.  Codec address 0 is the mandated first address, so a real
+       GetParameter response is a safe presence probe and avoids vendor IDs. */
+    if (!codecs_ready) enumerate_codec(0);
     char codec_count[12], output_count[12];
     number(codec_count, (u32)codecs_ready); number(output_count, (u32)outputs_ready);
     serial("MayOS: HDA generic CORB/RIRB ready, codecs="); serial(codec_count);
