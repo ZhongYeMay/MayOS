@@ -1,0 +1,64 @@
+name: MayKernel test-only persistent A/B journal ATA QEMU
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/rust/maykernel_policy/src/ab_policy.rs'
+      - 'MayOS_0.3.0-pre1/rust/maykernel_policy/src/ab_policy/disk.rs'
+      - 'MayOS_0.3.0-pre1/rust/maykernel_policy/Cargo.toml'
+      - 'MayOS_0.3.0-pre1/kernel/ab_journal_disk.c'
+      - 'MayOS_0.3.0-pre1/kernel/rust_bridge.h'
+      - 'MayOS_0.3.0-pre1/kernel/gui.c'
+      - 'MayOS_0.3.0-pre1/scripts/ab_journal_smoke.py'
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - '.github/workflows/maykernel-ab-journal-qemu.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ab-rust-host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use pinned Rust compiler and freestanding kernel target
+        run: |
+          rustup toolchain install 1.85.1 --profile minimal --target x86_64-unknown-none
+          rustup default 1.85.1
+      - name: Run durable A/B mirror codec + rollback policy tests
+        run: make -C MayOS_0.3.0-pre1 test-rust-host
+      - name: Build optional no_std diagnostic journal ELF64 archive
+        run: |
+          make -C MayOS_0.3.0-pre1 MAYOS_AB_DISK_DIAGNOSTIC=1 build/libmaykernel_rust.a
+          nm -g MayOS_0.3.0-pre1/build/libmaykernel_rust.a | grep -F mayrs_ab_disk_select
+  ab-real-qemu:
+    needs: ab-rust-host
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust bare-metal compiler and target
+        run: |
+          rustup toolchain install 1.85.1 --profile minimal --target x86_64-unknown-none
+          rustup default 1.85.1
+      - name: Install signed Ubuntu QEMU and GRUB dependencies
+        run: |
+          bash scripts/configure-ci-apt-mirror.sh
+          sudo apt-get install -y --no-install-recommends \
+            gcc binutils make python3 python3-pil fonts-noto-cjk \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools qemu-system-x86
+      - name: Exercise actual ATA FLUSH and mirrored journal through QEMU cold boots
+        run: |
+          make -C MayOS_0.3.0-pre1 MAYOS_AB_DISK_DIAGNOSTIC=1 test-ab-journal-qemu
+          nm -g MayOS_0.3.0-pre1/build/mayos.elf | grep -F ' mayrs_ab_disk_select'
+          echo 'PASS: Rust/C durable journal ABI linked into native test ELF64'
+      - name: Upload real screenshot and serial evidence (not fake boot videos)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel-ab-ata-mirror-recovery-qemu
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            MayOS_0.3.0-pre1/build/ab-journal-*.png
+            MayOS_0.3.0-pre1/build/ab-journal-*.log
+            MayOS_0.3.0-pre1/build/ab-journal-*-qemu.log
