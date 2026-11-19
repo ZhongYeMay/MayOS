@@ -18,7 +18,6 @@ static void test_header_and_mirrors(void) {
     may_stage_encode(a,&first);
     assert(may_stage_decode(a,&selected));
     assert(selected.generation==1u && selected.total_bytes==65536u);
-    assert(!may_stage_choose(a,(const u8[512]){0},&selected,&lba)==0);
     /* First is valid; second blank means the first is selected. */
     assert(may_stage_choose(a,(const u8[512]){0},&selected,&lba));
     assert(lba==MAY_STAGE_HEADER_A);
@@ -59,10 +58,9 @@ static void test_append_constraints(void) {
     s.stored_bytes=1;
     assert(!may_stage_plan_append(&s,512u));
     s=initial(MAY_STAGE_CAPACITY+1);
-    u8 invalid[512],decoded_dummy[512];
+    u8 invalid[512];
     may_stage_encode(invalid,&s);
     assert(!may_stage_decode(invalid,&s));
-    (void)decoded_dummy;
 }
 static void test_corruption_and_overflow(void) {
     MayStageRecord j=initial(MAY_STAGE_CAPACITY),out;
