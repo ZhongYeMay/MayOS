@@ -45,6 +45,10 @@ const char *may_update_verify_status(void);
  * This DOES NOT install or download. Disabled without owner-pinned root. */
 int may_update_authenticate_local(void);
 const char *may_update_auth_status(void);
+/* Signed 4KiB+ ATA staging integrity + pinned Ed25519 QEMU diagnostic ONLY.
+ * Never installs images or changes boot state. Disabled in ordinary builds. */
+int may_update_authenticate_staged(void);
+const char *may_update_auth_staged_status(void);
 
 
 #endif
