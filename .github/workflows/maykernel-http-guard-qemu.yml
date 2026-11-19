@@ -1,0 +1,62 @@
+name: MayKernel strict Rust no_std HTTP response framing
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/rust/maykernel_policy/src/http_framing.rs'
+      - 'MayOS_0.3.0-pre1/rust/maykernel_policy/src/lib.rs'
+      - 'MayOS_0.3.0-pre1/kernel/rust_bridge.h'
+      - 'MayOS_0.3.0-pre1/kernel/gui.c'
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - 'MayOS_0.3.0-pre1/scripts/http_guard_smoke.py'
+      - '.github/workflows/maykernel-http-guard-qemu.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host-framing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust compiler and bare-metal target
+        run: |
+          rustup toolchain install 1.85.1 --profile minimal --target x86_64-unknown-none
+          rustup default 1.85.1
+      - name: Test HTTP framing, unsafe redirect and request smuggling rejection
+        run: make -C MayOS_0.3.0-pre1 test-rust-host
+      - name: Prove exported strict HTTP guard in no_std ELF64 archive
+        run: |
+          make -C MayOS_0.3.0-pre1 MAYOS_RUST=1 build/libmaykernel_rust.a
+          nm -g MayOS_0.3.0-pre1/build/libmaykernel_rust.a | grep ' mayrs_http_headers$'
+  actual-native-qemu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: host-framing
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust and bare-metal target
+        run: |
+          rustup toolchain install 1.85.1 --profile minimal --target x86_64-unknown-none
+          rustup default 1.85.1
+      - name: Install signed Ubuntu build and QEMU packages
+        run: |
+          bash scripts/configure-ci-apt-mirror.sh
+          sudo apt-get install -y --no-install-recommends \
+            gcc binutils make python3 python3-pil fonts-noto-cjk \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools qemu-system-x86
+      - name: Build and boot real x86_64 MayKernel HTTP guard selftest
+        run: |
+          make -C MayOS_0.3.0-pre1 MAYOS_RUST=1 test-http-guard-qemu
+          nm -g MayOS_0.3.0-pre1/build/mayos.elf | grep ' mayrs_http_headers_selftest$'
+          echo 'PASS: strict Rust HTTP framing ABI called from native MayKernel'
+      - name: Save actual QEMU screenshot and guest serial logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel-rust-http-release-guard-qemu
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            MayOS_0.3.0-pre1/build/maykernel-http-*.png
+            MayOS_0.3.0-pre1/build/maykernel-http-*.log
+            MayOS_0.3.0-pre1/build/maykernel-http-*-qemu.log
