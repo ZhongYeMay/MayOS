@@ -58,6 +58,7 @@ def main():
         "virtio-net-pci,id=generic-network",
         "e1000,id=generic-e1000",
         "intel-hda,id=generic-audio",
+        "hda-duplex,bus=generic-audio.0",
     ], {
         "class 01:06": "AHCI storage controller",
         "class 0c:03:30": "xHCI USB controller",
@@ -66,6 +67,7 @@ def main():
         "class 02:": "network controller",
         "E1000 generic Ethernet rings ready": "E1000 DMA receive/transmit rings",
         "class 04:03": "HDA audio controller",
+        "HDA generic CORB/RIRB ready, codecs=1": "HDA codec command transport",
         "MayOS: desktop ready": "desktop boot after enumeration",
     })
     run_case("pcie-ecam", "q35", [], {
