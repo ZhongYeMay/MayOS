@@ -2,6 +2,7 @@
 
 mod ab_policy;
 mod release_url;
+mod http_framing;
 
 #[cfg(feature = "release-signature")]
 mod release_signature;
