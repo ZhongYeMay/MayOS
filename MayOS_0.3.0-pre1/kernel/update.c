@@ -420,7 +420,7 @@ int may_update_authenticate_staged(void) {
     memset(expected,0,sizeof(expected));
     if(!ok)return 0;
     staged_auth_state=STAGED_AUTH_SUCCESS;
-    serial("MayOS: signed manifest + 65536-byte staged ATA data authenticated; NO INSTALL\n");
+    serial("MayOS: signed manifest + staged ATA data authenticated; NO INSTALL\n");
     return 1;
 #else
     staged_auth_state=STAGED_AUTH_DISABLED;
