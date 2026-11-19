@@ -48,6 +48,12 @@ def main():
         vm.key('f1')
         vm.cmd('update check')
         vm.wait('No local manifest in Documents/Update.may')
+        # Production/no-diagnostic build must never authorize raw disk staging
+        # or authenticated installation, even if a user enters the test syntax.
+        vm.cmd('update auth-stage')
+        vm.wait('Signed staging: DISABLED (diagnostic-only; no installer)')
+        vm.cmd('update stage-begin')
+        vm.wait('Large-image streaming: production path disabled (no secure transport)')
         vm.cmd('write Documents/Update.may invalid-metadata')
         vm.wait('OK')
         vm.cmd('update check')

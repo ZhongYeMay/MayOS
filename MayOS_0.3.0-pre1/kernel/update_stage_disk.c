@@ -214,6 +214,39 @@ int may_stage_diag_status(void) {
     return 1;
 }
 
+/* Compare a separately SIGNED manifest commitment against the actual ATA
+ * data, not merely against an untrusted staging header. This function is a
+ * read-only diagnostic and STILL does not confer installation permission.
+ * Re-hashing at use time detects a mutation after an earlier "verified" flag.
+ */
+int may_stage_diag_matches_signed(u32 expected_size,const u8 expected_sha256[32]) {
+    if(!expected_sha256||!load_record()||
+       current.phase!=MAY_STAGE_HASH_VALID||
+       current.total_bytes!=expected_size||
+       current.stored_bytes!=expected_size)
+        return 0;
+    u8 diff=0;
+    for(u32 i=0;i<32u;i++)
+        diff|=(u8)(current.digest[i]^expected_sha256[i]);
+    if(diff)return 0;
+    MaySha256 hash;
+    may_sha256_init(&hash);
+    for(u32 offset=0;offset<expected_size;offset+=512u) {
+        if(!sector_io(MAY_STAGE_DATA_LBA+offset/512u,sector_data,0))
+            return 0;
+        u32 n=expected_size-offset;
+        if(n>512u)n=512u;
+        may_sha256_update(&hash,sector_data,n);
+    }
+    u8 actual[32];
+    may_sha256_final(&hash,actual);
+    diff=0;
+    for(u32 i=0;i<32u;i++)
+        diff|=(u8)(actual[i]^expected_sha256[i]);
+    memset(actual,0,sizeof(actual));
+    return diff==0;
+}
+
 /* Explicitly synthetic data source: replace with an authenticated network
  * streaming client in a future milestone. This is NOT a GitHub download. */
 static u8 fixture_byte(u32 i) {

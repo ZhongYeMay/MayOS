@@ -1,6 +1,9 @@
 #include "update.h"
 #include "version.h"
 #include "sha256.h"
+#if defined(MAYOS_RELEASE_SIGNATURE) && defined(MAYOS_STAGE_DISK_DIAGNOSTIC)
+#include "update_stage_disk.h"
+#endif
 #ifdef MAYOS_RELEASE_SIGNATURE
 #include "rust_bridge.h"
 #include "release_pubkey.h"
@@ -358,5 +361,87 @@ const char *may_update_auth_status(void) {
 #endif
         default:
             return "Authenticity: not checked; install DISABLED";
+    }
+}
+
+
+/* The signed staged-image verification is ALWAYS read-only and is compiled
+ * only for an explicitly marked QEMU test disk. Never use this as installer
+ * authorization: TLS, bootloader, disk geometry and owner key rotation remain
+ * security gates. The normal MayKernel build returns disabled.
+ */
+static int staged_auth_state;
+enum {
+    STAGED_AUTH_NOT_RUN=0,STAGED_AUTH_DISABLED,STAGED_AUTH_METADATA_INVALID,
+    STAGED_AUTH_SIG_MISSING,STAGED_AUTH_SIG_INVALID,
+    STAGED_AUTH_HASH_MISMATCH,STAGED_AUTH_SUCCESS
+};
+#if defined(MAYOS_RELEASE_SIGNATURE) && defined(MAYOS_STAGE_DISK_DIAGNOSTIC)
+static int nibble(char ch) {
+    if(ch>='0'&&ch<='9')return ch-'0';
+    if(ch>='a'&&ch<='f')return ch-'a'+10;
+    if(ch>='A'&&ch<='F')return ch-'A'+10;
+    return -1;
+}
+#endif
+int may_update_authenticate_staged(void) {
+#if defined(MAYOS_RELEASE_SIGNATURE) && defined(MAYOS_STAGE_DISK_DIAGNOSTIC)
+    /* Never use previously cached unsigned metadata. Always parse the
+     * exact current manifest before Ed25519 and full ATA SHA-256 checks. */
+    may_update_check();
+    staged_auth_state=STAGED_AUTH_METADATA_INVALID;
+    if(update.state!=MAY_UPDATE_CANDIDATE &&
+       update.state!=MAY_UPDATE_CURRENT)return 0;
+    int manifest=fs_find(1,"Update.may");
+    if(manifest<0||!files[manifest].used||files[manifest].dir||
+       !files[manifest].size||files[manifest].size>2048u)return 0;
+    staged_auth_state=STAGED_AUTH_SIG_MISSING;
+    int signature=fs_find(1,"Update.sig");
+    if(signature<0||!files[signature].used||files[signature].dir||
+       files[signature].size!=64u)return 0;
+    staged_auth_state=STAGED_AUTH_SIG_INVALID;
+    /* Trust root is the build-pinned Ed25519 public key, NOT a key from
+     * Update.may, a GitHub redirect or an unsigned TLS response. */
+    if(!mayrs_ed25519_verify(mayos_release_root_key,
+                            files[signature].data,
+                            files[manifest].data,files[manifest].size))
+        return 0;
+    u8 expected[32];
+    for(u32 i=0;i<32u;i++) {
+        int high=nibble(update.sha256[2u*i]);
+        int low=nibble(update.sha256[2u*i+1u]);
+        if(high<0||low<0)return 0;
+        expected[i]=(u8)((high<<4)|low);
+    }
+    staged_auth_state=STAGED_AUTH_HASH_MISMATCH;
+    /* Re-read and hash ACTUAL raw ATA bytes now, even if an older staging
+     * header said VERIFIED. This protects against post-verify mutations. */
+    int ok=may_stage_diag_matches_signed(update.size_bytes,expected);
+    memset(expected,0,sizeof(expected));
+    if(!ok)return 0;
+    staged_auth_state=STAGED_AUTH_SUCCESS;
+    serial("MayOS: signed manifest + staged ATA data authenticated; NO INSTALL\n");
+    return 1;
+#else
+    staged_auth_state=STAGED_AUTH_DISABLED;
+    return 0;
+#endif
+}
+const char *may_update_auth_staged_status(void) {
+    switch(staged_auth_state) {
+        case STAGED_AUTH_DISABLED:
+            return "Signed staging: DISABLED (diagnostic-only; no installer)";
+        case STAGED_AUTH_METADATA_INVALID:
+            return "Signed staging: invalid/incompatible manifest";
+        case STAGED_AUTH_SIG_MISSING:
+            return "Signed staging: detached signature missing/invalid length";
+        case STAGED_AUTH_SIG_INVALID:
+            return "Signed staging: publisher Ed25519 signature REJECTED";
+        case STAGED_AUTH_HASH_MISMATCH:
+            return "Signed staging: signed digest differs from ATA staged payload";
+        case STAGED_AUTH_SUCCESS:
+            return "Signed staging: Ed25519 + full disk image matched; NO INSTALL";
+        default:
+            return "Signed staging: not checked; NO INSTALL";
     }
 }

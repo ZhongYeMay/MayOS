@@ -906,6 +906,8 @@ static void shell(void) {
             may_update_verify_local();
         else if (argc > 1 && !strcmp(argv[1], "auth"))
             may_update_authenticate_local();
+        else if (argc > 1 && !strcmp(argv[1], "auth-stage"))
+            may_update_authenticate_staged();
         else if (argc > 1 &&
             (!strcmp(argv[1], "stage-begin") ||
              !strcmp(argv[1], "stage-half") ||
@@ -952,12 +954,13 @@ static void shell(void) {
             emit("A/B boot policy: requires optional Rust kernel build");
 #endif
         } else if (argc > 1 && strcmp(argv[1], "status")) {
-            emit("Usage: update check|verify|auth|recovery-test|stage-begin|stage-half|stage-rest|stage-verify|stage-status|status");
+            emit("Usage: update check|verify|auth|auth-stage|recovery-test|stage-begin|stage-half|stage-rest|stage-verify|stage-status|status");
             return;
         }
         emit(may_update_status());
         emit(may_update_verify_status());
         emit(may_update_auth_status());
+        emit(may_update_auth_staged_status());
         const MayUpdateInfo *info = may_update_info();
         if (info->state == MAY_UPDATE_CANDIDATE ||
             info->state == MAY_UPDATE_CURRENT) {
