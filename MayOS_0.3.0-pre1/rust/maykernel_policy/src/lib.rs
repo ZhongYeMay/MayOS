@@ -1,6 +1,7 @@
 #![cfg_attr(not(test), no_std)]
 
 mod ab_policy;
+mod release_url;
 
 #[cfg(feature = "release-signature")]
 mod release_signature;
