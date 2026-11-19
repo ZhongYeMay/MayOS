@@ -6,6 +6,9 @@
 #ifdef MAYOS_RUST_CORE
 int mayrs_manifest_gate(const u8 *data, u32 length);
 u32 mayrs_abi_version(void);
+/* URL preflight is a pure parser, NEVER a TLS, DNS or HTTPS connection. */
+int mayrs_release_url_allowed(const u8 *data,u32 length,u32 redirects);
+int mayrs_release_url_selftest(void);
 #ifdef MAYOS_AB_DISK_DIAGNOSTIC
 /* Test-only journal codec, never enabled in a production installer. */
 int mayrs_ab_disk_initial(u8 *out, u32 length);
