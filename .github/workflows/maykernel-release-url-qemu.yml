@@ -1,0 +1,62 @@
+name: MayKernel Rust no_std safe GitHub Release URL preflight
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/rust/maykernel_policy/src/release_url.rs'
+      - 'MayOS_0.3.0-pre1/rust/maykernel_policy/src/lib.rs'
+      - 'MayOS_0.3.0-pre1/kernel/gui.c'
+      - 'MayOS_0.3.0-pre1/kernel/rust_bridge.h'
+      - 'MayOS_0.3.0-pre1/scripts/release_url_smoke.py'
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - '.github/workflows/maykernel-release-url-qemu.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rust-url-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin Rust no_std toolchain
+        run: |
+          rustup toolchain install 1.85.1 --profile minimal --target x86_64-unknown-none
+          rustup default 1.85.1
+      - name: Reject non-GitHub origins, HTTP downgrades, CRLF and malicious redirects
+        run: make -C MayOS_0.3.0-pre1 test-rust-host
+      - name: Compile native Rust no_std URL policy
+        run: |
+          make -C MayOS_0.3.0-pre1 MAYOS_RUST=1 build/libmaykernel_rust.a
+          nm -g MayOS_0.3.0-pre1/build/libmaykernel_rust.a | grep ' mayrs_release_url_allowed$'
+  native-qemu-preflight:
+    runs-on: ubuntu-24.04
+    needs: rust-url-tests
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin Rust and bare-metal target
+        run: |
+          rustup toolchain install 1.85.1 --profile minimal --target x86_64-unknown-none
+          rustup default 1.85.1
+      - name: Install QEMU/GRUB from signed Ubuntu packages
+        run: |
+          bash scripts/configure-ci-apt-mirror.sh
+          sudo apt-get install -y --no-install-recommends \
+            gcc binutils make python3 python3-pil fonts-noto-cjk \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools qemu-system-x86
+      - name: Boot native Rust C MayKernel, exercise URL self-test without opening network
+        run: |
+          make -C MayOS_0.3.0-pre1 MAYOS_RUST=1 test-rust-url-qemu
+          nm -g MayOS_0.3.0-pre1/build/mayos.elf | grep ' mayrs_release_url_allowed$'
+          echo 'PASS: no_std release URL guard is part of real MayKernel ELF64'
+      - name: Preserve authentic QEMU screenshot and serial log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel-release-url-guard-qemu
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            MayOS_0.3.0-pre1/build/maykernel-release-url-*.png
+            MayOS_0.3.0-pre1/build/maykernel-release-url-*.log
+            MayOS_0.3.0-pre1/build/maykernel-release-url-*-qemu.log

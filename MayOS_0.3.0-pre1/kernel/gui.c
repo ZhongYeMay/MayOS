@@ -983,7 +983,18 @@ static void shell(void) {
         emit("TLS preflight: MayKernel-native only");
 #else
         const MayTlsSecurityReport *state=may_tls_security_report();
-        if(argc>1 && !strcmp(argv[1],"check")) {
+        if(argc>1 && !strcmp(argv[1],"url-test")) {
+#ifdef MAYOS_RUST_CORE
+            int ok=mayrs_release_url_selftest();
+            emit(ok ? "GitHub Release URL policy PASS (offline; NO HTTPS)"
+                    : "GitHub Release URL policy FAILED (NO HTTPS)");
+            serial(ok
+                ? "MayOS: GitHub Release URL policy self-test PASSED (NO CONNECT)\n"
+                : "MayOS: GitHub Release URL policy self-test FAILED (NO CONNECT)\n");
+#else
+            emit("GitHub Release URL policy needs optional Rust kernel build");
+#endif
+        } else if(argc>1 && !strcmp(argv[1],"check")) {
             if(argc<3)emit("Usage: tls check api.github.com");
             else {
                 int reason=may_tls_update_preflight(argv[2]);
@@ -991,7 +1002,7 @@ static void shell(void) {
                 serial("MayOS: TLS preflight fail-closed (no HTTPS request sent)\n");
             }
         } else if(argc>1 && strcmp(argv[1],"status")) {
-            emit("Usage: tls status|check <host>");
+            emit("Usage: tls status|check <host>|url-test");
         }
         emit("MayKernel HTTPS: DISABLED (no authenticated TLS handshake)");
         emit(may_tls_provider_is_linked()
