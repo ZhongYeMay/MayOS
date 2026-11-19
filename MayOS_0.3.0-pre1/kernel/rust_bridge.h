@@ -11,6 +11,8 @@ u32 mayrs_abi_version(void);
 int mayrs_ab_disk_initial(u8 *out, u32 length);
 u32 mayrs_ab_disk_select(const u8 *a, const u8 *b, u8 *out, u32 length);
 int mayrs_ab_disk_synthetic_stage(const u8 *source, u8 *out, u32 length);
+/* Strictly opt-in 8MiB QEMU test disk ATA operations; no installer. */
+int may_ab_journal_diagnostic(int command);
 #endif
 /* In-memory A/B transition policy diagnostic only, NEVER installs/boots.
  * Can be invoked on real MayKernel without writing disks. */
