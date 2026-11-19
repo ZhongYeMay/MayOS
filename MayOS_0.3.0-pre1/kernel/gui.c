@@ -905,7 +905,20 @@ static void shell(void) {
             may_update_verify_local();
         else if (argc > 1 && !strcmp(argv[1], "auth"))
             may_update_authenticate_local();
-        else if (argc > 1 && !strcmp(argv[1], "recovery-test")) {
+        else if (argc > 1 &&
+            (!strcmp(argv[1], "journal-status") ||
+             !strcmp(argv[1], "journal-init") ||
+             !strcmp(argv[1], "journal-stage"))) {
+#ifdef MAYOS_AB_DISK_DIAGNOSTIC
+            int mode=!strcmp(argv[1],"journal-init") ? 1 :
+                     !strcmp(argv[1],"journal-stage") ? 2 : 0;
+            int result=may_ab_journal_diagnostic(mode);
+            emit(result ? "QEMU A/B journal diagnostic PASS (no installation)"
+                        : "QEMU A/B journal diagnostic REFUSED/FAILED");
+#else
+            emit("A/B persistent journal: disabled outside opt-in QEMU test build");
+#endif
+        } else if (argc > 1 && !strcmp(argv[1], "recovery-test")) {
 #ifdef MAYOS_RUST_CORE
             int passed=mayrs_ab_selftest();
             emit(passed ? "A/B boot policy PASS (memory only; no installation)"
@@ -916,7 +929,7 @@ static void shell(void) {
             emit("A/B boot policy: requires optional Rust kernel build");
 #endif
         } else if (argc > 1 && strcmp(argv[1], "status")) {
-            emit("Usage: update check|verify|auth|recovery-test|status");
+            emit("Usage: update check|verify|auth|recovery-test|journal-status|journal-init|journal-stage|status");
             return;
         }
         emit(may_update_status());
