@@ -1,3 +1,6 @@
+#[cfg(any(test, feature = "ab-disk-diagnostic"))]
+mod disk;
+
 //! MayOS A/B boot-slot *policy* and crash-consistent journal validation.
 //! No filesystem writes, bootloader selection or installer in this module.
 //! Data must be committed atomically by a future bootloader-compatible store.
