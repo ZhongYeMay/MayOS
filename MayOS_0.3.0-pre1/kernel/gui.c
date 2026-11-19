@@ -995,6 +995,16 @@ static void shell(void) {
 #else
             emit("BearSSL X.509 test CA: not linked in production build");
 #endif
+        } else if(argc>1 && !strcmp(argv[1],"http-test")) {
+#ifdef MAYOS_RUST_CORE
+            int passed=mayrs_http_headers_selftest();
+            emit(passed ? "HTTP/1.1 update response preflight PASS (NO CONNECT)"
+                        : "HTTP/1.1 update response preflight FAIL (NO CONNECT)");
+            serial(passed ? "MayOS: HTTP framing strict no_std self-test PASSED (NO CONNECT)\n"
+                          : "MayOS: HTTP framing strict no_std self-test FAILED (NO CONNECT)\n");
+#else
+            emit("HTTP update framing requires optional Rust kernel build");
+#endif
         } else if(argc>1 && !strcmp(argv[1],"url-test")) {
 #ifdef MAYOS_RUST_CORE
             int ok=mayrs_release_url_selftest();
@@ -1014,7 +1024,7 @@ static void shell(void) {
                 serial("MayOS: TLS preflight fail-closed (no HTTPS request sent)\n");
             }
         } else if(argc>1 && strcmp(argv[1],"status")) {
-            emit("Usage: tls status|check <host>|url-test|x509-test");
+            emit("Usage: tls status|check <host>|url-test|x509-test|http-test");
         }
         emit("MayKernel HTTPS: DISABLED (no authenticated TLS handshake)");
         emit(may_tls_provider_is_linked()
