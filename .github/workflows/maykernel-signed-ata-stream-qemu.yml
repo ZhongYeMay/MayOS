@@ -8,6 +8,7 @@ on:
       - 'MayOS_0.3.0-pre1/kernel/update_stage_disk.*'
       - 'MayOS_0.3.0-pre1/kernel/update_stream_integrity.*'
       - 'MayOS_0.3.0-pre1/scripts/signed_stream_ata_smoke.py'
+      - 'MayOS_0.3.0-pre1/scripts/signed_stream_ata_video.py'
       - 'MayOS_0.3.0-pre1/Makefile'
       - '.github/workflows/maykernel-signed-ata-stream-qemu.yml'
   workflow_dispatch:
@@ -25,7 +26,7 @@ jobs:
           rustup default 1.85.1
           bash scripts/configure-ci-apt-mirror.sh
           sudo apt-get install -y --no-install-recommends \
-            gcc binutils make python3 python3-pil fonts-noto-cjk openssl \
+            gcc binutils make python3 python3-pil fonts-noto-cjk openssl ffmpeg \
             grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools qemu-system-x86
       - name: Create ephemeral offline Ed25519 key and independent 64KiB fixtures
         shell: bash
@@ -74,6 +75,10 @@ jobs:
           python3 MayOS_0.3.0-pre1/scripts/signed_stream_ata_smoke.py \
             --package-dir "$RUNNER_TEMP/signed-ata-good-pkg" \
             --wrong-hash-package-dir "$RUNNER_TEMP/signed-ata-bad-pkg"
+      - name: Record actual QEMU terminal and signing verdict as MP4
+        run: |
+          python3 MayOS_0.3.0-pre1/scripts/signed_stream_ata_video.py \
+            --package-dir "$RUNNER_TEMP/signed-ata-good-pkg"
       - name: Upload real QEMU guest screenshots and logs, never signing keys
         if: always()
         uses: actions/upload-artifact@v4
@@ -85,3 +90,4 @@ jobs:
             MayOS_0.3.0-pre1/build/signed-ata-*.png
             MayOS_0.3.0-pre1/build/signed-ata-*.log
             MayOS_0.3.0-pre1/build/signed-ata-*-qemu.log
+            MayOS_0.3.0-pre1/build/MayOS-signed-stream-to-ATA-real-QEMU.mp4
