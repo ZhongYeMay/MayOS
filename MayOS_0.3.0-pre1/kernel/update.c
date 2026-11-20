@@ -562,4 +562,80 @@ const char *may_update_signed_stream_status(void) {
             return "Signed stream: not checked";
     }
 }
+
+/* Stage 6J: ONLY a specially marked 8MiB throwaway QEMU disk may receive
+ * staged data. Pin publisher key and verify raw manifest BEFORE ATA writes.
+ * After streaming we verify the signed commitment over actual disk bytes.
+ * These fixtures are not network downloads and NEVER authorize installation. */
+#ifdef MAYOS_SIGNED_ATA_STREAM_DIAGNOSTIC
+static int signed_ata_stream_result;
+enum {
+    SIGNED_ATA_NOT_RUN=0, SIGNED_ATA_MANIFEST_REJECTED,
+    SIGNED_ATA_DISK_REJECTED, SIGNED_ATA_STREAM_REJECTED,
+    SIGNED_ATA_REHASH_REJECTED, SIGNED_ATA_SUCCESS
+};
+int may_update_signed_ata_stream_diagnostic(void) {
+    static MayUpdateStreamIntegrity stream;
+    static u8 chunk[4096];
+    MayHttpHeaders headers;
+    signed_ata_stream_result=SIGNED_ATA_MANIFEST_REJECTED;
+    memset(&headers,0,sizeof(headers));
+    headers.status=200;
+    headers.header_bytes=42;
+    may_update_check();
+    headers.content_length=update.size_bytes;
+    if(!signed_stream_begin(&stream,&headers))return 0;
+    if(update.size_bytes!=65536u)return 0;
+
+    /* A valid pinned Ed25519 manifest is required BEFORE any ATA write.
+     * The hash value below was obtained inside signed_stream_begin, AFTER
+     * Ed25519 verification. Do not derive it from raw unsigned metadata. */
+    u8 signed_digest[32];
+    memcpy(signed_digest,stream.expected_sha256,sizeof(signed_digest));
+    signed_ata_stream_result=SIGNED_ATA_DISK_REJECTED;
+    int started=may_stage_diag_begin(update.size_bytes,signed_digest);
+    memset(signed_digest,0,sizeof(signed_digest));
+    if(!started)return 0;
+
+    signed_ata_stream_result=SIGNED_ATA_STREAM_REJECTED;
+    for(u32 offset=0;offset<65536u;offset+=sizeof(chunk)) {
+        for(u32 j=0;j<sizeof(chunk);j++) {
+            u32 p=offset+j;
+            chunk[j]=(u8)(((p*13u)^(p>>5)^0xa5u)&255u);
+        }
+        int expected=offset+sizeof(chunk)==65536u?2:1;
+        /* Reject malformed chunk, overflow and length before staging it. */
+        if(may_update_stream_feed(&stream,chunk,sizeof(chunk))!=expected)
+            return 0;
+        if(!may_stage_diag_append(chunk,sizeof(chunk))) {
+            signed_ata_stream_result=SIGNED_ATA_DISK_REJECTED;
+            return 0;
+        }
+    }
+    if(!may_update_stream_finish(&stream))return 0;
+    signed_ata_stream_result=SIGNED_ATA_REHASH_REJECTED;
+    if(!may_stage_diag_verify()||!may_update_authenticate_staged())
+        return 0;
+    signed_ata_stream_result=SIGNED_ATA_SUCCESS;
+    serial("MayOS: signed 64KiB stream staged to isolated ATA and rehashed PASS; NO INSTALL\n");
+    return 1;
+}
+const char *may_update_signed_ata_stream_status(void) {
+    switch(signed_ata_stream_result) {
+        case SIGNED_ATA_MANIFEST_REJECTED:
+            return "Signed ATA stream: manifest/signature rejected (NO INSTALL)";
+        case SIGNED_ATA_DISK_REJECTED:
+            return "Signed ATA stream: isolated staging disk rejected (NO INSTALL)";
+        case SIGNED_ATA_STREAM_REJECTED:
+            return "Signed ATA stream: body/hash verification failed (NO INSTALL)";
+        case SIGNED_ATA_REHASH_REJECTED:
+            return "Signed ATA stream: on-disk rehash rejected (NO INSTALL)";
+        case SIGNED_ATA_SUCCESS:
+            return "Signed ATA stream: full signed 64KiB ATA rehash PASS (NO INSTALL)";
+        default:
+            return "Signed ATA stream: not checked";
+    }
+}
+#endif
+
 #endif
