@@ -12,6 +12,8 @@ int mayrs_release_url_selftest(void);
 /* Read-only strict HTTP/1.1 framing check; no network or download.
  * The ABI struct layout is separately declared for future transport use. */
 int mayrs_http_headers_selftest(void);
+/* Offline byte-budget: does not parse TLS records, hash or install. */
+int mayrs_http_body_selftest(void);
 #ifdef MAYOS_AB_DISK_DIAGNOSTIC
 /* Test-only journal codec, never enabled in a production installer. */
 int mayrs_ab_disk_initial(u8 *out, u32 length);
