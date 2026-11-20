@@ -912,6 +912,16 @@ static void shell(void) {
             may_update_authenticate_local();
         else if (argc > 1 && !strcmp(argv[1], "auth-stage"))
             may_update_authenticate_staged();
+        else if (argc > 1 && !strcmp(argv[1], "auth-stream-stage-test")) {
+#ifdef MAYOS_SIGNED_ATA_STREAM_DIAGNOSTIC
+            int passed=may_update_signed_ata_stream_diagnostic();
+            emit(passed ? "Signed stream-to-ATA QEMU diagnostic PASS (NO INSTALL)"
+                        : "Signed stream-to-ATA QEMU diagnostic REJECTED (NO INSTALL)");
+            emit(may_update_signed_ata_stream_status());
+#else
+            emit("Signed ATA streaming: disabled outside isolated QEMU diagnostic");
+#endif
+        }
         else if (argc > 1 && !strcmp(argv[1], "auth-stream-test")) {
 #ifdef MAYOS_SIGNED_STREAM_DIAGNOSTIC
             int passed=may_update_signed_stream_diagnostic();
@@ -968,7 +978,7 @@ static void shell(void) {
             emit("A/B boot policy: requires optional Rust kernel build");
 #endif
         } else if (argc > 1 && strcmp(argv[1], "status")) {
-            emit("Usage: update check|verify|auth|auth-stage|auth-stream-test|recovery-test|stage-begin|stage-half|stage-rest|stage-verify|stage-status|status");
+            emit("Usage: update check|verify|auth|auth-stage|auth-stream-test|auth-stream-stage-test|recovery-test|stage-begin|stage-half|stage-rest|stage-verify|stage-status|status");
             return;
         }
         emit(may_update_status());
