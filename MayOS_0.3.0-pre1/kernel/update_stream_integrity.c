@@ -77,6 +77,23 @@ int may_update_stream_selftest(void) {
        may_update_stream_feed(&ctx,good,3)!=2||
        may_update_stream_feed(&ctx,good,1)!=0||
        may_update_stream_finish(&ctx)!=0)return 0;
+    /* Actual Rust+C native QEMU test over a 64KiB image-sized stream.
+     * Expected SHA-256 of exactly 65536 'Z' bytes is independently fixed. */
+    static const u8 large_sha[32]={
+        0x94,0x40,0x44,0xfe,0x48,0x2b,0xc4,0xe9,
+        0x10,0x85,0xc1,0x5c,0x5a,0x92,0x3a,0x1b,
+        0x9e,0x02,0xea,0xc9,0x8d,0x3b,0xce,0x04,
+        0x99,0x7d,0x6d,0xbe,0xcd,0x2a,0x5b,0x8d
+    };
+    static u8 chunk[4096];
+    memset(chunk,'Z',sizeof(chunk));
+    h.content_length=65536;
+    if(!may_update_stream_begin(&ctx,&h,65536,large_sha))return 0;
+    for(u32 i=0;i<16u;i++){
+        int status=may_update_stream_feed(&ctx,chunk,sizeof(chunk));
+        if(status!=(i==15u?2:1))return 0;
+    }
+    if(!may_update_stream_finish(&ctx))return 0;
     return 1;
 }
 #endif
