@@ -28,7 +28,10 @@ def rsa_crt_from_pem(path: Path) -> tuple[int,list[bytes]]:
         if kind!=0x02 or vend<=vstart:
             raise ValueError("RSA key field not positive integer")
         data=raw[vstart:vend]
-        if data[0]==0:
+        if data==b"\x00":
+            if i!=0:
+                raise ValueError("unexpected zero RSA key component")
+        elif data[0]==0:
             if len(data)<2 or data[1]<0x80:
                 raise ValueError("nonminimal RSA integer")
             data=data[1:]
