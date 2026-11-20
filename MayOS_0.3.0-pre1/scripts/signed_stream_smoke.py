@@ -26,6 +26,14 @@ def run_case(name: str, manifest: bytes, sig: bytes, accepted: bool, reason: str
         vm.wait("No download/install; rollback-capable installer not ready.")
         vm.shot(name)
         assert disk.read_bytes()[:2*512*512]==before, "MayFS changed in read-only stream test"
+        if accepted:
+            # After a valid stream, replace the previously signed manifest.
+            # A second operation MUST re-parse bytes and fail closed.
+            vm.cmd("write Documents/Update.may invalid-metadata")
+            vm.cmd("update auth-stream-test")
+            vm.wait("Signed stream: local manifest invalid (NO INSTALL)")
+            vm.shot(name+"-stale-manifest-rejected")
+            print("PASS: previous signed stream cannot authenticate a modified MayFS manifest",flush=True)
     finally:
         vm.stop()
     print("PASS: "+name+" accepted="+str(accepted)+"; MayFS untouched; NO INSTALL",flush=True)
