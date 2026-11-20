@@ -51,6 +51,18 @@ OBJECTS += build/security_tls_x509_fixture.o
 build/security_tls_x509_fixture.o: build/tls_x509_fixture.h
 endif
 
+# A CI-only in-memory TLS 1.2 handshake. The server CRT key and all
+# trust/entropy material are temporary *test* data; no Internet or installer.
+MAYOS_TLS_HANDSHAKE_DIAGNOSTIC ?= 0
+ifeq ($(MAYOS_TLS_HANDSHAKE_DIAGNOSTIC),1)
+ifeq ($(strip $(BEARSSL_SOURCE)),)
+$(error MAYOS_TLS_HANDSHAKE_DIAGNOSTIC requires pinned BEARSSL_SOURCE)
+endif
+CFLAGS += -DMAYOS_TLS_HANDSHAKE_DIAGNOSTIC
+OBJECTS += build/security_tls_memory_handshake.o
+build/security_tls_memory_handshake.o: build/tls_handshake_fixture.h build/tls_x509_fixture.h
+endif
+
 # Optional Rust/C hybrid kernel build. Default C mode keeps all existing
 # release and QEMU workflows unchanged until the Rust path is fully accepted.
 # Requires rustup target add x86_64-unknown-none (no userspace, no allocator).
@@ -123,7 +135,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: test-http-budget-qemu test-http-guard-qemu test-tls-x509-qemu test-rust-url-qemu test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video test-ab-journal-qemu test-stage-codec test-stage-qemu
+.PHONY: test-tls-handshake-qemu test-http-budget-qemu test-http-guard-qemu test-tls-x509-qemu test-rust-url-qemu test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video test-ab-journal-qemu test-stage-codec test-stage-qemu
 .PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 # Build flags and pinned key are part of the artifact identity. Never reuse
@@ -133,7 +145,7 @@ FORCE:
 build:
 	mkdir -p build
 build/config-flags.txt: FORCE | build
-	@printf '%s\n' '$(CFLAGS)' 'RUST=$(MAYOS_RUST)' 'SIGNATURE=$(MAYOS_RELEASE_SIGNATURE)' 'KEY=$(MAYOS_RELEASE_PUBKEY_HEX)' 'TESTKEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY)' 'ABDIAG=$(MAYOS_AB_DISK_DIAGNOSTIC)' 'STAGEDIAG=$(MAYOS_STAGE_DISK_DIAGNOSTIC)' 'X509DIAG=$(MAYOS_TLS_X509_DIAGNOSTIC)' > $@.tmp
+	@printf '%s\n' '$(CFLAGS)' 'RUST=$(MAYOS_RUST)' 'SIGNATURE=$(MAYOS_RELEASE_SIGNATURE)' 'KEY=$(MAYOS_RELEASE_PUBKEY_HEX)' 'TESTKEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY)' 'ABDIAG=$(MAYOS_AB_DISK_DIAGNOSTIC)' 'STAGEDIAG=$(MAYOS_STAGE_DISK_DIAGNOSTIC)' 'X509DIAG=$(MAYOS_TLS_X509_DIAGNOSTIC)' 'TLSMEM=$(MAYOS_TLS_HANDSHAKE_DIAGNOSTIC)' > $@.tmp
 	@if ! cmp -s $@.tmp $@; then mv $@.tmp $@; else rm -f $@.tmp; fi
 build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
 	$(PYTHON) scripts/font.py
@@ -252,6 +264,9 @@ test-rust-bearssl-qemu: all test-rust-host
 	@test -n "$(BEARSSL_SOURCE)" || (echo "Set BEARSSL_SOURCE to pinned upstream checkout" >&2; exit 1)
 	$(PYTHON) scripts/rust_bearssl_smoke.py
 
+test-tls-handshake-qemu: all
+	@test "$(MAYOS_TLS_HANDSHAKE_DIAGNOSTIC)" = "1" || (echo "Enable test-only in-memory TLS handshake fixture" >&2; exit 1)
+	$(PYTHON) scripts/tls_memory_handshake_smoke.py
 test-tls-x509-qemu: all
 	@test "$(MAYOS_TLS_X509_DIAGNOSTIC)" = "1" || (echo "Set MAYOS_TLS_X509_DIAGNOSTIC=1 for test-only X509" >&2; exit 1)
 	$(PYTHON) scripts/tls_x509_fixture_smoke.py
@@ -287,4 +302,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/*.a build/rust_manifest_tests build/update_stage_codec_test build/config-flags.txt build/release_pubkey.h build/tls_x509_fixture.h build/font.h build/cat_image.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/*.a build/rust_manifest_tests build/update_stage_codec_test build/config-flags.txt build/release_pubkey.h build/tls_x509_fixture.h build/tls_handshake_fixture.h build/font.h build/cat_image.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h
