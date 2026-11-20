@@ -1,0 +1,81 @@
+name: MayKernel native BearSSL TLS1.2 memory handshake and encrypted record
+on:
+  pull_request:
+    paths:
+      - 'MayOS_0.3.0-pre1/kernel/security_tls_memory_handshake.c'
+      - 'MayOS_0.3.0-pre1/kernel/gui.c'
+      - 'MayOS_0.3.0-pre1/scripts/generate_tls_handshake_fixture.py'
+      - 'MayOS_0.3.0-pre1/scripts/tls_memory_handshake_smoke.py'
+      - 'MayOS_0.3.0-pre1/Makefile'
+      - '.github/workflows/maykernel-tls-memory-handshake.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  BEARSSL_PIN: 79c060eea3eea1257797f15ea1608a9a9923aa6f
+jobs:
+  native-bearssl-memory-tls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install signed QEMU/GRUB/OpenSSL build dependencies
+        run: |
+          bash scripts/configure-ci-apt-mirror.sh
+          sudo apt-get install -y --no-install-recommends \
+            gcc binutils make python3 python3-pil fonts-noto-cjk openssl \
+            grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools qemu-system-x86
+      - name: Fetch exact pinned upstream BearSSL source
+        run: |
+          git clone --quiet https://www.bearssl.org/git/BearSSL vendor/bearssl
+          git -C vendor/bearssl checkout -q --detach "$BEARSSL_PIN"
+          test "$(git -C vendor/bearssl rev-parse HEAD)" = "$BEARSSL_PIN"
+      - name: Mint disposable test CA and server RSA key with matching SAN
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 10 \
+            -subj "/CN=MayOS Ephemeral TLS Memory CA" \
+            -addext "basicConstraints=critical,CA:TRUE" \
+            -addext "keyUsage=critical,keyCertSign,cRLSign" \
+            -keyout "$RUNNER_TEMP/memory-ca.key" -out "$RUNNER_TEMP/memory-ca.pem"
+          openssl req -newkey rsa:2048 -nodes \
+            -subj "/CN=test.mayos.local" \
+            -keyout "$RUNNER_TEMP/memory-leaf.key" -out "$RUNNER_TEMP/memory-leaf.csr"
+          cat > "$RUNNER_TEMP/memory-leaf-ext.cnf" <<'EOF'
+          basicConstraints=critical,CA:FALSE
+          keyUsage=critical,digitalSignature,keyEncipherment
+          extendedKeyUsage=serverAuth
+          subjectAltName=DNS:test.mayos.local
+          EOF
+          openssl x509 -req -in "$RUNNER_TEMP/memory-leaf.csr" \
+            -CA "$RUNNER_TEMP/memory-ca.pem" \
+            -CAkey "$RUNNER_TEMP/memory-ca.key" -CAcreateserial \
+            -out "$RUNNER_TEMP/memory-leaf.pem" \
+            -days 5 -sha256 -extfile "$RUNNER_TEMP/memory-leaf-ext.cnf"
+          openssl verify -CAfile "$RUNNER_TEMP/memory-ca.pem" "$RUNNER_TEMP/memory-leaf.pem"
+          python3 MayOS_0.3.0-pre1/scripts/generate_tls_x509_fixture.py \
+            --ca "$RUNNER_TEMP/memory-ca.pem" \
+            --leaf "$RUNNER_TEMP/memory-leaf.pem" \
+            --output MayOS_0.3.0-pre1/build/tls_x509_fixture.h
+          python3 MayOS_0.3.0-pre1/scripts/generate_tls_handshake_fixture.py \
+            --leaf-key "$RUNNER_TEMP/memory-leaf.key" \
+            --output MayOS_0.3.0-pre1/build/tls_handshake_fixture.h
+          test -s MayOS_0.3.0-pre1/build/tls_handshake_fixture.h
+      - name: Boot native ELF64 and execute real TLS1.2 client/server transcript
+        run: |
+          make -C MayOS_0.3.0-pre1 \
+            BEARSSL_SOURCE="$GITHUB_WORKSPACE/vendor/bearssl" \
+            MAYOS_TLS_HANDSHAKE_DIAGNOSTIC=1 test-tls-handshake-qemu
+          nm -g MayOS_0.3.0-pre1/build/mayos.elf | grep ' may_tls_memory_handshake_selftest$'
+          echo "PASS: genuine BearSSL TLS1.2 handshake client and server linked into native MayKernel"
+      - name: Preserve framebuffer and serial evidence ONLY (no ephemeral private keys)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maykernel-real-bearssl-tls-memory-qemu
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            MayOS_0.3.0-pre1/build/maykernel-bearssl-tls-*.png
+            MayOS_0.3.0-pre1/build/maykernel-bearssl-tls-*.log
