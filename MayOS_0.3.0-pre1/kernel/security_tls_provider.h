@@ -7,4 +7,7 @@
  */
 int may_tls_provider_probe(void);
 int may_tls_provider_is_linked(void);
+/* A test-observable guarantee of non-SIMD portable cipher selection.
+ * Does not mean TLS authentication or HTTPS networking is enabled. */
+int may_tls_provider_scalar_only(void);
 #endif
