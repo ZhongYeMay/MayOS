@@ -535,6 +535,13 @@ int may_update_signed_stream_diagnostic(void) {
         signed_stream_result=SIGNED_STREAM_HASH_REJECTED;
         return 0;
     }
+    /* An authenticated manifest never permits a mismatched HTTP length.
+     * No previously verified context is sufficient to bypass this gate. */
+    headers.content_length=65535u;
+    if(signed_stream_begin(&ctx,&headers)!=0) {
+        signed_stream_result=SIGNED_STREAM_LENGTH_REJECTED;
+        return 0;
+    }
     signed_stream_result=SIGNED_STREAM_OK;
     serial("MayOS: Ed25519 authenticated manifest + 64KiB streamed SHA-256 PASS (NO INSTALL)\n");
     return 1;
