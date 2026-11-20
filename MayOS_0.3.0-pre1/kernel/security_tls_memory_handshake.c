@@ -74,6 +74,20 @@ static int begin_peers(const char *hostname,unsigned advance_days,int known_ca) 
     br_ssl_server_init_full_rsa(&server,chain,1,&key);
     br_ssl_engine_set_versions(&client.eng,BR_TLS12,BR_TLS12);
     br_ssl_engine_set_versions(&server.eng,BR_TLS12,BR_TLS12);
+    /* MayKernel does not enable/save SSE/XMM CPU state. BearSSL's normal
+     * x86 runtime dispatcher sees SSE2 in CPUID and would select an SSE2
+     * cipher, crashing with #UD at br_chacha20_sse2_run. Pin the portable
+     * constant-time C cipher on BOTH peers, and a single AEAD TLS1.2 suite.
+     * This is required in any future real kernel TLS provider too. */
+    static const uint16_t suite[]={
+        BR_TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+    };
+    br_ssl_engine_set_suites(&client.eng,suite,1);
+    br_ssl_engine_set_suites(&server.eng,suite,1);
+    br_ssl_engine_set_chacha20(&client.eng,&br_chacha20_ct_run);
+    br_ssl_engine_set_chacha20(&server.eng,&br_chacha20_ct_run);
+    br_ssl_engine_set_poly1305(&client.eng,&br_poly1305_ctmul_run);
+    br_ssl_engine_set_poly1305(&server.eng,&br_poly1305_ctmul_run);
 
     br_ssl_engine_set_buffers_bidi(&client.eng,client_in,sizeof(client_in),
                                   client_out,sizeof(client_out));
