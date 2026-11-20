@@ -445,3 +445,114 @@ const char *may_update_auth_staged_status(void) {
             return "Signed staging: not checked; NO INSTALL";
     }
 }
+
+
+/* Stage 6I diagnostic: bind *verified* local MayFS Ed25519 manifest to
+ * the Rust+C exact-length streaming SHA-256 gate. The private signing key
+ * never enters the guest. This requires an explicit non-release test build;
+ * it never reads the Internet, writes media, installs or changes boot slots. */
+#ifdef MAYOS_SIGNED_STREAM_DIAGNOSTIC
+#include "update_stream_integrity.h"
+static int signed_stream_result;
+enum {
+    SIGNED_STREAM_NOT_RUN=0, SIGNED_STREAM_MANIFEST_INVALID,
+    SIGNED_STREAM_SIGNATURE_REJECTED, SIGNED_STREAM_LENGTH_REJECTED,
+    SIGNED_STREAM_HASH_REJECTED, SIGNED_STREAM_OK
+};
+static int hex_byte(char ch) {
+    if(ch>='0'&&ch<='9')return ch-'0';
+    if(ch>='a'&&ch<='f')return ch-'a'+10;
+    if(ch>='A'&&ch<='F')return ch-'A'+10;
+    return -1;
+}
+static int signed_stream_begin(MayUpdateStreamIntegrity *ctx,
+                               const MayHttpHeaders *headers) {
+    signed_stream_result=SIGNED_STREAM_MANIFEST_INVALID;
+    if(!ctx||!headers)return 0;
+    /* Re-parse current MayFS bytes. A cached unsigned preview can never
+     * start a signed stream. Signed manifest and signature must both be
+     * valid *at this invocation*, before any image data is accepted. */
+    may_update_check();
+    if((update.state!=MAY_UPDATE_CANDIDATE &&
+        update.state!=MAY_UPDATE_CURRENT) ||
+       update.size_bytes==0||update.size_bytes>524288u)return 0;
+    int m=fs_find(1,"Update.may"),s=fs_find(1,"Update.sig");
+    signed_stream_result=SIGNED_STREAM_SIGNATURE_REJECTED;
+    if(m<0||s<0 || !files[m].used||files[m].dir ||
+       !files[m].size||files[m].size>2048u ||
+       !files[s].used||files[s].dir||files[s].size!=64u ||
+       !mayrs_ed25519_verify(mayos_release_root_key,files[s].data,
+                            files[m].data,files[m].size))return 0;
+    u8 expected[32];
+    for(u32 i=0;i<32u;i++){
+        int hi=hex_byte(update.sha256[i*2u]);
+        int lo=hex_byte(update.sha256[i*2u+1u]);
+        if(hi<0||lo<0){
+            memset(expected,0,sizeof(expected));
+            signed_stream_result=SIGNED_STREAM_MANIFEST_INVALID;
+            return 0;
+        }
+        expected[i]=(u8)((hi<<4)|lo);
+    }
+    signed_stream_result=SIGNED_STREAM_LENGTH_REJECTED;
+    int result=may_update_stream_begin(ctx,headers,update.size_bytes,expected);
+    memset(expected,0,sizeof(expected));
+    return result;
+}
+/* A genuine in-kernel 64KiB streaming fixture: same deterministic image
+ * independently hashed and Ed25519-signed by CI's offline packager. The
+ * QEMU shell never accepts caller-supplied signatures or network input. */
+int may_update_signed_stream_diagnostic(void) {
+    static MayUpdateStreamIntegrity ctx;
+    static u8 chunk[4096];
+    MayHttpHeaders headers;
+    memset(&headers,0,sizeof(headers));
+    headers.status=200;headers.header_bytes=42;
+    may_update_check();
+    headers.content_length=update.size_bytes;
+    if(!signed_stream_begin(&ctx,&headers))return 0;
+    if(update.size_bytes!=65536u) {
+        signed_stream_result=SIGNED_STREAM_LENGTH_REJECTED;
+        return 0;
+    }
+    for(u32 offset=0;offset<65536u;offset+=sizeof(chunk)){
+        for(u32 j=0;j<sizeof(chunk);j++){
+            u32 position=offset+j;
+            chunk[j]=(u8)(((position*13u)^(position>>5)^0xa5u)&255u);
+        }
+        if(may_update_stream_feed(&ctx,chunk,sizeof(chunk))!=
+           (offset+sizeof(chunk)==65536u?2:1)){
+            signed_stream_result=SIGNED_STREAM_HASH_REJECTED;
+            return 0;
+        }
+    }
+    if(!may_update_stream_finish(&ctx)){
+        signed_stream_result=SIGNED_STREAM_HASH_REJECTED;
+        return 0;
+    }
+    /* A complete context is terminal; duplicate/extra bytes MUST fail. */
+    if(may_update_stream_finish(&ctx)!=0){
+        signed_stream_result=SIGNED_STREAM_HASH_REJECTED;
+        return 0;
+    }
+    signed_stream_result=SIGNED_STREAM_OK;
+    serial("MayOS: Ed25519 authenticated manifest + 64KiB streamed SHA-256 PASS (NO INSTALL)\n");
+    return 1;
+}
+const char *may_update_signed_stream_status(void) {
+    switch(signed_stream_result) {
+        case SIGNED_STREAM_MANIFEST_INVALID:
+            return "Signed stream: local manifest invalid (NO INSTALL)";
+        case SIGNED_STREAM_SIGNATURE_REJECTED:
+            return "Signed stream: Ed25519 signature REJECTED (NO INSTALL)";
+        case SIGNED_STREAM_LENGTH_REJECTED:
+            return "Signed stream: signed HTTP Content-Length rejected";
+        case SIGNED_STREAM_HASH_REJECTED:
+            return "Signed stream: streamed SHA-256 REJECTED (NO INSTALL)";
+        case SIGNED_STREAM_OK:
+            return "Signed stream: Ed25519 + SHA-256 PASS (NO INSTALL)";
+        default:
+            return "Signed stream: not checked";
+    }
+}
+#endif
