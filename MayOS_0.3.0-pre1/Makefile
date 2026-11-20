@@ -93,6 +93,7 @@ endif
 RUST_LIB :=
 ifeq ($(MAYOS_RUST),1)
 CFLAGS += -DMAYOS_RUST_CORE
+OBJECTS += build/update_stream_integrity.o
 RUST_LIB := build/libmaykernel_rust.a
 ifeq ($(MAYOS_RELEASE_SIGNATURE),1)
 build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs rust/maykernel_policy/src/release_url.rs rust/maykernel_policy/src/http_framing.rs rust/maykernel_policy/src/http_body_budget.rs rust/maykernel_policy/Cargo.toml build/config-flags.txt | build
@@ -123,7 +124,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: test-http-budget-qemu test-http-guard-qemu test-tls-x509-qemu test-rust-url-qemu test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video test-ab-journal-qemu test-stage-codec test-stage-qemu
+.PHONY: test-stream-integrity-qemu test-stream-integrity test-http-budget-qemu test-http-guard-qemu test-tls-x509-qemu test-rust-url-qemu test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video test-ab-journal-qemu test-stage-codec test-stage-qemu
 .PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 # Build flags and pinned key are part of the artifact identity. Never reuse
@@ -149,6 +150,7 @@ build/update_stage_codec.o: kernel/update_stage_codec.h
 build/update_stage_disk.o: kernel/update_stage_codec.h kernel/sha256.h
 build/update.o: kernel/update.h kernel/version.h kernel/sha256.h kernel/rust_bridge.h
 build/sha256.o: kernel/sha256.h
+build/update_stream_integrity.o: kernel/update_stream_integrity.h kernel/sha256.h kernel/rust_bridge.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/net.h kernel/security_tls.h
 build/net.o: kernel/net.h kernel/net_ipv4.h kernel/net_dhcp.h kernel/net_tcp.h kernel/net_tcp_retry.h kernel/io.h
 build/net_dhcp.o: kernel/net_dhcp.h
@@ -181,6 +183,10 @@ build/sha256_test: tests/sha256_test.c kernel/sha256.c kernel/sha256.h kernel/co
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/sha256_test.c kernel/sha256.c -o $@
 test-sha256: build/sha256_test
 	./build/sha256_test
+build/update_stream_integrity_test: tests/update_stream_integrity_test.c kernel/update_stream_integrity.c kernel/update_stream_integrity.h kernel/rust_bridge.h kernel/sha256.c kernel/sha256.h kernel/core.h | build
+	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -DMAYOS_RUST_CORE -Ikernel tests/update_stream_integrity_test.c kernel/update_stream_integrity.c kernel/sha256.c -o $@
+test-stream-integrity: build/update_stream_integrity_test
+	./build/update_stream_integrity_test
 build/update_verify_test: tests/update_verify_test.c kernel/update.c kernel/update.h kernel/sha256.c kernel/sha256.h kernel/core.h | build
 	$(CC) -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-builtin -Ikernel tests/update_verify_test.c kernel/update.c kernel/sha256.c -o $@
 test-update-verify: build/update_verify_test
@@ -232,6 +238,9 @@ test-stage-qemu: all test-stage-codec
 test-ab-journal-qemu: all test-rust-host
 	@test "$(MAYOS_AB_DISK_DIAGNOSTIC)" = "1" || (echo "Set MAYOS_AB_DISK_DIAGNOSTIC=1" >&2; exit 1)
 	$(PYTHON) scripts/ab_journal_smoke.py
+test-stream-integrity-qemu: all test-stream-integrity test-rust-host
+	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for Rust+C QEMU digest test" >&2; exit 1)
+	$(PYTHON) scripts/stream_integrity_smoke.py
 test-http-budget-qemu: all test-rust-host
 	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for body budget QEMU" >&2; exit 1)
 	$(PYTHON) scripts/http_body_budget_smoke.py

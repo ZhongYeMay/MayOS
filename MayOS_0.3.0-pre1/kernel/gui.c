@@ -13,6 +13,7 @@
 #include "update.h"
 #include "update_stage_disk.h"
 #include "rust_bridge.h"
+#include "update_stream_integrity.h"
 #include "net.h"
 #include "security_tls.h"
 #include "security_tls_provider.h"
@@ -995,6 +996,16 @@ static void shell(void) {
 #else
             emit("BearSSL X.509 test CA: not linked in production build");
 #endif
+        } else if(argc>1 && !strcmp(argv[1],"digest-test")) {
+#ifdef MAYOS_RUST_CORE
+            int passed=may_update_stream_selftest();
+            emit(passed ? "HTTP stream SHA-256 and exact-length PASS (NO INSTALL)"
+                        : "HTTP stream SHA-256 and exact-length FAIL (NO INSTALL)");
+            serial(passed ? "MayOS: HTTP stream digest self-test PASSED (NO DOWNLOAD)\n"
+                          : "MayOS: HTTP stream digest self-test FAILED (NO DOWNLOAD)\n");
+#else
+            emit("HTTP stream SHA-256 test requires optional Rust kernel build");
+#endif
         } else if(argc>1 && !strcmp(argv[1],"body-test")) {
 #ifdef MAYOS_RUST_CORE
             int passed=mayrs_http_body_selftest();
@@ -1034,7 +1045,7 @@ static void shell(void) {
                 serial("MayOS: TLS preflight fail-closed (no HTTPS request sent)\n");
             }
         } else if(argc>1 && strcmp(argv[1],"status")) {
-            emit("Usage: tls status|check <host>|url-test|x509-test|http-test|body-test");
+            emit("Usage: tls status|check <host>|url-test|x509-test|http-test|body-test|digest-test");
         }
         emit("MayKernel HTTPS: DISABLED (no authenticated TLS handshake)");
         emit(may_tls_provider_is_linked()

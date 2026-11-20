@@ -14,6 +14,19 @@ int mayrs_release_url_selftest(void);
 int mayrs_http_headers_selftest(void);
 /* Offline byte-budget: does not parse TLS records, hash or install. */
 int mayrs_http_body_selftest(void);
+/* Exact repr(C) layouts exported by Rust no_std; strictly parser metadata.
+ * Length and digest are untrusted until an owner-signed manifest verifies. */
+typedef struct {
+    u32 status,header_bytes,content_length,redirect_length;
+    u8 redirect[1024];
+} MayHttpHeaders;
+typedef struct {
+    u32 declared,received,phase,reserved;
+} MayHttpBodyBudget;
+int mayrs_http_body_begin(const MayHttpHeaders *headers,u32 signed_len,
+                          MayHttpBodyBudget *out);
+int mayrs_http_body_consume(MayHttpBodyBudget *ctx,u32 length);
+int mayrs_http_body_finish(MayHttpBodyBudget *ctx);
 #ifdef MAYOS_AB_DISK_DIAGNOSTIC
 /* Test-only journal codec, never enabled in a production installer. */
 int mayrs_ab_disk_initial(u8 *out, u32 length);
