@@ -51,5 +51,5 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
           path: |
-            MayOS_0.3.0-pre1/build/maykernel-stream-integrity-*.png
+            MayOS_0.3.0-pre1/build/maykernel-stream-integrity.png
             MayOS_0.3.0-pre1/build/maykernel-stream-integrity-*.log
