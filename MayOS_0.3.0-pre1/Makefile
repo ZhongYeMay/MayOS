@@ -56,6 +56,12 @@ endif
 # Requires rustup target add x86_64-unknown-none (no userspace, no allocator).
 MAYOS_RUST ?= 0
 MAYOS_RELEASE_SIGNATURE ?= 0
+# Read-only test gate. Never enable in publish/release workflows.
+MAYOS_SIGNED_STREAM_DIAGNOSTIC ?= 0
+ifeq ($(MAYOS_SIGNED_STREAM_DIAGNOSTIC),1)
+override MAYOS_RELEASE_SIGNATURE := 1
+CFLAGS += -DMAYOS_SIGNED_STREAM_DIAGNOSTIC
+endif
 RUSTC ?= rustc
 CARGO ?= cargo
 RUST_TARGET ?= x86_64-unknown-none
@@ -124,7 +130,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: test-stream-integrity-qemu test-stream-integrity test-http-budget-qemu test-http-guard-qemu test-tls-x509-qemu test-rust-url-qemu test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video test-ab-journal-qemu test-stage-codec test-stage-qemu
+.PHONY: test-signed-stream-qemu test-stream-integrity-qemu test-stream-integrity test-http-budget-qemu test-http-guard-qemu test-tls-x509-qemu test-rust-url-qemu test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video test-ab-journal-qemu test-stage-codec test-stage-qemu
 .PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 # Build flags and pinned key are part of the artifact identity. Never reuse
@@ -134,7 +140,7 @@ FORCE:
 build:
 	mkdir -p build
 build/config-flags.txt: FORCE | build
-	@printf '%s\n' '$(CFLAGS)' 'RUST=$(MAYOS_RUST)' 'SIGNATURE=$(MAYOS_RELEASE_SIGNATURE)' 'KEY=$(MAYOS_RELEASE_PUBKEY_HEX)' 'TESTKEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY)' 'ABDIAG=$(MAYOS_AB_DISK_DIAGNOSTIC)' 'STAGEDIAG=$(MAYOS_STAGE_DISK_DIAGNOSTIC)' 'X509DIAG=$(MAYOS_TLS_X509_DIAGNOSTIC)' > $@.tmp
+	@printf '%s\n' '$(CFLAGS)' 'RUST=$(MAYOS_RUST)' 'SIGNATURE=$(MAYOS_RELEASE_SIGNATURE)' 'KEY=$(MAYOS_RELEASE_PUBKEY_HEX)' 'TESTKEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY)' 'ABDIAG=$(MAYOS_AB_DISK_DIAGNOSTIC)' 'STAGEDIAG=$(MAYOS_STAGE_DISK_DIAGNOSTIC)' 'SIGNSTREAMDIAG=$(MAYOS_SIGNED_STREAM_DIAGNOSTIC)' 'X509DIAG=$(MAYOS_TLS_X509_DIAGNOSTIC)' > $@.tmp
 	@if ! cmp -s $@.tmp $@; then mv $@.tmp $@; else rm -f $@.tmp; fi
 build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
 	$(PYTHON) scripts/font.py
@@ -238,6 +244,10 @@ test-stage-qemu: all test-stage-codec
 test-ab-journal-qemu: all test-rust-host
 	@test "$(MAYOS_AB_DISK_DIAGNOSTIC)" = "1" || (echo "Set MAYOS_AB_DISK_DIAGNOSTIC=1" >&2; exit 1)
 	$(PYTHON) scripts/ab_journal_smoke.py
+test-signed-stream-qemu: all test-stream-integrity test-rust-host
+	@test "$(MAYOS_SIGNED_STREAM_DIAGNOSTIC)" = "1" || (echo "Set MAYOS_SIGNED_STREAM_DIAGNOSTIC=1 for QEMU only" >&2; exit 1)
+	@test -n "$(MAYOS_RELEASE_PUBKEY_HEX)" || (echo "Pinned public key is required" >&2; exit 1)
+	$(PYTHON) scripts/signed_stream_smoke.py --package-dir "$(PACKAGE_DIR)"
 test-stream-integrity-qemu: all test-stream-integrity test-rust-host
 	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for Rust+C QEMU digest test" >&2; exit 1)
 	$(PYTHON) scripts/stream_integrity_smoke.py

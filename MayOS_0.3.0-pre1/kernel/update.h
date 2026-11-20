@@ -50,5 +50,11 @@ const char *may_update_auth_status(void);
 int may_update_authenticate_staged(void);
 const char *may_update_auth_staged_status(void);
 
+/* Only for explicitly flagged QEMU diagnostics with temporary signing key.
+ * Real update installation is unavailable. */
+#ifdef MAYOS_SIGNED_STREAM_DIAGNOSTIC
+int may_update_signed_stream_diagnostic(void);
+const char *may_update_signed_stream_status(void);
+#endif
 
 #endif
