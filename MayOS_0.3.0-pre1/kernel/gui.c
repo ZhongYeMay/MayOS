@@ -995,6 +995,16 @@ static void shell(void) {
 #else
             emit("BearSSL X.509 test CA: not linked in production build");
 #endif
+        } else if(argc>1 && !strcmp(argv[1],"body-test")) {
+#ifdef MAYOS_RUST_CORE
+            int passed=mayrs_http_body_selftest();
+            emit(passed ? "HTTP body streaming budget PASS (NO DOWNLOAD)"
+                        : "HTTP body streaming budget FAIL (NO DOWNLOAD)");
+            serial(passed ? "MayOS: strict HTTP body budget self-test PASSED (NO CONNECT)\n"
+                          : "MayOS: strict HTTP body budget self-test FAILED (NO CONNECT)\n");
+#else
+            emit("HTTP body budget needs optional Rust kernel build");
+#endif
         } else if(argc>1 && !strcmp(argv[1],"http-test")) {
 #ifdef MAYOS_RUST_CORE
             int passed=mayrs_http_headers_selftest();
@@ -1024,7 +1034,7 @@ static void shell(void) {
                 serial("MayOS: TLS preflight fail-closed (no HTTPS request sent)\n");
             }
         } else if(argc>1 && strcmp(argv[1],"status")) {
-            emit("Usage: tls status|check <host>|url-test|x509-test|http-test");
+            emit("Usage: tls status|check <host>|url-test|x509-test|http-test|body-test");
         }
         emit("MayKernel HTTPS: DISABLED (no authenticated TLS handshake)");
         emit(may_tls_provider_is_linked()
