@@ -1051,6 +1051,9 @@ static void shell(void) {
         emit(may_tls_provider_is_linked()
             ? "BearSSL TLS engine: linked for isolated testing ONLY"
             : "BearSSL TLS engine: not linked in this build");
+        emit(may_tls_provider_scalar_only()
+            ? "Bare-metal cipher: portable ChaCha20/Poly1305 (NO HTTPS)"
+            : "Bare-metal scalar cipher policy: unavailable");
         emit(state->hardware_entropy_observed
             ? "CPU RDRAND: sampled (NOT a cryptographic DRBG)"
             : "CPU RDRAND: unavailable or health check failed");
