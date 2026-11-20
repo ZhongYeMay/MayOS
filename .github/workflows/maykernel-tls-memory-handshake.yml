@@ -69,6 +69,18 @@ jobs:
             MAYOS_TLS_HANDSHAKE_DIAGNOSTIC=1 test-tls-handshake-qemu
           nm -g MayOS_0.3.0-pre1/build/mayos.elf | grep ' may_tls_memory_handshake_selftest$'
           echo "PASS: genuine BearSSL TLS1.2 handshake client and server linked into native MayKernel"
+      - name: Diagnose guest invalid-opcode RIP from real native ELF symbols
+        if: always()
+        run: |
+          if test -f MayOS_0.3.0-pre1/build/mayos.elf; then
+            echo "GUEST INVALID-OPCODE ADDRESS 0x11b370:"
+            addr2line -f -C -e MayOS_0.3.0-pre1/build/mayos.elf 0x11b370 || true
+            objdump -d -M intel MayOS_0.3.0-pre1/build/mayos.elf |
+              grep -B 18 -A 22 -F '11b370:' || true
+            echo "BearSSL TLS fixture symbol:"
+            nm -n MayOS_0.3.0-pre1/build/mayos.elf |
+              grep -E 'may_tls_memory_handshake|br_ssl_client_init_full|br_ssl_engine_' | head -25 || true
+          fi
       - name: Preserve framebuffer and serial evidence ONLY (no ephemeral private keys)
         if: always()
         uses: actions/upload-artifact@v4
