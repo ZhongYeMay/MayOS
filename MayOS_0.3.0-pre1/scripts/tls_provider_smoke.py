@@ -13,6 +13,8 @@ def main():
         vm.key("f1")
         vm.cmd("tls status")
         vm.wait("BearSSL TLS engine: linked for isolated testing ONLY")
+        vm.wait("MayOS: BearSSL scalar-only AEAD backend selected (NO TRUST/NO HTTPS)")
+        vm.wait("Bare-metal cipher: portable ChaCha20/Poly1305 (NO HTTPS)")
         vm.wait("MayKernel HTTPS: DISABLED (no authenticated TLS handshake)")
         vm.cmd("tls check api.github.com")
         vm.wait("TLS BLOCKED: cryptographic DRBG is unavailable")
