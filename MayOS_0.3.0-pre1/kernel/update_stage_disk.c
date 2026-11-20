@@ -23,7 +23,11 @@ static int io_ready(int read_data) {
         if(!status||status==255u)return 0;
         if((status&0x80u)==0u) {
             if(status&0x21u)return 0;
-            if(!read_data||(status&0x08u))return 1;
+            /* Before/after ATA commands, completion means DRQ has cleared.
+             * A prior version returned while a write remained in DRQ and
+             * could issue FLUSH before the device had accepted the sector. */
+            if(read_data ? ((status&0x08u)!=0u) :
+                           ((status&0x08u)==0u))return 1;
         }
     }
     return 0;
@@ -108,9 +112,22 @@ static int write_header(u32 lba,const MayStageRecord *record) {
     if(lba!=MAY_STAGE_HEADER_A&&lba!=MAY_STAGE_HEADER_B)return 0;
     may_stage_encode(sector_data,record);
     if(!owned_header(sector_data))return 0;
-    if(!sector_io(lba,sector_data,1)||!flush_disk()||
-       !sector_io(lba,sector_readback,0)||
-       !equals(sector_data,sector_readback,512u))return 0;
+    if(!sector_io(lba,sector_data,1)) {
+        serial("MayOS: staging ATA header WRITE timed out (NO INSTALL)\n");
+        return 0;
+    }
+    if(!flush_disk()) {
+        serial("MayOS: staging ATA header FLUSH failed (NO INSTALL)\n");
+        return 0;
+    }
+    if(!sector_io(lba,sector_readback,0)) {
+        serial("MayOS: staging ATA header READBACK failed (NO INSTALL)\n");
+        return 0;
+    }
+    if(!equals(sector_data,sector_readback,512u)) {
+        serial("MayOS: staging ATA header READBACK mismatch (NO INSTALL)\n");
+        return 0;
+    }
     return 1;
 }
 static int verify_blank_staging_area(void) {
