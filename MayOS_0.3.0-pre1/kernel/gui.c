@@ -912,6 +912,16 @@ static void shell(void) {
             may_update_authenticate_local();
         else if (argc > 1 && !strcmp(argv[1], "auth-stage"))
             may_update_authenticate_staged();
+        else if (argc > 1 && !strcmp(argv[1], "auth-stream-test")) {
+#ifdef MAYOS_SIGNED_STREAM_DIAGNOSTIC
+            int passed=may_update_signed_stream_diagnostic();
+            emit(passed ? "Signed 64KiB HTTP stream diagnostic PASS (NO DOWNLOAD)"
+                        : "Signed 64KiB HTTP stream diagnostic REJECTED (NO DOWNLOAD)");
+            emit(may_update_signed_stream_status());
+#else
+            emit("Signed stream: disabled outside isolated QEMU diagnostic");
+#endif
+        }
         else if (argc > 1 &&
             (!strcmp(argv[1], "stage-begin") ||
              !strcmp(argv[1], "stage-half") ||
@@ -958,7 +968,7 @@ static void shell(void) {
             emit("A/B boot policy: requires optional Rust kernel build");
 #endif
         } else if (argc > 1 && strcmp(argv[1], "status")) {
-            emit("Usage: update check|verify|auth|auth-stage|recovery-test|stage-begin|stage-half|stage-rest|stage-verify|stage-status|status");
+            emit("Usage: update check|verify|auth|auth-stage|auth-stream-test|recovery-test|stage-begin|stage-half|stage-rest|stage-verify|stage-status|status");
             return;
         }
         emit(may_update_status());
