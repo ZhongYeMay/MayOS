@@ -19,6 +19,9 @@
 #ifdef MAYOS_TLS_X509_DIAGNOSTIC
 extern int may_tls_x509_fixture_selftest(void);
 #endif
+#ifdef MAYOS_TLS_HANDSHAKE_DIAGNOSTIC
+extern int may_tls_memory_handshake_selftest(void);
+#endif
 #endif
 #define MAYOS_RELEASE MAYOS_VERSION
 #ifdef MAYOS_LINUX
@@ -986,7 +989,15 @@ static void shell(void) {
         emit("TLS preflight: MayKernel-native only");
 #else
         const MayTlsSecurityReport *state=may_tls_security_report();
-        if(argc>1 && !strcmp(argv[1],"x509-test")) {
+        if(argc>1 && !strcmp(argv[1],"memory-handshake")) {
+#ifdef MAYOS_TLS_HANDSHAKE_DIAGNOSTIC
+            int passed=may_tls_memory_handshake_selftest();
+            emit(passed ? "BearSSL TLS1.2 memory-only handshake PASS (NO HTTPS)"
+                        : "BearSSL TLS1.2 memory-only handshake FAILED (NO HTTPS)");
+#else
+            emit("TLS test-server memory handshake is DISABLED in normal MayOS");
+#endif
+        } else if(argc>1 && !strcmp(argv[1],"x509-test")) {
 #ifdef MAYOS_TLS_X509_DIAGNOSTIC
             int passed=may_tls_x509_fixture_selftest();
             emit(passed
@@ -1034,7 +1045,7 @@ static void shell(void) {
                 serial("MayOS: TLS preflight fail-closed (no HTTPS request sent)\n");
             }
         } else if(argc>1 && strcmp(argv[1],"status")) {
-            emit("Usage: tls status|check <host>|url-test|x509-test|http-test|body-test");
+            emit("Usage: tls status|check <host>|url-test|x509-test|http-test|body-test|memory-handshake");
         }
         emit("MayKernel HTTPS: DISABLED (no authenticated TLS handshake)");
         emit(may_tls_provider_is_linked()
