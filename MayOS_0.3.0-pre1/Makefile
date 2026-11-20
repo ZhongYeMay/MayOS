@@ -95,11 +95,11 @@ ifeq ($(MAYOS_RUST),1)
 CFLAGS += -DMAYOS_RUST_CORE
 RUST_LIB := build/libmaykernel_rust.a
 ifeq ($(MAYOS_RELEASE_SIGNATURE),1)
-build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs rust/maykernel_policy/src/release_url.rs rust/maykernel_policy/src/http_framing.rs rust/maykernel_policy/Cargo.toml build/config-flags.txt | build
+build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs rust/maykernel_policy/src/release_url.rs rust/maykernel_policy/src/http_framing.rs rust/maykernel_policy/src/http_body_budget.rs rust/maykernel_policy/Cargo.toml build/config-flags.txt | build
 	CARGO_TARGET_DIR=$(CURDIR)/build/cargo RUSTFLAGS='-C panic=abort -C no-redzone=yes -C relocation-model=static --cfg curve25519_dalek_backend="serial"' $(CARGO) build --locked --manifest-path rust/maykernel_policy/Cargo.toml --target $(RUST_TARGET) --release --no-default-features --features release-signature$(RUST_AB_FEATURE)
 	cp build/cargo/$(RUST_TARGET)/release/libmaykernel_policy.a $@
 else
-build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs rust/maykernel_policy/src/release_url.rs rust/maykernel_policy/src/http_framing.rs build/config-flags.txt | build
+build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs rust/maykernel_policy/src/release_url.rs rust/maykernel_policy/src/http_framing.rs rust/maykernel_policy/src/http_body_budget.rs build/config-flags.txt | build
 	$(RUSTC) --edition=2021 --crate-name maykernel_policy \
 	  --crate-type staticlib --target $(RUST_TARGET) -C panic=abort \
 	  -C opt-level=s -C codegen-units=1 -C relocation-model=static \
@@ -123,7 +123,7 @@ build/summer_art.o: build/summer_art.h
 	$(LD) -m elf_x86_64 -r -b binary -o $@ build/summer_art.bin
 build/galgame.o: build/summer_art.h
 endif
-.PHONY: test-http-guard-qemu test-tls-x509-qemu test-rust-url-qemu test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video test-ab-journal-qemu test-stage-codec test-stage-qemu
+.PHONY: test-http-budget-qemu test-http-guard-qemu test-tls-x509-qemu test-rust-url-qemu test-bearssl-qemu test-rust-host test-rust-qemu test-rust-bearssl-qemu test-rust-video test-ab-journal-qemu test-stage-codec test-stage-qemu
 .PHONY: all clean run test test-update test-net test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security test-tls-qemu linux linux-update dual run-dual test-dual run-uefi test-uefi
 all: build/mayos.iso build/mayos-disk.img
 # Build flags and pinned key are part of the artifact identity. Never reuse
@@ -209,7 +209,7 @@ test-tls-qemu: all test-security
 	$(PYTHON) scripts/tls_smoke.py
 # Rust host unit tests run with std only in the test harness. The target
 # MayKernel library remains no_std with no allocator.
-build/rust_manifest_tests: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs rust/maykernel_policy/src/release_url.rs rust/maykernel_policy/src/http_framing.rs | build
+build/rust_manifest_tests: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs rust/maykernel_policy/src/release_url.rs rust/maykernel_policy/src/http_framing.rs rust/maykernel_policy/src/http_body_budget.rs | build
 	$(RUSTC) --edition=2021 --crate-name maykernel_policy --test $< -o $@
 test-rust-host: build/rust_manifest_tests
 	./build/rust_manifest_tests
@@ -232,6 +232,9 @@ test-stage-qemu: all test-stage-codec
 test-ab-journal-qemu: all test-rust-host
 	@test "$(MAYOS_AB_DISK_DIAGNOSTIC)" = "1" || (echo "Set MAYOS_AB_DISK_DIAGNOSTIC=1" >&2; exit 1)
 	$(PYTHON) scripts/ab_journal_smoke.py
+test-http-budget-qemu: all test-rust-host
+	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for body budget QEMU" >&2; exit 1)
+	$(PYTHON) scripts/http_body_budget_smoke.py
 test-http-guard-qemu: all test-rust-host
 	@test "$(MAYOS_RUST)" = "1" || (echo "Set MAYOS_RUST=1 for Rust HTTP preflight QEMU test" >&2; exit 1)
 	$(PYTHON) scripts/http_guard_smoke.py
