@@ -2,6 +2,9 @@
 #include "version.h"
 #ifndef MAYOS_LINUX
 #include "io.h"
+#include "pci.h"
+#include "ahci.h"
+#include "nvme.h"
 #endif
 
 /* MayFS uses a checksummed fixed-size snapshot on primary IDE master. */
@@ -16,6 +19,9 @@ File files[FS_MAX];
 int disk_ready;
 #ifndef MAYOS_LINUX
 static u32 disk_sectors;
+static int storage_ahci;
+static int storage_nvme;
+static u16 ata_command_base = 0x1f0, ata_control_base = 0x3f6;
 static int backup_enabled;
 static int active_slot;
 static u32 fs_generation;
@@ -34,7 +40,7 @@ static u8 backup_image[FS_SECTORS * 512];
 
 static int ata_wait(int data) {
     for (u32 t = 0; t < 1000000; t++) {
-        u8 s = inb(0x1f7);
+        u8 s = inb((u16)(ata_command_base + 7));
         if (s == 0 || s == 255)
             return 0;
         if (!(s & 0x80)) {
@@ -46,37 +52,46 @@ static int ata_wait(int data) {
     }
     return 0;
 }
-static int sector(u32 lba, void *buf, int write) {
+static int ata_sector(u32 lba, void *buf, int write) {
     if (lba >= FS_TOTAL_SECTORS || lba >= disk_sectors)
         return 0;
-    outb(0x1f6, 0xe0 | ((lba >> 24) & 15));
+    outb((u16)(ata_command_base + 6), 0xe0 | ((lba >> 24) & 15));
     for (int i = 0; i < 4; i++)
-        inb(0x3f6);
+        inb(ata_control_base);
     if (!ata_wait(-1))
         return 0;
-    outb(0x1f2, 1);
-    outb(0x1f3, lba);
-    outb(0x1f4, lba >> 8);
-    outb(0x1f5, lba >> 16);
-    outb(0x1f7, write ? 0x30 : 0x20);
+    outb((u16)(ata_command_base + 2), 1);
+    outb((u16)(ata_command_base + 3), lba);
+    outb((u16)(ata_command_base + 4), lba >> 8);
+    outb((u16)(ata_command_base + 5), lba >> 16);
+    outb((u16)(ata_command_base + 7), write ? 0x30 : 0x20);
     if (!ata_wait(1))
         return 0;
     u16 *p = buf;
     for (int i = 0; i < 256; i++) {
         if (write)
-            outw(0x1f0, p[i]);
+            outw(ata_command_base, p[i]);
         else
-            p[i] = inw(0x1f0);
+            p[i] = inw(ata_command_base);
     }
     return ata_wait(0);
 }
+static int sector(u32 lba, void *buf, int write) {
+    if (lba >= FS_TOTAL_SECTORS || lba >= disk_sectors) return 0;
+    if (storage_nvme)
+        return write ? nvme_write_sector(lba, buf) : nvme_read_sector(lba, buf);
+    if (storage_ahci)
+        return write ? ahci_write_sector(lba, buf) : ahci_read_sector(lba, buf);
+    return ata_sector(lba, buf, write);
+}
 static u32 ata_capacity(void) {
     u16 identify[256];
-    outb(0x1f6, 0xe0);
-    for (int i = 0; i < 4; i++) inb(0x3f6);
-    outb(0x1f7, 0xec); /* ATA IDENTIFY DEVICE, primary master */
+    if (!ata_command_base || !ata_control_base) return 0;
+    outb((u16)(ata_command_base + 6), 0xe0);
+    for (int i = 0; i < 4; i++) inb(ata_control_base);
+    outb((u16)(ata_command_base + 7), 0xec); /* ATA IDENTIFY DEVICE, primary master */
     if (!ata_wait(1)) return 0;
-    for (int i = 0; i < 256; i++) identify[i] = inw(0x1f0);
+    for (int i = 0; i < 256; i++) identify[i] = inw(ata_command_base);
     u32 sectors = (u32)identify[60] | ((u32)identify[61] << 16);
     /* Only LBA28 addressing is implemented in sector(). */
     if (sectors > 0x0fffffffU) sectors = 0x0fffffffU;
@@ -164,7 +179,9 @@ static int write_snapshot(u32 slot) {
     }
     if (!sector(base, fs_image, 1))
         return 0;
-    outb(0x1f7, 0xe7); /* ATA FLUSH CACHE */
+    if (storage_nvme) return nvme_flush();
+    if (storage_ahci) return ahci_flush();
+    outb((u16)(ata_command_base + 7), 0xe7); /* ATA FLUSH CACHE */
     return ata_wait(0);
 }
 int fs_sync(void) {
@@ -290,7 +307,22 @@ void fs_init(void) {
     int valid = 0;
     serial("MayOS Linux: RAM filesystem; no block devices opened\n");
 #else
-    disk_sectors = ata_capacity();
+    storage_nvme = nvme_init();
+    storage_ahci = !storage_nvme && ahci_init();
+    if (storage_nvme) {
+        u64 sectors = nvme_sector_count();
+        disk_sectors = sectors > 0xffffffffu ? 0xffffffffu : (u32)sectors;
+    } else if (storage_ahci) {
+        u64 sectors = ahci_sector_count();
+        disk_sectors = sectors > 0xffffffffu ? 0xffffffffu : (u32)sectors;
+    } else {
+        pci_ide_primary_ports(&ata_command_base, &ata_control_base);
+        if (ata_command_base) {
+            char port[12]; number(port, ata_command_base);
+            serial("MayOS: ATA primary command port="); serial(port); serial("\n");
+        }
+        disk_sectors = ata_capacity();
+    }
     disk_ready = disk_sectors >= FS_SECTORS;
     backup_enabled = 0;
     active_slot = 0;

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Real MayKernel/QEMU RTL8139 ARP + IPv4 UDP + DNS-A fixture acceptance.
+"""Real MayKernel/QEMU Ethernet ARP + IPv4 UDP + DNS-A fixture acceptance.
 
 The host loopback server provides deterministic, synthetic packets; this does
 NOT exercise public DNS, Internet connectivity, or GitHub updates.
 The DHCP handshake below uses QEMU SLIRP's actual DHCP service.
 """
+import argparse
 import socket
 import threading
 import time
@@ -67,7 +68,7 @@ def tcp_fixture_server(listener, shutdown, events):
                 continue
 
 
-def main():
+def main(model):
     server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server.bind(("127.0.0.1", 10053))
     shutdown = threading.Event()
@@ -84,20 +85,24 @@ def main():
     tcp_thread.start()
     vm = None
     try:
-        vm = VM(None, "maykernel-rtl8139-arp", nic=True)
-        vm.wait("MayOS: RTL8139 native PCI Ethernet ready")
+        vm = VM(None, f"maykernel-{model}-arp", nic=model)
+        if model == "rtl8139":
+            vm.wait("MayOS: RTL8139 native PCI Ethernet ready")
+        else:
+            vm.wait("MayOS: E1000 generic Ethernet rings ready")
         vm.key("f1")
         vm.cmd("net status")
-        vm.wait("Network: RTL8139 PCI Ethernet ready (polled, L2 only).")
+        vm.wait("Network: RTL8139 PCI Ethernet ready (polled, L2 only)." if model == "rtl8139"
+                else "Network: E1000/E1000e PCI Ethernet ready.")
         vm.cmd("net qemu-probe")
-        vm.wait("MayOS: RTL8139 QEMU ARP probe sent to 10.0.2.2")
-        vm.wait("MayOS: RTL8139 ARP reply received from QEMU gateway 10.0.2.2")
+        vm.wait("MayOS: Ethernet QEMU ARP probe sent to 10.0.2.2")
+        vm.wait("MayOS: Ethernet ARP reply received from QEMU gateway 10.0.2.2")
         vm.cmd("net udp-probe")
-        vm.wait("MayOS: RTL8139 IPv4 UDP echo probe sent to QEMU host")
-        vm.wait("MayOS: RTL8139 IPv4 UDP echo validated from QEMU host")
+        vm.wait("MayOS: Ethernet IPv4 UDP echo probe sent to QEMU host")
+        vm.wait("MayOS: Ethernet IPv4 UDP echo validated from QEMU host")
         vm.cmd("net dns-probe")
-        vm.wait("MayOS: RTL8139 DNS fixture request sent over IPv4 UDP")
-        vm.wait("MayOS: RTL8139 DNS fixture response validated over IPv4 UDP")
+        vm.wait("MayOS: Ethernet DNS fixture request sent over IPv4 UDP")
+        vm.wait("MayOS: Ethernet DNS fixture response validated over IPv4 UDP")
         vm.cmd("net status")
         vm.wait("QEMU IPv4 UDP echo: validated")
         vm.wait("QEMU synthetic DNS A response: validated")
@@ -167,4 +172,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--model", choices=("rtl8139", "e1000", "e1000e"), default="rtl8139")
+    main(parser.parse_args().model)

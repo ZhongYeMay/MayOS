@@ -7,12 +7,21 @@ ROOT=Path(__file__).resolve().parents[1]
 BUILD=ROOT/'build'
 QEMU=os.environ.get('QEMU','qemu-system-x86_64')
 class VM:
-    def __init__(self,disk,tag,nic=False):
+    def __init__(self,disk,tag,nic=False,*,machine='pc',storage='ide'):
         self.sock=BUILD/f'{tag}.sock';self.sock.unlink(missing_ok=True)
         self.log=BUILD/f'{tag}.log'
-        args=[QEMU,'-machine','pc','-accel','tcg','-cpu','max','-m','128','-vga','std','-display','none','-cdrom',str(BUILD/'mayos.iso'),'-boot','d','-serial',f'file:{self.log}','-qmp',f'unix:{self.sock},server=on,wait=off','-no-reboot','-no-shutdown']
-        if disk is not None:args+=['-drive',f'file={disk},format=raw,if=ide,index=0']
-        if nic:args+=['-nic','user,model=rtl8139']
+        args=[QEMU,'-machine',machine,'-accel','tcg','-cpu','max','-m','128','-vga','std','-display','none','-cdrom',str(BUILD/'mayos.iso'),'-boot','d','-serial',f'file:{self.log}','-qmp',f'unix:{self.sock},server=on,wait=off','-no-reboot','-no-shutdown']
+        if disk is not None:
+            if storage=='ahci':
+                args+=['-drive',f'file={disk},format=raw,if=none,id=mayfs',
+                       '-device','ide-hd,drive=mayfs,bus=ide.0']
+            elif storage=='nvme':
+                args+=['-drive',f'file={disk},format=raw,if=none,id=mayfs',
+                       '-device','nvme,drive=mayfs,serial=MAYOS-NVME']
+            else:args+=['-drive',f'file={disk},format=raw,if=ide,index=0']
+        if nic:
+            model = 'rtl8139' if nic is True else nic
+            args += ['-nic', f'user,model={model}']
         if os.environ.get('QEMU_DATA_DIR'):args+=['-L',os.environ['QEMU_DATA_DIR']]
         self.proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=(BUILD/f'{tag}-qemu.log').open('w'))
         until=time.monotonic()+20
@@ -79,6 +88,8 @@ def main():
     vm=VM(disk,'test-first')
     try:
         vm.shot('desktop')
+        vm.wait('MayOS: PCI enumeration complete')
+        vm.wait('class 01:01')
         vm.key('f1');vm.cmd('neofetch');vm.wait('OS: MayOS 0.5.0-pre2-dev');vm.wait('Kernel: MayKernel x86_64 (custom)');vm.shot('terminal')
         vm.cmd('memtest');vm.wait('memtest: PASS')
         vm.cmd('mkdir Projects');vm.cmd('write Projects/persist.txt reboot-survives')

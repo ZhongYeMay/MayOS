@@ -24,7 +24,7 @@ FS_POWERLOSS_SELFTEST ?= 0
 ifeq ($(FS_POWERLOSS_SELFTEST),1)
 CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
 endif
-OBJECTS := build/boot64.o build/core.o build/fs.o build/gui.o build/galgame.o build/update.o build/net.o build/net_ipv4.o build/net_dhcp.o build/sha256.o build/net_tcp.o build/net_tcp_retry.o build/security_clock.o build/security_entropy.o build/security_tls.o build/security_tls_provider.o
+OBJECTS := build/boot64.o build/core.o build/acpi.o build/pci.o build/ahci.o build/nvme.o build/xhci.o build/e1000.o build/hda.o build/fs.o build/gui.o build/galgame.o build/update.o build/net.o build/net_ipv4.o build/net_dhcp.o build/sha256.o build/net_tcp.o build/net_tcp_retry.o build/security_clock.o build/security_entropy.o build/security_tls.o build/security_tls_provider.o
 
 # This is an OPTIONAL vendor-link TEST, not an HTTPS enable switch.
 # BEARSSL_SOURCE must be a locally checked-out, pinned upstream source tree.
@@ -175,6 +175,16 @@ build/security_tls.o: kernel/security_tls.h kernel/security_tls_provider.h kerne
 build/security_tls_provider.o: kernel/security_tls_provider.h kernel/security_tls.h
 build/security_clock.o: kernel/security_clock.h kernel/io.h
 build/security_entropy.o: kernel/security_entropy.h
+build/core.o: kernel/framebuffer.h kernel/boot64.S
+build/acpi.o: kernel/acpi.h
+build/pci.o: kernel/pci.h kernel/io.h
+build/ahci.o: kernel/ahci.h kernel/pci.h
+build/nvme.o: kernel/nvme.h kernel/pci.h
+build/xhci.o: kernel/xhci.h kernel/pci.h
+build/e1000.o: kernel/e1000.h kernel/pci.h
+build/net.o: kernel/pci.h kernel/e1000.h
+build/fs.o: kernel/pci.h kernel/ahci.h kernel/nvme.h
+build/hda.o: kernel/hda.h kernel/pci.h
 build/galgame.o: kernel/galgame.h
 build/boot64.o: kernel/boot64.S | build
 	$(CC) -m64 -c $< -o $@
@@ -294,9 +304,14 @@ test-net: all test-net-codec test-dhcp test-tcp test-tcp-retry test-security
 	$(PYTHON) scripts/tls_smoke.py
 test: all test-update test-net-codec test-dhcp test-tcp test-tcp-retry test-sha256 test-update-verify test-security
 	$(PYTHON) scripts/smoke.py
+	$(PYTHON) scripts/ahci_smoke.py
+	$(PYTHON) scripts/nvme_smoke.py
+	$(PYTHON) scripts/pci_smoke.py
 	$(PYTHON) scripts/ui_smoke.py
 	$(PYTHON) scripts/settings_smoke.py
 	$(PYTHON) scripts/net_smoke.py
+	$(PYTHON) scripts/net_smoke.py --model e1000
+	$(PYTHON) scripts/net_smoke.py --model e1000e
 	$(PYTHON) scripts/tls_smoke.py
 	$(PYTHON) scripts/easter_smoke.py
 # An explicit Linux build resolves latest stable at kernel.org. `dual` reuses

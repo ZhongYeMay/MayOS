@@ -25,5 +25,8 @@ static inline u32 inl(u16 p) {
     __asm__ volatile("inl %1,%0" : "=a"(v) : "Nd"(p));
     return v;
 }
+static inline void io_wait(void) {
+    outb(0x80, 0);
+}
 
 #endif
