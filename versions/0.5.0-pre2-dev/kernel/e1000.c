@@ -1,4 +1,5 @@
 #include "core.h"
+#include "procfs.h"
 #include "pci.h"
 #include "e1000.h"
 
@@ -104,6 +105,7 @@ int e1000_send(const void *frame, u32 length) {
     __asm__ volatile("mfence" ::: "memory");
     tx_index = (tx_index + 1u) % TX_COUNT;
     write_reg(0x3818, tx_index);
+    mayperf_note_network(1, length);
     return 1;
 }
 
@@ -118,5 +120,6 @@ int e1000_receive(void *frame, u32 capacity) {
     descriptor->status = 0;
     write_reg(0x2818, rx_index);
     rx_index = (rx_index + 1u) % RX_COUNT;
+    if (length) mayperf_note_network(0, length);
     return (int)length;
 }
