@@ -486,6 +486,8 @@ static int keycode(unsigned int code, int value) {
         case KEY_F2: return MAYOS_KEY_TASK_MANAGER;
         case KEY_UP: return 0x101;
         case KEY_DOWN: return 0x102;
+        case KEY_LEFT: return MAYOS_KEY_LEFT;
+        case KEY_RIGHT: return MAYOS_KEY_RIGHT;
         case KEY_DELETE: return 0x103;
         case KEY_LEFTMETA: case KEY_RIGHTMETA: return 0x104;
         case KEY_KPENTER: return '\n';

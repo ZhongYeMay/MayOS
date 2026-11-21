@@ -155,7 +155,7 @@ build:
 build/config-flags.txt: FORCE | build
 	@printf '%s\n' '$(CFLAGS)' 'RUST=$(MAYOS_RUST)' 'SIGNATURE=$(MAYOS_RELEASE_SIGNATURE)' 'KEY=$(MAYOS_RELEASE_PUBKEY_HEX)' 'TESTKEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY)' 'ABDIAG=$(MAYOS_AB_DISK_DIAGNOSTIC)' 'STAGEDIAG=$(MAYOS_STAGE_DISK_DIAGNOSTIC)' 'SIGNSTREAMDIAG=$(MAYOS_SIGNED_STREAM_DIAGNOSTIC)' 'SIGNEDATADIAG=$(MAYOS_SIGNED_ATA_STREAM_DIAGNOSTIC)' 'X509DIAG=$(MAYOS_TLS_X509_DIAGNOSTIC)' > $@.tmp
 	@if ! cmp -s $@.tmp $@; then mv $@.tmp $@; else rm -f $@.tmp; fi
-build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
+build/font.h: scripts/font.py $(wildcard kernel/*.c) kernel/locale.h kernel/locale_strings.h | build
 	$(PYTHON) scripts/font.py
 build/boot_logo.h: scripts/boot_art.py assets/limine-mayos-brand.png | build
 	$(PYTHON) scripts/boot_art.py $@

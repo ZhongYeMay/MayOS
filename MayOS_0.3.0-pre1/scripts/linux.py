@@ -62,6 +62,8 @@ INPUT_FILES = {
     "framebuffer_adapter_sha256": ROOT / "kernel/framebuffer.h",
     "font_core_source_sha256": ROOT / "kernel/core.c",
     "font_generator_sha256": ROOT / "scripts/font.py",
+    "locale_catalog_sha256": ROOT / "kernel/locale.h",
+    "locale_strings_sha256": ROOT / "kernel/locale_strings.h",
     "photo_generator_sha256": ROOT / "scripts/photo.py",
     "photo_sha256": ROOT / "assets/easter-cat.jpg",
     "linux_readme_sha256": ROOT / "linux/README.md",

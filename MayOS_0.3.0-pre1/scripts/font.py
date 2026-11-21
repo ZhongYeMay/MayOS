@@ -5,7 +5,9 @@ import os
 from PIL import Image, ImageFont, ImageDraw
 root=Path(__file__).resolve().parents[1]
 chars=set(range(32,127))
-for source in (root/'kernel').glob('*.c'):
+sources = sorted((root/'kernel').glob('*.c')) + [
+    root/'kernel/locale.h', root/'kernel/locale_strings.h']
+for source in sources:
     chars.update(map(ord,source.read_text()))
 # Native story literals are generated before font.h when SUMMER_SITE is set.
 story_header=root/'build/summer_story.h'
@@ -15,6 +17,16 @@ chars=sorted(c for c in chars if c>=32 and c<65536)
 font_path=os.environ.get('MAYOS_FONT','/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc')
 font=ImageFont.truetype(font_path,15,index=2)
 ascii_font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',13)
+
+def bitmap(codepoint, face):
+    image = Image.new('L', (16, 20))
+    symbol = chr(codepoint) in '▯▾'
+    narrow = codepoint < 0x250 or codepoint == 0x2019
+    ImageDraw.Draw(image).text(
+        (3 if symbol else 0, 0 if narrow or symbol else -3),
+        chr(codepoint), font=ascii_font if narrow or symbol else face, fill=255)
+    return image.tobytes()
+
 out=root/'build/font.h'
 out.parent.mkdir(exist_ok=True)
 with out.open('w') as f:
@@ -22,12 +34,24 @@ with out.open('w') as f:
     f.write(f'#define FONT_COUNT {len(chars)}\n')
     f.write('static const unsigned short font_code[]={'+','.join(map(str,chars))+'};\n')
     f.write('static const unsigned char font_bits[][320]={\n')
-    for c in chars:
-        im=Image.new('L',(16,20));d=ImageDraw.Draw(im)
-        symbol=chr(c) in '▯▾'
-        d.text((3 if symbol else 0,0 if c<128 or symbol else -3),chr(c),font=ascii_font if c<128 or symbol else font,fill=255)
-        f.write('{'+','.join(map(str,im.tobytes()))+'},\n')
+    base = [bitmap(c, font) for c in chars]
+    for bits in base:
+        f.write('{'+','.join(map(str,bits))+'},\n')
     f.write('};\n')
+    # Keep only glyphs that actually differ from the simplified-Chinese atlas.
+    for region, face_index in (('ja', 0), ('ko', 1), ('tw', 3)):
+        face = ImageFont.truetype(font_path, 15, index=face_index)
+        cells, indices = [bytes(320)], []
+        for c, original in zip(chars, base):
+            variant = bitmap(c, face) if c >= 0x3000 else original
+            indices.append(len(cells) if variant != original else 0)
+            if variant != original:
+                cells.append(variant)
+        f.write(f'static const unsigned short font_{region}_index[]={{'+','.join(map(str,indices))+'};\n')
+        f.write(f'static const unsigned char font_{region}_bits[][320]={{\n')
+        for bits in cells:
+            f.write('{'+','.join(map(str,bits))+'},\n')
+        f.write('};\n')
     # The reference About card is large, proportional and sans-serif rather
     # than the 13px monospace system bitmap. Rasterize only our UI Latin glyphs
     # to a separate source-specific alpha atlas. The final OS uses no font files.

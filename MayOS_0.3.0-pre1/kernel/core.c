@@ -573,6 +573,10 @@ int input_poll(int *mx, int *my, int *buttons, int *key) {
                     *key = 0x101;
                 if (v == 80)
                     *key = 0x102;
+                if (v == 75)
+                    *key = MAYOS_KEY_LEFT;
+                if (v == 77)
+                    *key = MAYOS_KEY_RIGHT;
                 if (v == 83)
                     *key = 0x103;
                 if (v == 91)

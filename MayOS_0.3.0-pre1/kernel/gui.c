@@ -2,6 +2,7 @@
 #include "boot_logo.h"
 #include "core.h"
 #include "font.h"
+#include "locale.h"
 #include "procfs.h"
 #include "task_manager.h"
 #include "material_icons.h"
@@ -42,6 +43,101 @@ static u32 bg = 0x050506, panel = 0x080809, ink = 0xf5f5f6, muted = 0xa1a1a5, li
 static int dark = 1, accent_choice = 0;
 static int desktop_style = 0, pointer_size = 0, show_brand = 1, high_contrast = 0;
 static char profile_name[21] = "may";
+static enum MayLocale display_language = MAY_ZH_HANS;
+static enum MayLocale language_choice = MAY_ZH_HANS;
+static int language_save_failed;
+#define L(key) (translations[MAY_MSG_##key][display_language])
+
+static const char locale_file[] = "MayOS-Language.txt";
+static const char locale_header[] = "MAYLANG1\n";
+
+static int locale_record(const File *file) {
+    u32 size = sizeof(locale_header) - 1;
+    if (file->dir || file->size <= size || file->size >= size + 16) return 0;
+    for (u32 i = 0; i < size; i++)
+        if (file->data[i] != (u8)locale_header[i]) return 0;
+    return 1;
+}
+
+static void locale_load(void) {
+    int index = fs_find(0, locale_file);
+    if (index < 0 || !locale_record(&files[index])) return;
+    const File *file = &files[index];
+    u32 offset = sizeof(locale_header) - 1;
+    display_language = MAY_EN;
+    for (int i = 0; i < MAY_LOCALE_COUNT; i++) {
+        const char *tag = languages[i].tag;
+        if (file->size - offset != strlen(tag)) continue;
+        u32 k = 0;
+        while (tag[k] && file->data[offset + k] == (u8)tag[k]) k++;
+        if (!tag[k]) {
+            display_language = (enum MayLocale)i;
+            break;
+        }
+    }
+    serial("MayOS: display language loaded: ");
+    serial(languages[display_language].tag);
+    serial("\n");
+}
+
+/* Stage a regular MayFS file so older builds retain it during updates. */
+typedef struct {
+    int index, created;
+    u32 old_size;
+    u8 old_record[sizeof(locale_header) + 16];
+} LocaleEdit;
+
+static int locale_stage(enum MayLocale locale, LocaleEdit *edit) {
+    edit->index = fs_find(0, locale_file);
+    if (edit->index < 0) {
+        edit->index = fs_create(0, locale_file, 0);
+        if (edit->index < 0) return 0;
+        edit->created = 1;
+    } else if (!locale_record(&files[edit->index])) {
+        return 0;
+    }
+    File *file = &files[edit->index];
+    edit->old_size = file->size;
+    u32 offset = sizeof(locale_header) - 1;
+    const char *tag = languages[locale].tag;
+    u32 tag_size = strlen(tag);
+    u32 new_size = offset + tag_size;
+    memcpy(edit->old_record, file->data, new_size);
+    memcpy(file->data, locale_header, offset);
+    memcpy(file->data + offset, tag, tag_size);
+    file->size = new_size;
+    return 1;
+}
+
+static void locale_unstage(const LocaleEdit *edit) {
+    if (edit->created) fs_remove(edit->index);
+    else {
+        File *file = &files[edit->index];
+        memcpy(file->data, edit->old_record, file->size);
+        file->size = edit->old_size;
+    }
+}
+
+static void locale_apply(void) {
+    if (language_choice == display_language) return;
+    language_save_failed = 0;
+    if (disk_ready) {
+        LocaleEdit edit = {0};
+        if (!locale_stage(language_choice, &edit)) {
+            language_save_failed = 1;
+            return;
+        }
+        if (!fs_sync()) {
+            locale_unstage(&edit);
+            language_save_failed = 1;
+            return;
+        }
+    }
+    display_language = language_choice;
+    serial("MayOS: display language applied: ");
+    serial(languages[display_language].tag);
+    serial("\n");
+}
 #ifndef MAYOS_LINUX
 static const char profile_file[] = "MayOS-Profile.txt";
 static const char profile_header[] = "MAYPROFILE1\n";
@@ -243,12 +339,19 @@ static void circle(int cx, int cy, int r, u32 c) {
 static int utf(const char **s) {
     const u8 *p = (const u8 *)*s;
     int c = *p++;
-    if (c >= 0xe0) {
+    if (c >= 0xe0 && c <= 0xef && (p[0] & 0xc0) == 0x80 && (p[1] & 0xc0) == 0x80) {
         c = ((c & 15) << 12) | ((p[0] & 63) << 6) | (p[1] & 63);
         p += 2;
-    } else if (c >= 0xc0) {
+        if (c < 0x800 || (c >= 0xd800 && c <= 0xdfff)) c = 0xfffd;
+    } else if (c >= 0xc2 && c <= 0xdf && (p[0] & 0xc0) == 0x80) {
         c = ((c & 31) << 6) | (p[0] & 63);
         p++;
+    } else if (c >= 0xf0 && c <= 0xf4 && (p[0] & 0xc0) == 0x80 &&
+               (p[1] & 0xc0) == 0x80 && (p[2] & 0xc0) == 0x80) {
+        p += 3;
+        c = 0xfffd; /* Current bitmap atlas contains BMP glyphs. */
+    } else if (c >= 128) {
+        c = 0xfffd;
     }
     *s = (const char *)p;
     return c;
@@ -265,6 +368,23 @@ static int glyph(int c) {
             hi = m - 1;
     }
     return 31;
+}
+static int glyph_width(int c) {
+    return c < 0x250 || c == 0x2019 ? 8 : 16;
+}
+static const u8 *glyph_pixels(int glyph_id, enum MayLocale locale) {
+    if (locale == MAY_JA && font_ja_index[glyph_id])
+        return font_ja_bits[font_ja_index[glyph_id]];
+    if (locale == MAY_KO && font_ko_index[glyph_id])
+        return font_ko_bits[font_ko_index[glyph_id]];
+    if (locale == MAY_ZH_HANT && font_tw_index[glyph_id])
+        return font_tw_bits[font_tw_index[glyph_id]];
+    return font_bits[glyph_id];
+}
+static int text_width(const char *s) {
+    int width = 0;
+    while (*s) width += glyph_width(utf(&s));
+    return width;
 }
 static u32 blend(u32 b, u32 f, u32 a) {
     u32 r = (((b >> 16 & 255) * (255 - a) + (f >> 16 & 255) * a) / 255),
@@ -331,7 +451,7 @@ static void maygame_blit(int x,int y,int width,int height,
     }
 }
 #endif
-static int text(int x, int y, const char *s, u32 color) {
+static int text_face(int x, int y, const char *s, u32 color, enum MayLocale locale) {
     int start = x;
     while (*s) {
         int c = utf(&s);
@@ -340,14 +460,15 @@ static int text(int x, int y, const char *s, u32 color) {
             x = start;
             continue;
         }
-        int g = glyph(c), width = c < 128 ? 8 : 16;
+        const u8 *bits = glyph_pixels(glyph(c), locale);
+        int width = glyph_width(c);
         for (int j = 0; j < 20; j++)
             for (int i = 0; i < width; i++) {
                 int px = x + i, py = y + j;
                 if (px >= 0 && px < W && py >= 0 && py < H &&
                     (!draw_clip_active || (px >= draw_clip_left && px < draw_clip_right &&
                                            py >= draw_clip_top && py < draw_clip_bottom))) {
-                    u8 a = font_bits[g][j * 16 + i];
+                    u8 a = bits[j * 16 + i];
                     if (a)
                         pixels[py * W + px] = blend(pixels[py * W + px], color, a);
                 }
@@ -356,6 +477,14 @@ static int text(int x, int y, const char *s, u32 color) {
     }
     return x;
 }
+static int text(int x, int y, const char *s, u32 color) {
+    return text_face(x, y, s, color, display_language);
+}
+#ifndef MAYOS_LINUX
+static void center_text(int x, int width, int y, const char *s, u32 color) {
+    text(x + (width - text_width(s)) / 2, y, s, color);
+}
+#endif
 
 #ifdef MAYOS_TASK_MANAGER
 void may_task_text(int x, int y, const char *label, u32 color) {
@@ -445,10 +574,11 @@ void boot_splash_finish(const char *message) {
 
 static int large_text(int x, int y, const char *s, u32 color) {
     while (*s) {
-        int c = utf(&s), g = glyph(c), width = c < 128 ? 8 : 16;
+        int c = utf(&s), width = glyph_width(c);
+        const u8 *bits = glyph_pixels(glyph(c), display_language);
         for (int j = 0; j < 20; j++)
             for (int i = 0; i < width; i++) {
-                u8 a = font_bits[g][j * 16 + i];
+                u8 a = bits[j * 16 + i];
                 if (a)
                     for (int yy = 0; yy < 2; yy++)
                         for (int xx = 0; xx < 2; xx++) {
@@ -467,8 +597,9 @@ static int large_text(int x, int y, const char *s, u32 color) {
  * Bilinear alpha interpolation, drawn into the native framebuffer. */
 static int heading_text(int x, int y, const char *s, u32 color) {
     while (*s) {
-        int cp = utf(&s), g = glyph(cp);
-        int src_width = cp < 128 ? 8 : 16;
+        int cp = utf(&s);
+        const u8 *bits = glyph_pixels(glyph(cp), display_language);
+        int src_width = glyph_width(cp);
         int out_width = src_width * 3 / 2;
         for (int py = 0; py < 30; py++) {
             int sy = py * 2 / 3, fy = (py * 2) % 3;
@@ -476,10 +607,10 @@ static int heading_text(int x, int y, const char *s, u32 color) {
             for (int px = 0; px < out_width; px++) {
                 int sx = px * 2 / 3, fx = (px * 2) % 3;
                 int sx1 = sx + 1 < src_width ? sx + 1 : sx;
-                int a00 = font_bits[g][sy * 16 + sx];
-                int a10 = font_bits[g][sy * 16 + sx1];
-                int a01 = font_bits[g][sy1 * 16 + sx];
-                int a11 = font_bits[g][sy1 * 16 + sx1];
+            int a00 = bits[sy * 16 + sx];
+            int a10 = bits[sy * 16 + sx1];
+            int a01 = bits[sy1 * 16 + sx];
+            int a11 = bits[sy1 * 16 + sx1];
                 u32 a = (u32)(a00 * (3 - fx) * (3 - fy) +
                               a10 * fx * (3 - fy) +
                               a01 * (3 - fx) * fy +
@@ -690,6 +821,38 @@ static void button(int x, int y, int w, const char *s, int primary) {
     else ui_card(x, y, w, 30, 10, surface_high);
     text(x + 12, y + 4, s, primary ? on_accent : ink);
 }
+enum { LANGUAGE_CELL_H = 47, LANGUAGE_ROW_H = 52, LANGUAGE_GAP = 12 };
+static void language_grid(int x, int y, int width, int choice, u32 foreground, u32 secondary) {
+    int cell = (width - LANGUAGE_GAP) / 2;
+    for (int i = 0; i < MAY_LOCALE_COUNT; i++) {
+        int xx = x + (i % 2) * (cell + LANGUAGE_GAP);
+        int yy = y + (i / 2) * LANGUAGE_ROW_H;
+        ui_card(xx, yy, cell, LANGUAGE_CELL_H, 11, choice == i ? selected_fill : surface_high);
+        text_face(xx + 13, yy + 4, languages[i].name, foreground, (enum MayLocale)i);
+        text(xx + 13, yy + 24, languages[i].tag, secondary);
+        if (choice == i) {
+            stroke(xx + cell - 30, yy + 22, xx + cell - 25, yy + 27, 2, foreground);
+            stroke(xx + cell - 25, yy + 27, xx + cell - 16, yy + 17, 2, foreground);
+        }
+    }
+}
+static int language_hit(int px, int py, int x, int y, int width) {
+    int cell = (width - LANGUAGE_GAP) / 2;
+    for (int i = 0; i < MAY_LOCALE_COUNT; i++) {
+        int xx = x + (i % 2) * (cell + LANGUAGE_GAP);
+        int yy = y + (i / 2) * LANGUAGE_ROW_H;
+        if (px >= xx && px < xx + cell && py >= yy && py < yy + LANGUAGE_CELL_H) return i;
+    }
+    return -1;
+}
+static enum MayLocale language_move(enum MayLocale choice, int key) {
+    int next = choice;
+    if (key == 0x101) next -= 2;       /* Up */
+    else if (key == 0x102) next += 2;  /* Down */
+    else if (key == MAYOS_KEY_LEFT && next % 2) next--;
+    else if (key == MAYOS_KEY_RIGHT && !(next % 2)) next++;
+    return next >= 0 && next < MAY_LOCALE_COUNT ? (enum MayLocale)next : choice;
+}
 typedef struct {
     int x, y, w, h, open, min, max, ox, oy, ow, oh;
     const char *title;
@@ -782,6 +945,10 @@ static void notify(const char *s) {
     dirty = 1;
 }
 static void raise_window(int id) {
+    if (id == 1 && !windows[id].open) {
+        language_choice = display_language;
+        language_save_failed = 0;
+    }
     if (!windows[id].open || windows[id].min) animate_window(id);
     int at = 0;
     for (; at < WINDOW_COUNT && order[at] != id; at++)
@@ -1527,7 +1694,7 @@ static void desktop(void) {
     rect(25, 22, 4, 2, ink);
     rect(22, 24, 10, 1, ink);
     int menu_x = text(46, 6, "MayOS", ink) + 22;
-    const char *menus[] = {"Settings", "File", "Edit", "View", "Window", "Help"};
+    const char *menus[] = {L(SETTINGS), L(FILE), L(EDIT), L(VIEW), L(WINDOW), L(HELP)};
     for (int i = 0; i < 6; i++) menu_x = text(menu_x, 6, menus[i], muted) + 22;
     int count = 0;
     for (int i = 4; i < FS_MAX && count < 15; i++) {
@@ -1562,7 +1729,8 @@ static void frame(int id) {
     symbol(w->x + 18, w->y + 11,
            id == 0 ? 0 : id == 1 ? 1 : id == 4 ? 4 : id == 3 ? 5 : 2,
            22, muted);
-    text(w->x + 48, w->y + 11, w->title, focus == id ? ink : muted);
+    const char *titles[] = {L(FILES), L(SETTINGS), L(TERMINAL), L(EDITOR)};
+    text(w->x + 48, w->y + 11, id < 4 ? titles[id] : w->title, focus == id ? ink : muted);
     int controls = w->x + w->w - 119;
     const int kinds[] = {15, 16, 14};
     for (int i = 0; i < 3; i++) {
@@ -1581,14 +1749,14 @@ static void settings(Window *w) {
     int x = w->x, y = w->y, cx = x + 264, cy = y + 53, cw = w->w - 286;
     rect(x + 1, y + 36, 240, w->h - 38, dark ? 0x080809 : 0xf7f7f9);
     rect(x + 240, y + 36, 1, w->h - 38, line);
-    heading_text(x + 20, y + 49, "Settings", ink);
+    heading_text(x + 20, y + 49, L(SETTINGS), ink);
     ui_card(x + 18, y + 82, 207, 34, 17, dark ? 0x111113 : surface_high);
     symbol(x + 28, y + 90, 4, 15, muted);
-    text(x + 51, y + 91, "Search Settings", muted);
-    const char *tabs[] = {"General", "Display", "Sound", "Network",
-                          "Privacy & Security", "Updates", "About MayOS"};
-    const int tab_icons[] = {1, 11, 7, 8, 12, 10, 10};
-    for (int i = 0; i < 7; i++) {
+    text(x + 51, y + 91, L(SEARCH_SETTINGS), muted);
+    const char *tabs[] = {L(GENERAL), L(DISPLAY), L(SOUND), L(NETWORK),
+                          L(PRIVACY), L(UPDATES), L(ABOUT), L(LANG_REGION)};
+    const int tab_icons[] = {1, 11, 7, 8, 12, 10, 10, 4};
+    for (int i = 0; i < 8; i++) {
         int yy = y + 132 + i * 36;
         if (settings_tab == i)
             soft_roundrect(x + 18, yy, 207, 34, 10, selected_fill);
@@ -1596,8 +1764,21 @@ static void settings(Window *w) {
                settings_tab == i ? ink : muted);
         text(x + 61, yy + 7, tabs[i], settings_tab == i ? ink : muted);
     }
-    if (settings_tab == 6) {
-        heading_text(cx, cy - 8, "About MayOS", ink);
+    if (settings_tab == 7) {
+        heading_text(cx, cy - 8, L(LANG_REGION), ink);
+        text(cx, cy + 28, L(DISPLAY_LANGUAGE), muted);
+        text_face(cx + cw - text_width(languages[display_language].name), cy + 28,
+                  languages[display_language].name, ink, display_language);
+        language_grid(cx, cy + 57, cw, language_choice, ink, muted);
+        int changed = language_choice != display_language;
+        if (changed) {
+            button(cx, cy + 273, 118, L(CANCEL), 0);
+            button(cx + cw - 136, cy + 273, 136, L(APPLY), 1);
+        }
+        if (language_save_failed) text(cx, cy + 316, L(SAVE_ERROR), ink);
+        else if (!disk_ready) text(cx, cy + 316, L(SESSION_ONLY), muted);
+    } else if (settings_tab == 6) {
+        heading_text(cx, cy - 8, L(ABOUT), ink);
         /*
          * Supplied reference: 1320x580 card with black #000 interior,
          * #292929 rounded outline, white monitor+name and muted gray version.
@@ -1627,7 +1808,7 @@ static void settings(Window *w) {
         /* Device rename/Credits remain available beneath the card,
            outside the screenshot-specific component. */
     } else if (settings_tab == 5) {
-        heading_text(cx, cy - 8, "System Update", ink);
+        heading_text(cx, cy - 8, L(UPDATES), ink);
         ui_card(cx, cy + 36, cw, 126, 18, bg);
         reference_text(cx + 18, cy + 48, "MayOS", ink, 1);
         text(cx + 18, cy + 93, "Current: " MAYOS_RELEASE, muted);
@@ -1665,7 +1846,7 @@ static void settings(Window *w) {
     } else if (settings_tab == 1) {
         MayDisplayInfo info;
         display_get_info(&info);
-        heading_text(cx, cy - 8, "Display", ink);
+        heading_text(cx, cy - 8, L(DISPLAY), ink);
         ui_card(cx, cy + 40, cw, 116, 18, bg);
         symbol(cx + 18, cy + 59, 11, 28, ink);
         text(cx + 62, cy + 57, "Built-in Display", ink);
@@ -1805,14 +1986,14 @@ static void build_file_list(void) {
 static void files_draw(Window *w) {
     int x = w->x, y = w->y;
     rect(x + 1, y + 43, 146, w->h - 44, bg);
-    text(x + 20, y + 65, "位置", muted);
+    text(x + 20, y + 65, L(LOCATIONS), muted);
     const char *nav[] = {
 #ifdef MAYOS_LINUX
         "RAM / 根目录",
 #else
         "disk1 / 根目录",
 #endif
-        "文档", "桌面", "回收站"};
+        L(DOCUMENTS), L(DESKTOP), L(TRASH)};
     for (int i = 0; i < 4; i++) {
         if (folder == i)
             roundrect(x + 10, y + 103 + i * 40, 128, 33, selected_fill);
@@ -1841,16 +2022,16 @@ static void files_draw(Window *w) {
     if (folder && may_vfs_info(folder, &node))
         text(cx + 130, y + 59, node.name, ink);
     if (may_vfs_read_only(folder))
-        text(cx + 10, y + 105, "只读系统文件", muted);
+        text(cx + 10, y + 105, L(READ_ONLY), muted);
     else {
-        button(cx, y + 99, 102, "新建文件", 0);
-        button(cx + 114, y + 99, 118, "新建文件夹", 0);
+        button(cx, y + 99, 134, L(NEW_FILE), 0);
+        button(cx + 144, y + 99, 148, L(NEW_FOLDER), 0);
     }
     button(x + w->w - 120, y + 99, 44, "‹", 0);
     button(x + w->w - 66, y + 99, 44, "›", 0);
-    text(cx, y + 147, "名称", muted);
-    text(x + w->w - 190, y + 147, "类型", muted);
-    text(x + w->w - 99, y + 147, "大小", muted);
+    text(cx, y + 147, L(NAME), muted);
+    text(x + w->w - 190, y + 147, L(TYPE), muted);
+    text(x + w->w - 99, y + 147, L(SIZE), muted);
     rect(cx, y + 176, w->w - 185, 1, line);
     build_file_list();
     int visible = (w->h - 225) / 44;
@@ -1908,9 +2089,9 @@ static void editor_draw(Window *w) {
     MayVfsNode node;
     int open = may_vfs_info(editor_file, &node);
     if (open && node.read_only)
-        text(x + 29, y + 61, "只读", muted);
+        text(x + 29, y + 61, L(READ_ONLY), muted);
     else
-        button(x + 17, y + 55, 90, "保存", 1);
+        button(x + 17, y + 55, 90, L(SAVE), 1);
     text(x + 126, y + 61, open ? node.name : "没有打开文件", ink);
     if (editor_changed)
         text(x + w->w - 110, y + 61, "● 未保存", accent);
@@ -1925,7 +2106,7 @@ static void editor_draw(Window *w) {
             col = 0;
             continue;
         }
-        int cw = c < 128 ? 1 : 2;
+        int cw = glyph_width(c) / 8;
         if (col + cw > (w->w - 48) / 8) {
             yy += 22;
             col = 0;
@@ -2124,7 +2305,7 @@ static void start_draw(void) {
     roundrect(x + 18, y + 57, 290, 34, bg);
     text(x + 30, y + 64, search[0] ? search : "搜索 / files, settings, terminal",
          search[0] ? ink : muted);
-    const char *names[] = {"文件管理器", "设置", "终端", "回收站",
+    const char *names[] = {L(FILES), L(SETTINGS), L(TERMINAL), L(TRASH),
 #ifdef MAYOS_LINUX
                            "Explorer 浏览器",
 #else
@@ -2650,12 +2831,26 @@ static void left_click(void) {
             }
             if (rx < 241) {
                 int tab = (ry - 132) / 36;
-                if (ry >= 132 && tab >= 0 && tab < 7 && (ry - 132) % 36 < 34) {
-                    if (settings_tab != tab) animate_window(1);
+                if (ry >= 132 && tab >= 0 && tab < 8 && (ry - 132) % 36 < 34) {
+                    if (settings_tab != tab) {
+                        animate_window(1);
+                        language_choice = display_language;
+                        language_save_failed = 0;
+                    }
                     settings_tab = tab;
                 }
-            }
-            else if (settings_tab == 5) {
+            } else if (settings_tab == 7) {
+                int picked = language_hit(rx, ry, 264, 110, w->w - 286);
+                if (picked >= 0) {
+                    language_choice = (enum MayLocale)picked;
+                    language_save_failed = 0;
+                } else if (inside(rx, ry, 264, 326, 118, 30)) {
+                    language_choice = display_language;
+                    language_save_failed = 0;
+                } else if (inside(rx, ry, w->w - 158, 326, 136, 30)) {
+                    locale_apply();
+                }
+            } else if (settings_tab == 5) {
 #ifndef MAYOS_LINUX
                 if (inside(rx, ry, 264, 227, 204, 34)) {
                     may_update_check();
@@ -2721,9 +2916,9 @@ static void left_click(void) {
                         file_scroll += 5;
                 } else if (may_vfs_read_only(folder)) {
                     notify("只读系统目录");
-                } else if (rx >= 164 && rx < 266)
+                } else if (rx >= 164 && rx < 298)
                     begin_modal(1, -1);
-                else if (rx >= 278 && rx < 396)
+                else if (rx >= 308 && rx < 456)
                     begin_modal(2, -1);
             } else if (ry >= 184 && ry < w->h - 40) {
                 int n = (ry - 184) / 44 + file_scroll;
@@ -2829,6 +3024,19 @@ static void key_event(int k) {
             modal_text[n + 1] = 0;
         }
         return;
+    }
+    if (!start_open && !top_panel && focus == 1 && windows[1].open &&
+        !windows[1].min && settings_tab == 7) {
+        if (k == '\n') {
+            locale_apply();
+            return;
+        }
+        if (k == 27 || k == 0x101 || k == 0x102 ||
+            k == MAYOS_KEY_LEFT || k == MAYOS_KEY_RIGHT) {
+            language_choice = k == 27 ? display_language : language_move(language_choice, k);
+            language_save_failed = 0;
+            return;
+        }
     }
     if (k == 27) {
 #ifdef MAYOS_LINUX_TASK_MANAGER
@@ -3009,6 +3217,11 @@ static void setup_license(void) {
     }
 }
 
+static void setup_title(const char *title, u32 color) {
+    if (text_width(title) * 2 <= 573) large_text(482, 150, title, color);
+    else heading_text(482, 153, title, color);
+}
+
 static void setup_screen(enum SetupStep step, const char *name, int theme, int error) {
     desktop_wallpaper();
     soft_roundrect(175, 91, 930, 538, 31, 0x050506);
@@ -3017,9 +3230,9 @@ static void setup_screen(enum SetupStep step, const char *name, int theme, int e
     rect(438, 108, 1, 483, 0x2c2c32);
     reference_monitor_icon(214, 124, 0xf3f3f6, 0x101013);
     reference_text(252, 112, "MayOS", 0xf3f3f6, 1);
-    text(214, 172, "首次开机设置", 0xa8a8af);
-    const char *steps[SETUP_COUNT] = {"欢迎", "语言", "软件许可", "本机资料",
-                                         "系统更新", "桌面外观", "准备就绪"};
+    text(214, 172, L(FIRST_BOOT), 0xa8a8af);
+    const char *steps[SETUP_COUNT] = {L(WELCOME), L(LANGUAGE), L(LICENSE), L(PROFILE),
+                                    L(UPDATES), L(APPEARANCE), L(READY)};
     for (enum SetupStep i = SETUP_WELCOME; i < SETUP_COUNT; i++) {
         int y = 215 + i * 52;
         if (step == i) soft_roundrect(207, y, 204, 42, 12, 0x29292e);
@@ -3029,75 +3242,70 @@ static void setup_screen(enum SetupStep step, const char *name, int theme, int e
     }
     rect(482, 507, 573, 1, 0x2c2c32);
     if (step == SETUP_WELCOME) {
-        large_text(482, 150, "欢迎使用 MayOS", 0xf5f5f6);
-        text(482, 224, "完成几个设置步骤，即可进入桌面。", 0xb4b4bb);
+        setup_title(L(WELCOME_TITLE), 0xf5f5f6);
+        text(482, 224, L(WELCOME_HINT), 0xb4b4bb);
         soft_roundrect(482, 285, 506, 110, 18, 0x212126);
         reference_monitor_icon(505, 321, 0xe7e7eb, 0x212126);
-        text(552, 310, "MayKernel 桌面", 0xf5f5f6);
-        text(552, 345, "文件与设置保存在本机 MayFS。", 0xb4b4bb);
+        text(552, 310, L(KERNEL_DESKTOP), 0xf5f5f6);
+        text(552, 345, L(FILES_HINT), 0xb4b4bb);
     } else if (step == SETUP_LANGUAGE) {
-        large_text(482, 150, "选择系统语言", 0xf5f5f6);
-        text(482, 224, "选择首次设置使用的语言。", 0xb4b4bb);
-        soft_roundrect(482, 279, 506, 83, 16, 0x75757e);
-        soft_roundrect(483, 280, 504, 81, 15, 0x212126);
-        text(505, 296, "简体中文", 0xf5f5f6);
-        text(505, 322, "Simplified Chinese", 0xb4b4bb);
-        text(894, 308, "已选中", 0xf5f5f6);
+        setup_title(L(CHOOSE), 0xf5f5f6);
+        text(482, 224, L(CHOOSE_HINT), 0xb4b4bb);
+        language_grid(482, 266, 573, language_choice, 0xf5f5f6, 0xb4b4bb);
     } else if (step == SETUP_LICENSE) {
-        large_text(482, 150, "软件许可协议", 0xf5f5f6);
+        setup_title(L(LICENSE_TITLE), 0xf5f5f6);
         setup_license();
     } else if (step == SETUP_PROFILE) {
-        large_text(482, 150, "设置本机用户名", 0xf5f5f6);
-        text(482, 224, "此名称用于 MayShell，并存储在本机 MayFS。", 0xb4b4bb);
-        text(482, 273, "用户名", 0xf5f5f6);
+        setup_title(L(PROFILE_TITLE), 0xf5f5f6);
+        text(482, 224, L(PROFILE_HINT), 0xb4b4bb);
+        text(482, 273, L(USERNAME), 0xf5f5f6);
         soft_roundrect(482, 303, 506, 53, 12, 0x85858c);
         soft_roundrect(483, 304, 504, 51, 11, 0x212126);
         int end = text(500, 319, name[0] ? name : "may", name[0] ? 0xf5f5f6 : 0xa5a5ab);
         rect(name[0] ? end + 2 : 499, 319, 1, 18, 0xf5f5f6);
-        text(482, 373, "最多 20 个字母、数字、连字符或下划线。", 0xb4b4bb);
-        text(482, 403, "留空时使用默认名称 may。", 0xb4b4bb);
+        text(482, 373, L(USER_RULE), 0xb4b4bb);
+        text(482, 403, L(USER_DEFAULT), 0xb4b4bb);
     } else if (step == SETUP_UPDATES) {
-        large_text(482, 150, "系统更新", 0xf5f5f6);
-        text(482, 224, "当前版本    " MAYOS_RELEASE, 0xb4b4bb);
+        setup_title(L(UPDATES), 0xf5f5f6);
+        int end = text(482, 224, L(CURRENT_VERSION), 0xb4b4bb);
+        text(end + 24, 224, MAYOS_RELEASE, 0xb4b4bb);
         soft_roundrect(482, 279, 506, 135, 16, 0x212126);
-        text(505, 302, "手动更新", 0xf5f5f6);
-        text(505, 337, "从新版安装镜像启动，并选择试用升级。", 0xb4b4bb);
-        text(505, 368, "检查新版本正常后，用同一镜像确认。", 0xb4b4bb);
+        text(505, 302, L(MANUAL_UPDATE), 0xf5f5f6);
+        text(505, 337, L(UPDATE_IMAGE), 0xb4b4bb);
+        text(505, 368, L(UPDATE_CONFIRM), 0xb4b4bb);
     } else if (step == SETUP_APPEARANCE) {
-        large_text(482, 150, "选择桌面外观", 0xf5f5f6);
-        text(482, 224, "以后可在设置中随时切换。", 0xb4b4bb);
-        setup_card(482, 279, 0x111113, 0x787881, theme == 0, "深色", "黑色与炭灰");
-        setup_card(744, 279, 0xeaeaec, 0xa3a3aa, theme == 1, "浅色", "浅灰与白色");
+        setup_title(L(APPEARANCE_TITLE), 0xf5f5f6);
+        text(482, 224, L(APPEARANCE_HINT), 0xb4b4bb);
+        setup_card(482, 279, 0x111113, 0x787881, theme == 0, L(DARK), L(DARK_HINT));
+        setup_card(744, 279, 0xeaeaec, 0xa3a3aa, theme == 1, L(LIGHT), L(LIGHT_HINT));
     } else {
-        large_text(482, 150, "你的桌面已就绪", 0xf5f5f6);
-        text(482, 224, "确认本机资料与桌面外观，然后开始使用。", 0xb4b4bb);
+        setup_title(L(READY_TITLE), 0xf5f5f6);
+        text(482, 224, L(READY_HINT), 0xb4b4bb);
         soft_roundrect(482, 271, 506, 158, 16, 0x212126);
-        text(505, 292, "系统语言", 0xb4b4bb);
-        text(690, 292, "简体中文", 0xf5f5f6);
+        text(505, 292, L(DISPLAY_LANGUAGE), 0xb4b4bb);
+        text(690, 292, languages[display_language].name, 0xf5f5f6);
         rect(505, 329, 460, 1, 0x34343a);
-        text(505, 341, "本机用户名", 0xb4b4bb);
+        text(505, 341, L(USERNAME), 0xb4b4bb);
         text(690, 341, name[0] ? name : "may", 0xf5f5f6);
         rect(505, 378, 460, 1, 0x34343a);
-        text(505, 390, "桌面外观", 0xb4b4bb);
-        text(690, 390, theme == 0 ? "深色" : "浅色", 0xf5f5f6);
+        text(505, 390, L(APPEARANCE), 0xb4b4bb);
+        text(690, 390, theme == 0 ? L(DARK) : L(LIGHT), 0xf5f5f6);
     }
-    if (error) text(482, 475, "设置未能保存，请重试。", 0xffaf9f);
+    if (error) text(482, 475, L(SAVE_ERROR), 0xffaf9f);
     if (step != SETUP_WELCOME) {
         soft_roundrect(483, 529, 108, 46, 12, 0x26262c);
-        text(519, 541, "返回", 0xe7e7eb);
+        center_text(483, 108, 541, L(BACK), 0xe7e7eb);
     }
     soft_roundrect(889, 529, 166, 46, 12, 0xf2f2f4);
-    const char *next = step == SETUP_REVIEW ? "开始使用" :
-                       step == SETUP_LICENSE ? "同意并继续" :
-                       step == SETUP_WELCOME ? "开始设置" : "继续";
-    int label_width = step == SETUP_LICENSE ? 80 :
-                      step == SETUP_REVIEW || step == SETUP_WELCOME ? 64 : 32;
-    text(972 - label_width / 2, 541, next, 0x151519);
+    const char *next = step == SETUP_REVIEW ? L(FINISH) :
+                       step == SETUP_LICENSE ? L(AGREE) :
+                       step == SETUP_WELCOME ? L(START) : L(CONTINUE);
+    center_text(889, 166, 541, next, 0x151519);
     if (step == SETUP_LICENSE) {
         soft_roundrect(647, 529, 152, 46, 12, 0x26262c);
-        text(675, 541, "拒绝并关机", 0xe7e7eb);
+        center_text(647, 152, 541, L(DECLINE), 0xe7e7eb);
     } else {
-        text(665, 545, "Enter 继续", 0xa5a5ab);
+        center_text(647, 152, 545, "Enter", 0xa5a5ab);
     }
     cursor();
     present(pixels);
@@ -3129,6 +3337,7 @@ static int setup_save(const char *name, int theme) {
 
 static void installed_first_boot(void) {
     enum SetupStep step = SETUP_WELCOME;
+    enum MayLocale initial_language = display_language;
     char name[sizeof(profile_name)] = "";
     if (strcmp(profile_name, "may")) copy(name, profile_name, sizeof(name));
     int theme = 0, error = 0, previous = 0;
@@ -3140,6 +3349,11 @@ static void installed_first_boot(void) {
             enum SetupStep old_step = step;
             int click = (buttons & 1) && !(previous & 1);
             previous = buttons;
+            if (step == SETUP_LANGUAGE) {
+                int picked = click ? language_hit(mx, my, 482, 266, 573) : -1;
+                if (picked >= 0) language_choice = (enum MayLocale)picked;
+                else language_choice = language_move(language_choice, key);
+            }
             if (step == SETUP_PROFILE) {
                 u32 length = strlen(name);
                 if (key == '\b' && length) name[length - 1] = 0;
@@ -3163,14 +3377,27 @@ static void installed_first_boot(void) {
                        (key == 27 || (key == '\b' && step != SETUP_PROFILE) ||
                         (click && inside(mx, my, 483, 529, 108, 46)))) {
                 step--;
+                language_choice = display_language;
             } else if (key == '\n' || (step == SETUP_LICENSE && (key == 'y' || key == 'Y')) ||
                        (click && inside(mx, my, 889, 529, 166, 46))) {
-                if (step != SETUP_REVIEW) step++;
-                else {
-                    if (setup_save(name, theme)) {
-                        oldbuttons = buttons;
-                        serial("MayOS: first boot setup completed\n");
-                        return;
+                if (step != SETUP_REVIEW) {
+                    if (step == SETUP_LANGUAGE) {
+                        display_language = language_choice;
+                        serial("MayOS: first boot display language selected: ");
+                        serial(languages[display_language].tag);
+                        serial("\n");
+                    }
+                    step++;
+                } else {
+                    LocaleEdit edit = {0};
+                    int changed = display_language != initial_language;
+                    if (!changed || locale_stage(display_language, &edit)) {
+                        if (setup_save(name, theme)) {
+                            oldbuttons = buttons;
+                            serial("MayOS: first boot setup completed\n");
+                            return;
+                        }
+                        if (changed) locale_unstage(&edit);
                     }
                     error = 1;
                 }
@@ -3189,6 +3416,8 @@ void kernel_main(u32 magic, u32 info) {
     fs_init();
     may_vfs_init();
     preferences_load();
+    locale_load();
+    language_choice = display_language;
     boot_splash_step(4, "Applying desktop settings");
 #ifndef MAYOS_LINUX
     profile_load();
