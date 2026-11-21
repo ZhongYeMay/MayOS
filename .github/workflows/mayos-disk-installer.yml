@@ -2,6 +2,8 @@ name: Verify MayOS 0.5.1 hard-disk installer
 on:
   push:
     branches: [feat/mayos-0.5.1-disk-installer]
+  pull_request:
+    branches: [feat/mayos-0.5.1-disk-installer]
 
 permissions:
   contents: read
