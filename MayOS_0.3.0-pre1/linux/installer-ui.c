@@ -161,6 +161,12 @@ static void paint(void) {
             card(482, top, 564, 58, i == action);
             text(504, top + 14, names[i], paper, 0);
         }
+        if (installed) {
+            const char *details[] = {"", "Start the new version once before confirming.",
+                "Keep the version you already tested.", "Keep the currently confirmed version."};
+            text(483, 463, details[action], muted_text, 0);
+        }
+        text(483, 538, "Back", muted_text, 0);
         button("Review", 1);
     } else if (page == REVIEW) {
         title(names[action], "Review your selection before continuing.");
@@ -170,7 +176,8 @@ static void paint(void) {
         text(483, 413, action == 0 ? "Only a completely empty disk can be installed."
                     : "Your MayFS files and settings will be kept.", muted_text, 0);
         text(483, 538, "Back", muted_text, 0);
-        button(action == 0 ? "Install" : action == 1 ? "Stage update" : "Confirm", 1);
+        button(action == 0 ? "Install" : action == 1 ? "Stage update"
+               : action == 2 ? "Confirm" : "Discard", 1);
     } else if (page == WORKING) {
         title(names[action], "Keep this machine powered on until the disk is verified.");
         roundbox(483, 302, 560, 10, 5, 0x303037);
@@ -197,6 +204,11 @@ static void paint(void) {
 
 static void back(void) {
     if (page == DISKS) page = WELCOME;
+    if (page == ACTION) {
+        dprintf(sender, "BACK\n");
+        scanned = 0;
+        page = DISKS;
+    }
     if (page == REVIEW) page = ACTION;
 }
 
@@ -254,8 +266,10 @@ static void read_message(const char *line) {
         page = ACTION;
     } else if (strstr(line, "Writing and verifying")) step = 2;
     else if (!strcmp(line, "@DONE")) page = FINISHED;
+    else if (!strcmp(line, "Target contains data. No sectors were written."))
+        snprintf(status, sizeof(status), "This disk already contains data.");
     else if (!strncmp(line, "@STOP ", 6)) {
-        snprintf(status, sizeof(status), "%.53s", line + 6);
+        if (!status[0]) snprintf(status, sizeof(status), "%.53s", line + 6);
         page = FAILED;
     }
 }
@@ -321,7 +335,10 @@ int main(void) {
                 waitpid(child, NULL, 0);
                 return 2;
             }
-            if (serial_fd >= 0) (void)write(serial_fd, data, (size_t)length);
+            if (serial_fd >= 0 && write(serial_fd, data, (size_t)length) < 0) {
+                close(serial_fd);
+                serial_fd = -1;
+            }
             for (ssize_t i = 0; i < length; i++) {
                 if (data[i] == '\n') {
                     line[used] = 0;

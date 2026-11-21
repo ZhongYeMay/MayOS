@@ -128,23 +128,27 @@ for sys in /sys/class/block/*; do
         if [ "$gui_backend" = 1 ]; then printf '@DISK %s %sMiB\n' "$disk" "$((blocks / 2048))"; fi
     fi
 done
-echo "Enter the target path, or type cancel."
-if [ "$gui_backend" = 1 ]; then echo '@SELECT'; fi
-IFS= read -r target || abort "No target selected."
-[ "$target" != cancel ] || abort "Installation cancelled."
-eligible "$target" || abort "Target is outside the supported disk layout."
-device_id="$(cat "$sys/dev")"
-if /installer/write-disk "$target" "$device_id" check >/dev/null 2>&1; then
-    installed=1
-    echo "MayOS installed disk detected."
-    echo "Type UPGRADE $target to stage a trial, DISCARD $target to keep the current slot,"
-    echo "or CONFIRM $target after you have verified that the trial desktop works."
-else
-    installed=0
-    echo "To continue, type INSTALL $target"
-fi
-if [ "$gui_backend" = 1 ]; then printf '@MODE %s\n' "$installed"; fi
-IFS= read -r answer || abort "Confirmation cancelled."
+while :; do
+    echo "Enter the target path, or type cancel."
+    if [ "$gui_backend" = 1 ]; then echo '@SELECT'; fi
+    IFS= read -r target || abort "No target selected."
+    [ "$target" != cancel ] || abort "Installation cancelled."
+    eligible "$target" || abort "Target is outside the supported disk layout."
+    device_id="$(cat "$sys/dev")"
+    if /installer/write-disk "$target" "$device_id" check >/dev/null 2>&1; then
+        installed=1
+        echo "MayOS installed disk detected."
+        echo "Type UPGRADE $target to stage a trial, DISCARD $target to keep the current slot,"
+        echo "or CONFIRM $target after you have verified that the trial desktop works."
+    else
+        installed=0
+        echo "To continue, type INSTALL $target"
+    fi
+    if [ "$gui_backend" = 1 ]; then printf '@MODE %s\n' "$installed"; fi
+    IFS= read -r answer || abort "Confirmation cancelled."
+    if [ "$gui_backend" = 1 ] && [ "$answer" = BACK ]; then continue; fi
+    break
+done
 eligible "$target" && [ "$device_id" = "$(cat "$sys/dev")" ] ||
     abort "The selected disk changed. Restart the installer."
 
