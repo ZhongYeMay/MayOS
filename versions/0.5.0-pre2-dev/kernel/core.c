@@ -1,4 +1,5 @@
 #include "core.h"
+#include "procfs.h"
 #include "io.h"
 #include "framebuffer.h"
 #include "pci.h"
@@ -92,6 +93,21 @@ static MaySurface display;
 static int display_scale_mode;
 static u8 pages[32768];
 static u32 page_count;
+/* HLT interval is measured with the real TSC. This estimates CPU busy
+ * residency in the single-task MayKernel; it is not per-process accounting. */
+static u64 may_idle_tsc(void) {
+    u32 low, high;
+    __asm__ volatile("rdtsc" : "=a"(low), "=d"(high));
+    return ((u64)high << 32) | low;
+}
+void platform_idle(void) {
+    u64 before = may_idle_tsc();
+    __asm__ volatile("hlt");
+    u64 after = may_idle_tsc();
+    mayperf_note_idle_cycles(after - before);
+}
+u32 mayperf_managed_pages(void) { return page_count; }
+
 extern char kernel_end;
 void *page_alloc(void) {
     for (u32 i = 0; i < page_count; i++)
