@@ -55,10 +55,22 @@ jobs:
             done
             xorriso -osirrox on -indev build/cached-dual/mayos-dual.iso               -extract /licenses versions/0.5.0-pre2-dev/build/linux/licenses || true
           fi
-          if ! python3 versions/0.5.0-pre2-dev/scripts/linux.py status; then
+          if test -s build/cached-dual/mayos-dual.iso; then
+            python3 - <<'PY'
+          import json, pathlib, sys
+          source=pathlib.Path('versions/0.5.0-pre2-dev').resolve()
+          sys.path.insert(0, str(source/'scripts'))
+          from linux import inputs
+          from dual_iso import checked_payloads
+          manifest=checked_payloads()
+          assert manifest['version']=='7.3.1'
+          assert manifest['inputs']==inputs(), 'Cached Linux payload does not match present source tree'
+          print('PASS: SHA-verified cached Linux kernel/initramfs exactly matches current sources')
+          PY
+          else
             make -C versions/0.5.0-pre2-dev linux LINUX_VERSION=7.3.1 LINUX_JOBS=4
+            python3 versions/0.5.0-pre2-dev/scripts/linux.py status
           fi
-          python3 versions/0.5.0-pre2-dev/scripts/linux.py status
       - name: Package bootable BIOS/UEFI ISO and assert El Torito catalog
         run: |
           set -euo pipefail
