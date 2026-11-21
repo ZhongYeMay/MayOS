@@ -1,11 +1,21 @@
 #!/bin/busybox sh
 export PATH=/bin
-mount -t devtmpfs devtmpfs /dev || exit 1
-mount -t proc proc /proc || exit 1
-mount -t sysfs sysfs /sys || exit 1
-exec </dev/console >/dev/console 2>&1
-
-. /installer/modules.sh
+gui_backend=0
+if [ "$1" = --backend ]; then
+    gui_backend=1
+else
+    mount -t devtmpfs devtmpfs /dev || exit 1
+    mount -t proc proc /proc || exit 1
+    mount -t sysfs sysfs /sys || exit 1
+    exec </dev/console >/dev/console 2>&1
+    . /installer/modules.sh
+    if grep -qw mayos_gui /proc/cmdline; then
+        /installer/gui
+        rc="$?"
+        [ "$rc" = 1 ] || poweroff -f
+        echo "Graphics unavailable. Continuing in the console installer."
+    fi
+fi
 echo
 echo "MayOS 0.5.1 | Installation and recovery"
 echo "Install MayKernel to an empty target disk (at least 80 MiB)."
@@ -28,6 +38,7 @@ eligible() {
 
 abort() {
     echo "$1"
+    if [ "$gui_backend" = 1 ]; then printf '@STOP %s\n' "$1"; fi
     if [ "$mounted" = 1 ]; then
         sync
         umount /target
@@ -114,9 +125,11 @@ for sys in /sys/class/block/*; do
     if eligible "$disk"; then
         model="$(cat "$sys/device/model" 2>/dev/null)"
         printf '%s  %s MiB  %s\n' "$disk" "$((blocks / 2048))" "$model"
+        if [ "$gui_backend" = 1 ]; then printf '@DISK %s %sMiB\n' "$disk" "$((blocks / 2048))"; fi
     fi
 done
 echo "Enter the target path, or type cancel."
+if [ "$gui_backend" = 1 ]; then echo '@SELECT'; fi
 IFS= read -r target || abort "No target selected."
 [ "$target" != cancel ] || abort "Installation cancelled."
 eligible "$target" || abort "Target is outside the supported disk layout."
@@ -130,6 +143,7 @@ else
     installed=0
     echo "To continue, type INSTALL $target"
 fi
+if [ "$gui_backend" = 1 ]; then printf '@MODE %s\n' "$installed"; fi
 IFS= read -r answer || abort "Confirmation cancelled."
 eligible "$target" && [ "$device_id" = "$(cat "$sys/dev")" ] ||
     abort "The selected disk changed. Restart the installer."
@@ -143,6 +157,7 @@ else
     /installer/write-disk "$target" "$device_id" || abort "Installation did not complete."
     echo "MayOS installation complete. Remove the ISO and boot from the hard disk."
 fi
+if [ "$gui_backend" = 1 ]; then echo '@DONE'; fi
 echo "Press Enter to power off."
 IFS= read -r answer
 poweroff -f

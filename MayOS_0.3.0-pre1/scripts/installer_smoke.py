@@ -20,12 +20,17 @@ def main():
         with legacy.open("xb") as out:
             out.truncate(8 * 1024 * 1024)
 
-        def boot(disk, tag, *, media=None, installed=False, commands=(), version=None):
+        def boot(disk, tag, *, media=None, installed=False, commands=(), version=None, setup=False):
             vars_path = root / f"{tag}.fd"
             shutil.copyfile(template, vars_path)
             vm = BootVM(iso=media, disk=disk, tag=tag, qemu="qemu-system-x86_64",
                         memory=256, timeout=60, ovmf_code=code, ovmf_vars=vars_path)
             try:
+                if setup:
+                    vm.wait("MayOS: first boot setup ready")
+                    for _ in range(3):
+                        vm.key("ret")
+                    vm.wait("MayOS: first boot setup completed")
                 vm.wait("MayOS: desktop ready")
                 if installed:
                     vm.wait("MayOS: MayFS GPT partition selected")
@@ -47,7 +52,7 @@ def main():
         assert digest(legacy) == before
         with installed.open("rb") as handle:
             prefix = handle.read(DATA_START * SECTOR)
-        boot(installed, "installer-installed", installed=True, commands=[
+        boot(installed, "installer-installed", installed=True, setup=True, commands=[
             ("cat keep.txt", "\noriginal\n"),
             ("write fresh.txt installed", "\nOK\n"),
         ])

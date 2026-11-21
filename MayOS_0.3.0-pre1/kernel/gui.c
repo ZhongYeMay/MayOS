@@ -111,7 +111,7 @@ static int cursor_image_load(int create_sample) {
     return 1;
 }
 #define MAYOS_PREFS_MAGIC 0x4d505246u
-static void preferences_save(void) {
+static int preferences_save(void) {
     MayDisplayInfo display_info;
     display_get_info(&display_info);
     u32 raw[8] = {MAYOS_PREFS_MAGIC, (u32)dark, (u32)accent_choice,
@@ -119,7 +119,7 @@ static void preferences_save(void) {
                   (u32)high_contrast | ((u32)cursor_style << 8) |
                       ((u32)display_info.scale_mode << 16), 1};
     /* Linux and diskless MayKernel keep the new values for this session. */
-    fs_prefs_write((const u8 *)raw, sizeof(raw));
+    return fs_prefs_write((const u8 *)raw, sizeof(raw));
 }
 static void preferences_load(void) {
     u32 raw[8];
@@ -1357,7 +1357,7 @@ static void document_symbol(int x, int y, int size, u32 color) {
     stroke(x0 + 6, y0 + size / 2, x1 - 5, y0 + size / 2, 2, color);
     stroke(x0 + 6, y0 + size / 2 + 7, x1 - 5, y0 + size / 2 + 7, 2, color);
 }
-static void desktop(void) {
+static void desktop_wallpaper(void) {
     /* Pure-black monochrome with two thin silver arcs; native framebuffer only. */
     if (desktop_style == 0) {
         for (int y = 0; y < H; y++)
@@ -1382,6 +1382,9 @@ static void desktop(void) {
         for (int x = 0; x < W; x += 64) rect(x, 42, 1, H - 42, line);
         for (int y = 42; y < H; y += 64) rect(0, y, W, 1, line);
     }
+}
+static void desktop(void) {
+    desktop_wallpaper();
     rect(0, 0, W, 32, dark ? 0x050506 : 0xf9f9fb);
     rect(0, 31, W, 1, dark ? 0x171719 : line);
     /* Compact monitor mark and dynamically spaced menus.  Never place a
@@ -2761,10 +2764,116 @@ static void key_event(int k) {
         }
     }
 }
+#ifndef MAYOS_LINUX
+static void setup_card(int x, int y, u32 base, u32 edge, int chosen,
+                       const char *title, const char *subtitle) {
+    soft_roundrect(x, y, 244, 128, 16, chosen ? 0xceced2 : 0x303034);
+    soft_roundrect(x + 1, y + 1, 242, 126, 15, 0x151518);
+    soft_roundrect(x + 14, y + 14, 62, 42, 8, edge);
+    soft_roundrect(x + 15, y + 15, 60, 40, 7, base);
+    rect(x + 23, y + 24, 43, 2, edge);
+    rect(x + 23, y + 44, 25, 2, edge);
+    text(x + 15, y + 69, title, 0xf5f5f6);
+    text(x + 15, y + 95, subtitle, 0xa5a5ab);
+    if (chosen) {
+        soft_roundrect(x + 201, y + 16, 22, 22, 11, 0xf2f2f4);
+        stroke(x + 207, y + 27, x + 211, y + 31, 2, 0x202024);
+        stroke(x + 211, y + 31, x + 218, y + 22, 2, 0x202024);
+    }
+}
+
+static void setup_screen(int step, int theme, int error) {
+    desktop_wallpaper();
+    soft_roundrect(175, 91, 930, 538, 31, 0x050506);
+    soft_roundrect(181, 87, 918, 530, 27, 0x3b3b41);
+    soft_roundrect(182, 88, 916, 528, 26, 0x101013);
+    rect(438, 108, 1, 483, 0x2c2c32);
+    reference_monitor_icon(214, 124, 0xf3f3f6, 0x101013);
+    reference_text(252, 112, "MayOS", 0xf3f3f6, 1);
+    text(214, 172, "首次开机设置", 0xa8a8af);
+    const char *steps[] = {"欢迎", "桌面外观", "准备就绪"};
+    for (int i = 0; i < 3; i++) {
+        int y = 230 + i * 58;
+        if (step == i) soft_roundrect(207, y, 204, 46, 12, 0x29292e);
+        soft_roundrect(217, y + 13, 20, 20, 10, i <= step ? 0xd5d5db : 0x45454d);
+        if (i > step) soft_roundrect(218, y + 14, 18, 18, 9, 0x101013);
+        text(251, y + 11, steps[i], i <= step ? 0xf5f5f6 : 0xa5a5ab);
+    }
+    rect(482, 507, 573, 1, 0x2c2c32);
+    if (step == 0) {
+        large_text(482, 150, "欢迎使用 MayOS", 0xf5f5f6);
+        text(482, 224, "选择适合你的桌面外观，然后开始使用。", 0xb4b4bb);
+        soft_roundrect(482, 285, 506, 110, 18, 0x212126);
+        reference_monitor_icon(505, 321, 0xe7e7eb, 0x212126);
+        text(552, 310, "MayKernel 桌面", 0xf5f5f6);
+        text(552, 345, "文件与设置保存在本机 MayFS。", 0xb4b4bb);
+    } else if (step == 1) {
+        large_text(482, 150, "选择桌面外观", 0xf5f5f6);
+        text(482, 224, "以后可在设置中随时切换。", 0xb4b4bb);
+        setup_card(482, 279, 0x111113, 0x787881, theme == 0, "深色", "黑色与炭灰");
+        setup_card(744, 279, 0xeaeaec, 0xa3a3aa, theme == 1, "浅色", "浅灰与白色");
+    } else {
+        large_text(482, 150, "你的桌面已就绪", 0xf5f5f6);
+        text(482, 224, "开始使用前，MayOS 会保存你选择的外观。", 0xb4b4bb);
+        setup_card(482, 279, theme == 0 ? 0x111113 : 0xeaeaec, 0x85858c, 1,
+                   theme == 0 ? "已选择深色外观" : "已选择浅色外观", "可在设置中更改");
+    }
+    if (error) text(482, 475, "设置未能保存，请重试。", 0xffaf9f);
+    if (step) {
+        soft_roundrect(483, 529, 108, 46, 12, 0x26262c);
+        text(519, 541, "返回", 0xe7e7eb);
+    }
+    soft_roundrect(889, 529, 166, 46, 12, 0xf2f2f4);
+    text(step == 2 ? 935 : 955, 541, step == 2 ? "开始使用" : "继续", 0x151519);
+    text(665, 545, "Enter 继续", 0xa5a5ab);
+    cursor();
+    present(pixels);
+}
+
+static void installed_first_boot(void) {
+    int step = 0, theme = 0, error = 0, previous = 0;
+    serial("MayOS: first boot setup ready\n");
+    setup_screen(step, theme, error);
+    for (;;) {
+        int key = 0;
+        if (input_poll(&mx, &my, &buttons, &key)) {
+            int click = (buttons & 1) && !(previous & 1);
+            previous = buttons;
+            if (step == 1) {
+                if (key == 0x101 || key == '1' || (click && inside(mx, my, 482, 279, 244, 128)))
+                    theme = 0;
+                if (key == 0x102 || key == '2' || (click && inside(mx, my, 744, 279, 244, 128)))
+                    theme = 1;
+            }
+            if (step && (key == '\b' || (click && inside(mx, my, 483, 529, 108, 46))))
+                step--;
+            else if (key == '\n' || (click && inside(mx, my, 889, 529, 166, 46))) {
+                if (step < 2) step++;
+                else {
+                    dark = theme == 0;
+                    if (preferences_save()) {
+                        oldbuttons = buttons;
+                        serial("MayOS: first boot setup completed\n");
+                        return;
+                    }
+                    dark = 1;
+                    error = 1;
+                }
+            }
+            setup_screen(step, theme, error);
+        }
+        platform_idle();
+    }
+}
+#endif
+
 void kernel_main(u32 magic, u32 info) {
     hardware_init(magic, info);
     fs_init();
     preferences_load();
+#ifndef MAYOS_LINUX
+    if (fs_installed_setup_pending()) installed_first_boot();
+#endif
     terminal_init();
     serial("MayOS: desktop ready\n");
     u32 last = 0;

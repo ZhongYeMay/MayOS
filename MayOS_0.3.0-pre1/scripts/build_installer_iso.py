@@ -16,7 +16,8 @@ from live_upgrade import digest
 
 def modules(version):
     included = set()
-    for driver in ("ata_piix", "ahci", "sd_mod", "nvme", "vfat", "nls_cp437", "nls_iso8859-1"):
+    for driver in ("ata_piix", "ahci", "sd_mod", "nvme", "vfat", "nls_cp437",
+                   "nls_iso8859-1", "evdev", "psmouse", "usbhid", "hid_generic"):
         result = subprocess.run(
             ["modprobe", "--set-version", version, "--show-depends", driver],
             capture_output=True, text=True, check=True)
@@ -41,7 +42,7 @@ def module_bytes(path):
     return path.read_bytes()
 
 
-def initramfs(output, payload, busybox, version, writer, upgrade_assets):
+def initramfs(output, payload, busybox, version, writer, gui, upgrade_assets):
     applets, _ = validate_busybox(busybox)
     required = {"sh", "cat", "mount", "umount", "sha256sum", "insmod", "sleep",
                 "poweroff", "grep", "cp", "mv", "sync"}
@@ -65,6 +66,7 @@ def initramfs(output, payload, busybox, version, writer, upgrade_assets):
         add("installer/payload.sha256", stat.S_IFREG | 0o644,
             f"{digest(payload)}  /installer/disk.img\n".encode())
         add("installer/write-disk", stat.S_IFREG | 0o755, writer.read_bytes())
+        add("installer/gui", stat.S_IFREG | 0o755, gui.read_bytes())
         for asset in upgrade_assets:
             add(f"installer/{asset.name}", stat.S_IFREG | 0o644, asset.read_bytes())
         script = []
@@ -99,6 +101,10 @@ def main():
         writer = work / "write-disk"
         subprocess.run(["gcc", "-O2", "-static", "-Wall", "-Wextra", "-Werror",
                         str(ROOT / "linux/installer-write-disk.c"), "-o", str(writer)], check=True)
+        gui = work / "gui"
+        subprocess.run(["gcc", "-O2", "-static", "-Wall", "-Wextra", "-Werror",
+                        "-DMAYOS_LINUX", "-I" + str(ROOT / "kernel"), "-I" + str(BUILD),
+                        str(ROOT / "linux/installer-ui.c"), "-o", str(gui)], check=True)
         update = work / "update.elf"
         subprocess.run(["mcopy", "-i", f"{disk}@@{ESP_START * SECTOR}",
                         "::/slots/A.elf", str(update)], check=True)
@@ -115,14 +121,17 @@ def main():
             if assignment:
                 subprocess.run(["grub-editenv", str(env), "set", assignment], check=True)
             assets.append(env)
-        initramfs(boot / "installer.cpio.gz", disk, args.busybox, args.kernel_version, writer, assets)
+        initramfs(boot / "installer.cpio.gz", disk, args.busybox, args.kernel_version, writer, gui, assets)
         shutil.copyfile(args.kernel, boot / "installer-linux")
         (boot / "grub/grub.cfg").write_text(
             "serial --unit=0 --speed=115200\n"
             "terminal_input console serial\nterminal_output console serial\n"
             "set timeout=8\nset default=0\n"
             "menuentry 'Install MayOS' {\n"
-            "  linux /boot/installer-linux console=tty0 quiet\n"
+            "  insmod all_video\n"
+            "  set gfxmode=1280x720x32,1024x768x32,auto\n"
+            "  linux /boot/installer-linux console=tty0 quiet nomodeset mayos_gui\n"
+            "  set gfxpayload=keep\n"
             "  initrd /boot/installer.cpio.gz\n}\n"
             "menuentry 'Install MayOS (serial console)' {\n"
             "  linux /boot/installer-linux console=ttyS0,115200 quiet\n"

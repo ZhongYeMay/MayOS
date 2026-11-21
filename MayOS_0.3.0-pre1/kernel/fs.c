@@ -325,6 +325,11 @@ int fs_prefs_read(u8 *destination, u32 bytes) {
     memcpy(destination, saved_prefs, PREFS_LENGTH);
     return 1;
 }
+#ifndef MAYOS_LINUX
+int fs_installed_setup_pending(void) {
+    return disk_ready && fs_start != 0 && !prefs_ready;
+}
+#endif
 int fs_prefs_write(const u8 *source, u32 bytes) {
     if (!source || bytes != PREFS_LENGTH)
         return 0;

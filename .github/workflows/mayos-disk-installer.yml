@@ -48,7 +48,9 @@ jobs:
         if: always()
         with:
           name: mayos-installer-media-logs
-          path: MayOS_0.3.0-pre1/build/installer-media-*.log
+          path: |
+            MayOS_0.3.0-pre1/build/installer-media-*.log
+            MayOS_0.3.0-pre1/build/installer-media-*.png
   install:
     runs-on: ubuntu-24.04
     timeout-minutes: 15

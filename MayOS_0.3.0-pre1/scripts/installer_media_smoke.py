@@ -52,8 +52,21 @@ def main():
             vm = start(tag, None)
             try:
                 vm.wait("MayOS: MayFS GPT partition selected")
+                if seed:
+                    vm.wait("MayOS: first boot setup ready")
+                    vm.shot("installer-media-oobe-welcome")
+                    vm.key("ret")
+                    vm.key("2")
+                    vm.shot("installer-media-oobe-appearance")
+                    vm.key("ret")
+                    vm.shot("installer-media-oobe-ready")
+                    vm.key("ret")
+                    vm.wait("MayOS: first boot setup completed")
                 vm.wait(f"MayOS Workstation {version} / MayShell")
                 vm.wait("MayOS: desktop ready")
+                if not seed:
+                    vm.wait("MayOS: desktop preferences applied")
+                    assert "MayOS: first boot setup ready" not in vm.text
                 vm.key("f1")
                 if seed:
                     vm.keyboard_command("write keep.txt installer-preserved")
@@ -98,13 +111,29 @@ def main():
             handle.truncate(target_size)
         vm = start("installer-media-install", iso)
         try:
-            console(vm)
-            vm.send_serial("INSTALL /dev/sda\n")
+            vm.wait("Install MayOS (serial console)")
+            vm.send_serial("\r")
+            vm.wait("MayOS installer graphical frontend ready")
+            vm.wait("@SELECT")
+            vm.shot("installer-media-gui-welcome")
+            vm.click(955, 552)
+            vm.shot("installer-media-gui-disk")
+            vm.key("ret")
+            vm.wait("@MODE 0")
+            vm.key("ret")
+            vm.shot("installer-media-gui-review")
+            vm.key("ret")
             vm.wait("MayOS installation complete.")
+            vm.wait("@DONE")
+            vm.shot("installer-media-gui-complete")
         finally:
             vm.stop()
         subprocess.run(["sfdisk", "--verify", str(disk)], check=True)
         boot_version("installer-media-hard-disk", "0.5.1-pre1", seed=True)
+        with disk.open("rb") as handle:
+            handle.seek((DATA_START + 500) * SECTOR)
+            saved = handle.read(20)
+            assert saved[:8] == b"MAYPREF1" and saved[16:20] == b"\0" * 4
         print("PASS: interactive ISO installation, readback verification and ISO-free hard-disk boot")
 
         original_data = data_digest()
