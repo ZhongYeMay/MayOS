@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#050506">
+<meta name="description" content="MayOS 双内核 BIOS/UEFI ISO：QEMU 部署、USB 外置设备启动、离线安装与校验说明。">
+<title>部署、外置设备启动与安装 · MayOS</title>
+<link rel="stylesheet" href="style.css"><script src="site.js" defer></script>
+</head>
+<body><a class="skip" href="#main">跳到主要内容</a>
+<header class="site-header"><div class="container nav-inner"><a class="brand" href="index.html" aria-label="MayOS 首页"><span class="brand-mark">M</span>MayOS</a><nav id="nav" class="nav-links" aria-label="主导航"><a href="index.html">概览</a><a href="download.html">下载</a><a href="deployment.html" aria-current="page">部署指南</a><a href="requirements.html">硬件要求</a><a href="demos.html">运行演示</a><a href="changelog.html">更新日志</a><a href="https://github.com/ZhongYeMay/MayOS">GitHub</a></nav><div class="nav-actions"><button type="button" id="theme" class="icon-btn" aria-label="切换主题">◐</button><button type="button" id="menu" class="icon-btn menu-toggle" aria-controls="nav" aria-expanded="false" aria-label="展开导航">☰</button></div></div></header>
+<main id="main">
+<section class="page-hero container">
+<p class="eyebrow">INSTALLATION & EXTERNAL BOOT</p>
+<h1>部署 MayOS。<br><span class="gradient-text">先测试，再安装。</span></h1>
+<p class="lead">同一张实验性 ISO 可以从 BIOS 或 UEFI 启动，分别进入 MayKernel64、Linux64 桌面和离线安装器。本指南区分不安装的启动体验与写入硬盘的安装操作。</p>
+<div class="specs"><span class="chip">x86_64</span><span class="chip">BIOS / UEFI x64</span><span class="chip">关闭 Secure Boot</span><span class="chip">QEMU 优先</span></div>
+</section>
+<section class="container">
+<article class="download-panel" id="versions">
+<p class="eyebrow">COMPONENT VERSIONS</p>
+<h2>镜像中分别包含什么？</h2>
+<div class="resource-grid">
+<article class="resource-card"><h3>MayKernel64</h3><p>最新已发布原生内核启动预览：<strong>0.5.2-pre4</strong>。它是从发布 ISO 提取并核对 SHA-256 的启动内核。</p></article>
+<article class="resource-card"><h3>Linux64</h3><p>从 MayOS 当前主分支的 Linux 桌面代码独立编译，内核版本 <strong>7.3.1</strong>，包含桌面、救援与兼容救援启动项。</p></article>
+<article class="resource-card"><h3>离线安装器</h3><p>复用已发布的 <strong>0.5.2-pre2</strong> 安装 / 恢复环境。<strong>它安装的是 0.5.2-pre2，而不是预览中的 0.5.2-pre4。</strong></p></article>
+</div>
+<div class="info-strip"><p><strong>版本差异说明</strong><br>不要把「最新 MayKernel 启动预览」误认为「最新已验证的磁盘安装版本」。组合介质不会自动升级安装器的写盘镜像。任务管理器的 Mission Center 重开发也不包含在此已发布组件中。</p></div>
+<div class="actions"><a class="btn blue" href="https://github.com/ZhongYeMay/MayOS/actions/workflows/latest-dual-installer-iso.yml">获取构建与 QEMU 验证结果</a><a class="btn secondary" href="download.html#cjk-installer">现有安装器 0.5.2-pre2</a><a class="btn secondary" href="requirements.html">硬件要求</a></div>
+<p>只有当 GitHub Actions 显示完整构建和 QEMU 验收成功，且出现真实 ISO 附件或实验性 Release 时，才能下载组合镜像。<strong>构建失败、任务仍运行或仅有源码，不代表存在可安装镜像。</strong></p>
+</article>
+<article class="download-panel" id="verify"><p class="eyebrow">STEP 01</p><h2>先验证下载文件</h2>
+<p>下载 ISO 与同一构建提供的 <code>SHA256SUMS.txt</code>。对比哈希必须一致，且文件名必须对应同一次构建。Windows 可以使用 PowerShell：</p>
+<pre><code>Get-FileHash .\MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso -Algorithm SHA256</code></pre>
+<p>Linux：</p><pre><code>sha256sum -c SHA256SUMS.txt</code></pre>
+<p>macOS：</p><pre><code>shasum -a 256 MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso</code></pre>
+<p>如果哈希不一致，停止使用。不要将不同版本的安装器、启动 ISO 和校验清单混用。</p>
+</article>
+<article class="download-panel" id="qemu"><p class="eyebrow">STEP 02 · RECOMMENDED</p><h2>使用 QEMU 测试</h2>
+<p>建议使用 <strong>1 GiB 或更多 RAM</strong> 的 QEMU x86_64 虚拟机，标准 VGA。以下命令仅创建并使用本地虚拟硬盘文件，<strong>不操作实体磁盘</strong>；请在镜像所在目录执行：</p>
+<pre><code>qemu-img create -f raw mayos-test.img 128M
+qemu-system-x86_64 -m 1024 -vga std -cdrom MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso -boot d -drive file=mayos-test.img,format=raw,if=ide</code></pre>
+<p>GRUB 菜单里，<strong>Start MayKernel64</strong> 进入原生系统，<strong>Start Linux64</strong> 进入 Linux 桌面；还可以选择救援模式或 <strong>Install MayOS 0.5.2-pre2</strong>。仅浏览桌面不需要选择安装器。</p>
+<p>UEFI 测试需要 OVMF 固件。以下路径是部分 Linux 发行版的示例，以本机安装的实际 OVMF 路径为准：</p>
+<pre><code>cp /usr/share/OVMF/OVMF_VARS_4M.fd ./mayos-uefi-vars.fd
+qemu-system-x86_64 -m 1024 -vga std -cdrom MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso -boot d -drive file=mayos-test.img,format=raw,if=ide -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd -drive if=pflash,format=raw,file=mayos-uefi-vars.fd</code></pre>
+</article>
+<article class="download-panel" id="usb"><p class="eyebrow">STEP 03 · EXTERNAL MEDIA</p><h2>从 U 盘或外置光驱启动</h2>
+<p>若要从另一台电脑或外置设备启动，可将已校验的 ISO 制作为<strong>专用启动 U 盘</strong>，或通过支持的外置光驱刻录/加载光盘映像。建议先用 QEMU 完成验证。</p>
+<ol>
+<li>准备一只<strong>没有重要数据的专用 U 盘</strong>。制作启动盘会清除该设备原有内容；不要选择存储资料的硬盘。</li>
+<li>在 Windows 可使用 Rufus，在 Windows/macOS/Linux 可尝试 balenaEtcher。选择正确的 <code>.iso</code> 和目标 U 盘；只有工具明确支持镜像写入模式时才进行写入。不要仅把 ISO 当作普通文件复制到 U 盘。</li>
+<li>插好 U 盘后重启电脑，通过主板的启动设备选择菜单（不同厂商可能是 F12、F11、Esc 或其他按键）选择对应的 <strong>UEFI: USB</strong> 或外置设备。</li>
+<li>关闭 Secure Boot，检查是否看到 GRUB 中的 MayKernel64、Linux64 和安装器选项。优先选择非安装项进行兼容性检查。</li>
+</ol>
+<p><strong>兼容性边界：</strong>已验证的 BIOS/UEFI 启动主要是 ISO 在 QEMU 虚拟光驱中的测试。实体主板的 U 盘原始镜像引导、USB 控制器兼容性和固件行为尚未普遍验证；无法启动时不要修改内部硬盘来尝试修复。</p>
+</article>
+<article class="download-panel" id="install"><p class="eyebrow">STEP 04 · INSTALLER</p><h2>离线安装到空白测试盘</h2>
+<p>安装器是会修改磁盘分区表和文件内容的程序，<strong>不是只读试用模式</strong>。请选择专用、空白、可舍弃数据的<strong>虚拟磁盘</strong>作为测试目标。图形安装或串口控制台安装均需要明确选盘并再次确认。</p>
+<p>QEMU 演示中可使用新建的 128 MiB 虚拟硬盘；安装器要求至少 80 MiB、512 字节逻辑扇区的受支持整盘。安装完成后关闭虚拟机，<strong>移除 ISO</strong>，只从新安装的虚拟硬盘启动并进行首次设置。不要将此流程直接套用到存放个人文件的实体硬盘。</p>
+<p>外置 USB 存储设备可能被系统标记为 <code>removable</code>，安装器会拒绝这类目标。<strong>能从 U 盘启动安装器，不代表允许把 MayOS 安装到 U 盘。</strong></p>
+<div class="info-strip"><p><strong>实体电脑安装尚未达到正式验收</strong><br>目前不保证所有 SATA/NVMe、USB 桥接设备、4Kn 扇区、显卡、键鼠、UEFI 固件及断电恢复兼容。不要在主力电脑或有数据的实体硬盘上执行安装、升级、回滚实验。正式发布前需要专门的硬件兼容性测试。</p></div>
+<div class="actions"><a class="btn secondary" href="requirements.html#installer">查看磁盘约束</a><a class="btn secondary" href="download.html#installer">查看已发布安装器</a><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS">查看源代码</a></div>
+</article>
+</section>
+</main>
+<footer class="site-footer"><div class="container"><div class="footer-bottom"><span>© 2023–2026 MayOS Team</span><span>Experimental OS · QEMU validation before installation</span></div></div></footer>
+</body></html>
