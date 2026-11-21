@@ -109,7 +109,7 @@ menuentry "Install/Recover 0.5.2-pre2 (serial console)" --id mayos-installer-ser
     bootable_iso(work, output, argparse.Namespace(
         firmware="hybrid", grub_mkrescue="grub-mkrescue",
         grub_mkstandalone="grub-mkstandalone", grub_file="grub-file",
-        grub_pc_dir=None, grub_efi_dir=None), efi_search_file="/boot/mayos.elf")
+        grub_pc_dir=None, grub_efi_dir=None))
     if output.stat().st_size <= max(custom.stat().st_size, installer.stat().st_size):
         raise AssertionError("combined ISO suspiciously small")
     record = {
