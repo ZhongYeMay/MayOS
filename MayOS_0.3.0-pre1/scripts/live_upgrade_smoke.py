@@ -29,11 +29,13 @@ def main():
         launcher = [sys.executable, str(Path(__file__).with_name("live_upgrade.py")),
                     "--directory", str(slots)]
 
-        def shell_boot(image, label, commands):
+        def shell_boot(image, label, commands, *, expect_preferences=False):
             vm = BootVM(iso=image, disk=disk, tag=label, qemu=qemu,
                         memory=256, timeout=60)
             try:
                 vm.wait("MayOS: desktop ready")
+                if expect_preferences:
+                    vm.wait("MayOS: desktop preferences applied")
                 vm.key("f1")
                 for command, result in commands:
                     vm.keyboard_command(command)
@@ -89,21 +91,21 @@ def main():
         shell_boot(slots / "B.iso", "live-upgrade-new", [
             ("cat keep.txt", "\nold-data\n"),
             ("write new.txt new-data", "\nOK\n"),
-        ])
+        ], expect_preferences=True)
         after = digest(disk)
         subprocess.run([*launcher, "rollback"], check=True)
         assert selected()["active"]["slot"] == "A" and digest(disk) == after
         shell_boot(slots / "A.iso", "live-upgrade-rollback", [
             ("cat keep.txt", "\nold-data\n"),
             ("cat new.txt", "\nnew-data\n"),
-        ])
+        ], expect_preferences=True)
         subprocess.run([*launcher, "rollback"], check=True)
         with (slots / "B.iso").open("ab") as image:
             image.write(b"damaged")
         subprocess.run([*launcher, "rollback"], check=True)
         assert selected()["active"]["slot"] == "A"
         assert selected()["previous"] is None
-        print("PASS: upgrade pre1 to pre2 and roll back with both versions' files intact")
+        print("PASS: signed upgrade and rollback preserve both versions' files and preferences")
 
 
 if __name__ == "__main__":
