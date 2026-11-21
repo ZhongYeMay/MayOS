@@ -1,0 +1,31 @@
+name: Verify MayOS 0.5.1 hard-disk installer
+on:
+  push:
+    branches: [feat/mayos-0.5.1-disk-installer]
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GRUB, partition and virtualization tools
+        run: |
+          bash scripts/configure-ci-apt-mirror.sh
+          sudo apt-get install -y --no-install-recommends gcc binutils fdisk \
+            grub-common grub-pc-bin grub-efi-amd64-bin xorriso mtools \
+            qemu-system-x86 ovmf python3-pil fonts-noto-cjk fonts-dejavu-core
+      - name: Build MayKernel and boot from an installed virtual hard disk
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          make -j2 all
+          python3 scripts/installer_smoke.py
+          python3 scripts/phase1_storage_bounds_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-qemu-evidence
+          path: MayOS_0.3.0-pre1/build/*.log

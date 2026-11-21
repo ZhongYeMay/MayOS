@@ -7,7 +7,7 @@
 #include "nvme.h"
 #endif
 
-/* MayFS uses a checksummed fixed-size snapshot on primary IDE master. */
+/* MayFS snapshots live on a dedicated GPT partition or legacy data disk. */
 #define FS_SECTORS 512
 #define FS_BACKUP_LBA FS_SECTORS
 #define FS_TOTAL_SECTORS (FS_SECTORS * 2)
@@ -19,6 +19,7 @@ File files[FS_MAX];
 int disk_ready;
 #ifndef MAYOS_LINUX
 static u32 disk_sectors;
+static u32 fs_start, fs_blocks;
 static int storage_ahci;
 static int storage_nvme;
 static u16 ata_command_base = 0x1f0, ata_control_base = 0x3f6;
@@ -53,7 +54,7 @@ static int ata_wait(int data) {
     return 0;
 }
 static int ata_sector(u32 lba, void *buf, int write) {
-    if (lba >= FS_TOTAL_SECTORS || lba >= disk_sectors)
+    if (lba >= disk_sectors)
         return 0;
     outb((u16)(ata_command_base + 6), 0xe0 | ((lba >> 24) & 15));
     for (int i = 0; i < 4; i++)
@@ -76,13 +77,97 @@ static int ata_sector(u32 lba, void *buf, int write) {
     }
     return ata_wait(0);
 }
-static int sector(u32 lba, void *buf, int write) {
-    if (lba >= FS_TOTAL_SECTORS || lba >= disk_sectors) return 0;
+static int disk_sector(u32 lba, void *buf, int write) {
+    if (lba >= disk_sectors) return 0;
     if (storage_nvme)
         return write ? nvme_write_sector(lba, buf) : nvme_read_sector(lba, buf);
     if (storage_ahci)
         return write ? ahci_write_sector(lba, buf) : ahci_read_sector(lba, buf);
     return ata_sector(lba, buf, write);
+}
+static int sector(u32 lba, void *buf, int write) {
+    if (lba >= FS_TOTAL_SECTORS || lba >= fs_blocks) return 0;
+    return disk_sector(fs_start + lba, buf, write);
+}
+
+static u32 gpt_crc(const u8 *bytes, u32 size) {
+    u32 crc = ~0u;
+    while (size--) {
+        crc ^= *bytes++;
+        for (int bit = 0; bit < 8; bit++)
+            crc = (crc >> 1) ^ (0xedb88320u & (0u - (crc & 1u)));
+    }
+    return ~crc;
+}
+
+/* The installer creates a conventional GPT with 128-byte entries. Limit
+ * reads to 128 entries and refuse ambiguous or overlapping MayFS regions. */
+static u8 gpt_entries[128 * 128];
+static const u8 mayfs_type[16] = {
+    0x4f, 0x59, 0x41, 0x4d, 0x2d, 0x53, 0x53, 0x46,
+    0x8c, 0x4d, 0x41, 0x59, 0x46, 0x53, 0x30, 0x31
+};
+
+static int bytes_equal(const u8 *a, const u8 *b, u32 size) {
+    for (u32 i = 0; i < size; i++)
+        if (a[i] != b[i]) return 0;
+    return 1;
+}
+
+static int gpt_mayfs(u8 *header) {
+    u32 header_size = *(u32 *)(header + 12), header_crc = *(u32 *)(header + 16);
+    if (header_size < 92 || header_size > 512 || *(u64 *)(header + 24) != 1)
+        return 0;
+    *(u32 *)(header + 16) = 0;
+    if (gpt_crc(header, header_size) != header_crc) return 0;
+    u64 first = *(u64 *)(header + 40), last = *(u64 *)(header + 48);
+    u64 table = *(u64 *)(header + 72);
+    u32 count = *(u32 *)(header + 80), entry_size = *(u32 *)(header + 84);
+    if (entry_size != 128 || !count || count > 128 ||
+        table < 2 || table >= disk_sectors || first > last || last >= disk_sectors ||
+        *(u64 *)(header + 32) <= last || *(u64 *)(header + 32) >= disk_sectors)
+        return 0;
+    u32 blocks = (count * 128 + 511) / 512;
+    if (table + blocks > first) return 0;
+    for (u32 i = 0; i < blocks; i++)
+        if (!disk_sector((u32)table + i, gpt_entries + 512 * i, 0)) return 0;
+    if (gpt_crc(gpt_entries, count * 128) != *(u32 *)(header + 88)) return 0;
+    u64 start = 0, end = 0;
+    for (u32 i = 0; i < count; i++) {
+        const u8 *entry = gpt_entries + 128 * i;
+        if (!bytes_equal(entry, mayfs_type, 16)) continue;
+        if (start) return 0;
+        start = *(const u64 *)(entry + 32);
+        end = *(const u64 *)(entry + 40);
+        if (start < first || end > last || end < start || end - start + 1 < FS_TOTAL_SECTORS)
+            return 0;
+    }
+    if (!start) return 0;
+    static const u8 empty[16];
+    for (u32 i = 0; i < count; i++) {
+        const u8 *entry = gpt_entries + 128 * i;
+        if (bytes_equal(entry, mayfs_type, 16) || bytes_equal(entry, empty, 16)) continue;
+        if (*(const u64 *)(entry + 32) <= end && *(const u64 *)(entry + 40) >= start)
+            return 0;
+    }
+    fs_start = (u32)start;
+    fs_blocks = (u32)(end - start + 1);
+    return 1;
+}
+
+static void select_mayfs_region(void) {
+    u8 header[512];
+    fs_start = fs_blocks = 0;
+    if (!disk_sector(0, header, 0)) return;
+    int partitioned = header[510] == 0x55 && header[511] == 0xaa &&
+                      !bytes_equal(header, (const u8 *)"MAYFS001", 8);
+    if (!disk_sector(1, header, 0)) return;
+    if (bytes_equal(header, (const u8 *)"EFI PART", 8)) {
+        if (gpt_mayfs(header)) serial("MayOS: MayFS GPT partition selected\n");
+        else serial("MayOS: no valid MayFS GPT partition\n");
+    } else if (!partitioned) {
+        fs_blocks = disk_sectors;
+    }
 }
 static u32 ata_capacity(void) {
     u16 identify[256];
@@ -323,14 +408,15 @@ void fs_init(void) {
         }
         disk_sectors = ata_capacity();
     }
-    disk_ready = disk_sectors >= FS_SECTORS;
+    select_mayfs_region();
+    disk_ready = fs_blocks >= FS_SECTORS;
     backup_enabled = 0;
     active_slot = 0;
     fs_generation = 0;
     int valid = 0;
     int main_valid = 0, backup_valid = 0;
     int main_blank = 0, backup_blank = 1;
-    int backup_readable = disk_sectors >= FS_TOTAL_SECTORS;
+    int backup_readable = fs_blocks >= FS_TOTAL_SECTORS;
     if (disk_ready) {
         int main_read = read_snapshot(0, fs_image);
         main_valid = main_read && snapshot_valid(fs_image);

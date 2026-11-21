@@ -22,7 +22,7 @@ from smoke import BUILD, entries
 
 
 class BootVM:
-    def __init__(self, *, iso: Path, disk: Path, tag: str, qemu: str,
+    def __init__(self, *, iso: Path | None, disk: Path, tag: str, qemu: str,
                  memory: int, timeout: float, ovmf_code: Path | None = None,
                  ovmf_vars: Path | None = None, cpu: str = 'max'):
         self.timeout = timeout
@@ -40,11 +40,13 @@ class BootVM:
         self._stderr_file = self.stderr_path.open('w')
         args = [qemu, '-machine', 'pc', '-accel', 'tcg', '-cpu', cpu,
                 '-m', str(memory), '-vga', 'std', '-display', 'none',
-                '-cdrom', str(iso), '-boot', 'd',
+                '-boot', 'd' if iso is not None else 'c',
                 '-drive', f'file={disk},format=raw,if=ide,index=0',
                 '-serial', f'unix:{self.serial_path},server=on,wait=off',
                 '-qmp', f'unix:{self.qmp_path},server=on,wait=off',
                 '-nic', 'user,model=e1000', '-no-reboot', '-S']
+        if iso is not None:
+            args += ['-cdrom', str(iso)]
         if (ovmf_code is None) != (ovmf_vars is None):
             raise ValueError('OVMF_CODE and an independent writable OVMF_VARS copy are both required')
         if ovmf_code is not None:
