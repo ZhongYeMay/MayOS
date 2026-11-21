@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
 CURRENT = "0.5.1-pre1"
+MULTILINGUAL = "0.5.2-pre1"
 HISTORIC_DEMOS = "0.4.1-pre2"
 DEMO_RELEASE = "0.4.0-pre3"
 PREFIX = "MayOS-0.4.0-pre3-all-features-"
@@ -70,7 +71,9 @@ assert "0.4.1-pre2" in docs["download.html"][1], "historic release download not 
 assert f"MayOS-{CURRENT}-Installer-x86_64.iso" in docs["download.html"][1]
 assert f"/download/v{CURRENT}/SHA256SUMS.txt" in docs["download.html"][1]
 assert "installer-preview" in docs["demos.html"][0].ids
-assert "0.5.2 · 多语言系统" in docs["changelog.html"][1]
+assert "multilingual-preview" in docs["changelog.html"][0].ids
+assert "multilingual" in docs["demos.html"][0].ids
+assert f"/releases/tag/v{MULTILINGUAL}" in docs["download.html"][1]
 assert f"/releases/tag/v{CURRENT}" in docs["index.html"][1]
 assert HISTORIC_DEMOS in docs["demos.html"][1], "historic QEMU demo missing"
 
@@ -134,7 +137,8 @@ assert history["repository"] == "ZhongYeMay/MayOS"
 assert len(history["releases"]) >= 10
 tags = [r["tag"] for r in history["releases"]]
 assert len(tags) == len(set(tags)), "duplicate release tag in snapshot"
-assert tags[0] == f"v{CURRENT}", "current prerelease missing from the top of the history snapshot"
+assert tags[0] == f"v{MULTILINGUAL}", "latest preview missing from the top of the history snapshot"
+assert f"v{CURRENT}" in tags, "installer release missing from the history snapshot"
 assert "v0.5.0-pre1" in tags and "v0.3.0" in tags, "historical release omitted"
 for entry in history["releases"]:
     assert entry["name"] and entry["published_at"]
