@@ -39,6 +39,8 @@ jobs:
           echo 'c51b45c92ea4cd6645b690e433af3f562507fc69ab62d5d39891c10284ac5bb7  build/release-components/MayOS-0.5.2-pre4-MayKernel-x86_64.iso' > build/components-sha256.txt
           echo 'c46ee45ded237f0c5823f94e498dad89700f7c54c0d80ba4137e5be3bf572a1a  build/release-components/MayOS-0.5.2-pre2-Installer-x86_64.iso' >> build/components-sha256.txt
           sha256sum --check build/components-sha256.txt
+      - name: Generate required compiled desktop fonts, icons and image headers
+        run: make -C versions/0.5.0-pre2-dev build/font.h build/cat_image.h build/material_icons.h
       - name: Reuse independently QEMU-tested Linux 7.3.1 payload when available; rebuild on missing cache
         env:
           GH_TOKEN: ${{ github.token }}
