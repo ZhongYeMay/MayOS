@@ -1782,41 +1782,43 @@ static int contains(const char *a, const char *b) {
 }
 static int search_match(int id) {
     const char *names[] = {"files 文件 文档", "settings 设置 关于", "terminal 终端 shell",
-                           "trash 回收站", "game 游戏 夏日未寄 explorer 浏览器"};
-    return id >= 0 && id < 5 && contains(names[id], search);
+                           "trash 回收站", "game 游戏 夏日未寄 explorer 浏览器", "taskmgr monitor CPU GPU RAM NET 性能"};
+    return id >= 0 && id < 6 && contains(names[id], search);
 }
 static void start_draw(void) {
-    int x = 210, y = H - 500;
-    roundrect(x + 3, y + 4, 326, 410, dark ? 0x141218 : 0xd8d1df);
-    roundrect(x, y, 326, 410, panel);
+    int x = 210, y = H - 558;
+    roundrect(x + 3, y + 4, 326, 470, dark ? 0x141218 : 0xd8d1df);
+    roundrect(x, y, 326, 470, panel);
     text(x + 22, y + 19, "应用程序 / Applications", ink);
     roundrect(x + 18, y + 57, 290, 34, bg);
     text(x + 30, y + 64, search[0] ? search : "搜索 / files, settings, terminal",
          search[0] ? ink : muted);
     const char *names[] = {"文件管理器", "设置", "终端", "回收站",
 #ifdef MAYOS_LINUX
-                           "Explorer 浏览器"
+                           "Explorer 浏览器",
 #else
-                           "夏日未寄"
+                           "夏日未寄",
 #endif
+                           "Task Manager / 性能"
     };
     const char *desc[] = {"浏览文件与文件夹", "系统信息与外观", "命令与会话工具", "找回或删除文件",
 #ifdef MAYOS_LINUX
-                          "Linux 网络文本预览"
+                          "Linux 网络文本预览",
 #else
-                          "MayKernel 原生游戏"
+                          "MayKernel 原生游戏",
 #endif
+                          "CPU · GPU · Disk · RAM · NET"
     };
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 6; i++)
         if (search_match(i)) {
-            icon(x + 24, y + 109 + i * 47, i, 31);
+            icon(x + 24, y + 109 + i * 47, i == 5 ? 19 : i, 31);
             text(x + 70, y + 105 + i * 47, names[i], ink);
             text(x + 70, y + 125 + i * 47, desc[i], muted);
         }
-    rect(x + 18, y + 350, 290, 1, line);
-    text(x + 25, y + 369, "may / 本地账户", muted);
-    text(x + 213, y + 369, "重启", ink);
-    text(x + 270, y + 369, "关机", ink);
+    rect(x + 18, y + 411, 290, 1, line);
+    text(x + 25, y + 430, "may / 本地账户", muted);
+    text(x + 213, y + 430, "重启", ink);
+    text(x + 270, y + 430, "关机", ink);
 }
 static void context_draw(void) {
     roundrect(ctxx + 3, ctxy + 3, 184, 320, dark ? 0x141218 : 0xd8d1df);
@@ -2202,15 +2204,17 @@ static void left_click(void) {
         return;
     }
     if (start_open) {
-        int x = 210, y = H - 500;
-        if (inside(mx, my, x, y, 326, 410)) {
-            for (int i = 0; i < 5; i++)
+        int x = 210, y = H - 558;
+        if (inside(mx, my, x, y, 326, 470)) {
+            for (int i = 0; i < 6; i++)
                 if (search_match(i) && inside(mx, my, x + 16, y + 100 + i * 47, 294, 46)) {
                     if (i == 3) {
                         folder = 3;
                         file_scroll = 0;
                         selected = -1;
                         raise_window(0);
+                    } else if (i == 5) {
+                        raise_window(TASK_MANAGER_WINDOW);
                     } else if (i == 4) {
 #ifdef MAYOS_LINUX
                         raise_window(4);
@@ -2223,7 +2227,7 @@ static void left_click(void) {
                     }
                     return;
                 }
-            if (my >= y + 354) {
+            if (my >= y + 413) {
                 if (mx > x + 267) {
                     fs_sync();
                     poweroff();
@@ -2491,11 +2495,13 @@ static void key_event(int k) {
             search[n] = k;
             search[n + 1] = 0;
         } else if (k == '\n') {
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 6; i++)
                 if (search_match(i)) {
                     if (i == 3) {
                         folder = 3;
                         raise_window(0);
+                    } else if (i == 5) {
+                        raise_window(TASK_MANAGER_WINDOW);
                     } else if (i == 4) {
 #ifdef MAYOS_LINUX
                         raise_window(4);
