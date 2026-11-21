@@ -391,6 +391,7 @@ static int keycode(unsigned int code, int value) {
     if (code == KEY_CAPSLOCK) { if (value == 1) caps_lock = !caps_lock; return 0; }
     switch (code) {
         case KEY_F1: return 0x105;
+        case KEY_F2: return 0x107;
         case KEY_UP: return 0x101;
         case KEY_DOWN: return 0x102;
         case KEY_DELETE: return 0x103;
