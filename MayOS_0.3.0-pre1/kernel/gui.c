@@ -2,6 +2,7 @@
 #include "boot_logo.h"
 #include "core.h"
 #include "font.h"
+#include "procfs.h"
 #include "task_manager.h"
 #include "material_icons.h"
 #ifndef MAYOS_LINUX
@@ -838,34 +839,14 @@ static void terminal_init(void) {
     emit("Type help for commands. F1 opens this terminal.");
     emit(" ");
 }
-static int resolve(const char *p, int base) {
-    char name[48];
-    if (*p == '/') {
-        base = 0;
-        p++;
-    }
-    while (*p) {
-        int n = 0;
-        while (*p && *p != '/') {
-            if (n < 47)
-                name[n++] = *p;
-            p++;
-        }
-        name[n] = 0;
-        if (*p == '/')
-            p++;
-        if (!strcmp(name, ".."))
-            base = files[base].parent;
-        else if (strcmp(name, ".")) {
-            base = fs_find(base, name);
-            if (base < 0)
-                return -1;
-        }
-        if (*p && !files[base].dir)
-            return -1;
-    }
-    return base;
+static MayVfsReader vfs_reader;
+static int read_text_file(int node, char *buffer) {
+    if (!may_vfs_open(node, &vfs_reader)) return 0;
+    u32 length = may_vfs_read(&vfs_reader, (u8 *)buffer, FILE_CAP - 1);
+    buffer[length] = 0;
+    return 1;
 }
+
 static int path_parent(const char *p, int *parent, char *name) {
     int n = strlen(p), split = -1;
     for (int i = 0; i < n; i++)
@@ -875,22 +856,24 @@ static int path_parent(const char *p, int *parent, char *name) {
     if (split >= 0) {
         char prefix[160];
         copy(prefix, p, split + 2);
-        *parent = resolve(prefix, cwd);
+        *parent = may_vfs_lookup(prefix, cwd);
     }
+    if (strlen(p + split + 1) >= 48) return 0;
     copy(name, p + split + 1, 48);
-    return *parent >= 0 && files[*parent].dir && name[0];
+    MayVfsNode node;
+    return may_vfs_info(*parent, &node) && node.directory && name[0];
 }
 static void pwd(void) {
-    char path[180] = "", tmp[180];
-    int chain[48], n = 0, a = cwd;
-    while (a && n < 48) {
-        chain[n++] = a;
-        a = files[a].parent;
+    char path[180] = "/";
+    const char *chain[FS_MAX];
+    int n = 0, a = cwd;
+    MayVfsNode node;
+    while (a && n < FS_MAX && may_vfs_info(a, &node)) {
+        chain[n++] = node.name;
+        a = node.parent;
     }
-    copy(path, "/", 180);
     while (n) {
-        copy(tmp, files[chain[--n]].name, 180);
-        copy(path + strlen(path), tmp, 180 - strlen(path));
+        copy(path + strlen(path), chain[--n], 180 - strlen(path));
         if (n)
             copy(path + strlen(path), "/", 180 - strlen(path));
     }
@@ -932,7 +915,8 @@ static void shell(void) {
     if (!argc)
         return;
     char *c = argv[0];
-    int target = argc > 1 ? resolve(argv[1], cwd) : -1;
+    int target = argc > 1 ? may_vfs_lookup(argv[1], cwd) : -1;
+    MayVfsNode info;
     if (!strcmp(c, "help")) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
@@ -954,26 +938,29 @@ static void shell(void) {
         pwd();
     else if (!strcmp(c, "ls")) {
         int d = argc > 1 ? target : cwd;
-        if (d < 0 || !files[d].dir)
+        if (!may_vfs_info(d, &info) || !info.directory)
             emit("ls: directory not found");
-        else
-            for (int i = 1; i < FS_MAX; i++)
-                if (files[i].used && files[i].parent == (u32)d) {
+        else {
+            for (int i = may_vfs_next(d, -1); i >= 0; i = may_vfs_next(d, i)) {
+                if (may_vfs_info(i, &info)) {
                     char b[100];
-                    copy(b, files[i].dir ? "[dir]  " : "       ", 100);
-                    copy(b + 7, files[i].name, 93);
+                    copy(b, info.directory ? "[dir]  " : "       ", 100);
+                    copy(b + 7, info.name, 93);
                     emit(b);
                 }
+            }
+        }
     } else if (!strcmp(c, "cd")) {
         if (argc < 2)
             cwd = 0;
-        else if (target >= 0 && files[target].dir)
+        else if (may_vfs_info(target, &info) && info.directory)
             cwd = target;
         else
             emit("cd: directory not found");
     } else if (!strcmp(c, "cat")) {
-        if (target >= 0 && !files[target].dir)
-            emit((char *)files[target].data);
+        static char contents[FILE_CAP];
+        if (read_text_file(target, contents))
+            emit(contents);
         else
             emit("cat: file not found");
     } else if (!strcmp(c, "mkdir") || !strcmp(c, "touch") || !strcmp(c, "write")) {
@@ -981,6 +968,8 @@ static void shell(void) {
         char name[48];
         if (argc < 2 || (!strcmp(c, "write") && argc < 3) || !path_parent(argv[1], &par, name)) {
             emit("usage: mkdir/touch <path> | write <file> <text>");
+        } else if (may_vfs_read_only(par) || may_vfs_read_only(target)) {
+            emit("Read-only filesystem");
         } else {
             int i = fs_find(par, name);
             if (i >= 0 && (!strcmp(c, "mkdir") || files[i].dir)) {
@@ -1000,7 +989,9 @@ static void shell(void) {
             }
         }
     } else if (!strcmp(c, "rm")) {
-        if (target < 4)
+        if (may_vfs_read_only(target))
+            emit("Read-only filesystem");
+        else if (target < 4)
             emit("rm: missing path or protected system folder");
         else if (!fs_move(target, 3))
             emit("rm: cannot move to Trash (name already exists?)");
@@ -1009,22 +1000,13 @@ static void shell(void) {
             emit("Moved to Trash");
         }
     } else if (!strcmp(c, "mv")) {
-        if (argc < 3 || target < 4 || strlen(argv[2]) > 47 ||
-            fs_find(files[target].parent, argv[2]) >= 0)
+        if (may_vfs_read_only(target))
+            emit("Read-only filesystem");
+        else if (argc < 3 || !fs_rename(target, argv[2]))
             emit("mv: invalid or duplicate name");
         else {
-            int valid = 1;
-            for (char *s = argv[2]; *s; s++)
-                if (*s == '/')
-                    valid = 0;
-            if (!strcmp(argv[2], ".") || !strcmp(argv[2], ".."))
-                valid = 0;
-            if (valid) {
-                copy(files[target].name, argv[2], 48);
-                sync_notice();
-                emit("Renamed");
-            } else
-                emit("mv: use a filename, without /");
+            sync_notice();
+            emit("Renamed");
         }
     } else if (!strcmp(c, "save")) {
 #ifdef MAYOS_LINUX
@@ -1377,9 +1359,9 @@ static void shell(void) {
         emit("Unknown command. Type help.");
 }
 static void open_file(int i) {
-    if (i < 0)
-        return;
-    if (files[i].dir) {
+    MayVfsNode info;
+    if (!may_vfs_info(i, &info)) return;
+    if (info.directory) {
         folder = i;
         file_scroll = 0;
         selected = -1;
@@ -1389,13 +1371,17 @@ static void open_file(int i) {
         notify("请先保存编辑器中的修改");
         return;
     }
+    if (!read_text_file(i, editor_buf)) return;
     editor_file = i;
-    copy(editor_buf, (char *)files[i].data, FILE_CAP);
     editor_changed = 0;
     raise_window(3);
 }
 static void save_editor(void) {
-    if (editor_file < 0 || !files[editor_file].used) {
+    if (may_vfs_read_only(editor_file)) {
+        notify("只读文件");
+        return;
+    }
+    if (editor_file < 0 || editor_file >= FS_MAX || !files[editor_file].used) {
         notify("文件已不存在");
         return;
     }
@@ -1454,12 +1440,10 @@ static void accept_modal(void) {
             notify("系统文件夹不可重命名");
             return;
         }
-        int duplicate = fs_find(folder, modal_text);
-        if (duplicate >= 0 && duplicate != modal_target) {
-            notify("同名文件已存在");
+        if (!fs_rename(modal_target, modal_text)) {
+            notify("名称不可用或已存在");
             return;
         }
-        copy(files[modal_target].name, modal_text, 48);
     } else {
         int i = fs_create(folder, modal_text, modal == 2);
         if (i < 0) {
@@ -1806,11 +1790,17 @@ static void settings(Window *w) {
     }
 }
 static int file_list[FS_MAX], file_count;
+static void files_up(void) {
+    MayVfsNode node;
+    if (may_vfs_info(folder, &node)) folder = node.parent;
+    file_scroll = 0;
+    selected = -1;
+}
+
 static void build_file_list(void) {
     file_count = 0;
-    for (int i = 1; i < FS_MAX; i++)
-        if (files[i].used && files[i].parent == (u32)folder)
-            file_list[file_count++] = i;
+    for (int i = may_vfs_next(folder, -1); i >= 0 && file_count < FS_MAX; i = may_vfs_next(folder, i))
+        file_list[file_count++] = i;
 }
 static void files_draw(Window *w) {
     int x = w->x, y = w->y;
@@ -1847,10 +1837,15 @@ static void files_draw(Window *w) {
 #endif
          muted);
     text(cx + 112, y + 59, "/", muted);
-    if (folder)
-        text(cx + 130, y + 59, files[folder].name, ink);
-    button(cx, y + 99, 102, "新建文件", 0);
-    button(cx + 114, y + 99, 118, "新建文件夹", 0);
+    MayVfsNode node;
+    if (folder && may_vfs_info(folder, &node))
+        text(cx + 130, y + 59, node.name, ink);
+    if (may_vfs_read_only(folder))
+        text(cx + 10, y + 105, "只读系统文件", muted);
+    else {
+        button(cx, y + 99, 102, "新建文件", 0);
+        button(cx + 114, y + 99, 118, "新建文件夹", 0);
+    }
     button(x + w->w - 120, y + 99, 44, "‹", 0);
     button(x + w->w - 66, y + 99, 44, "›", 0);
     text(cx, y + 147, "名称", muted);
@@ -1863,13 +1858,15 @@ static void files_draw(Window *w) {
         file_scroll = 0;
     for (int k = 0; k + file_scroll < file_count && k < visible; k++) {
         int i = file_list[k + file_scroll], yy = y + 184 + k * 44;
+        if (!may_vfs_info(i, &node)) continue;
         if (selected == i)
             roundrect(cx - 4, yy, w->w - 178, 40, selected_fill);
-        icon(cx + 7, yy + 8, files[i].dir ? 0 : 2, 24);
-        text(cx + 45, yy + 10, files[i].name, ink);
-        text(x + w->w - 190, yy + 10, files[i].dir ? "文件夹" : "文本文件", muted);
-        if (!files[i].dir)
-            numtext(x + w->w - 92, yy + 10, files[i].size, muted);
+        icon(cx + 7, yy + 8, node.directory ? 0 : 2, 24);
+        text(cx + 45, yy + 10, node.name, ink);
+        text(x + w->w - 190, yy + 10, node.directory ? "文件夹" :
+             node.read_only ? "系统文件" : "文本文件", muted);
+        if (!node.directory && !node.read_only)
+            numtext(x + w->w - 92, yy + 10, node.size, muted);
     }
     if (!file_count) {
         text(cx + 60, y + 230, "这里还很安静", muted);
@@ -1908,8 +1905,13 @@ static void terminal_draw(Window *w) {
 }
 static void editor_draw(Window *w) {
     int x = w->x, y = w->y;
-    button(x + 17, y + 55, 90, "保存", 1);
-    text(x + 126, y + 61, editor_file >= 0 ? files[editor_file].name : "没有打开文件", ink);
+    MayVfsNode node;
+    int open = may_vfs_info(editor_file, &node);
+    if (open && node.read_only)
+        text(x + 29, y + 61, "只读", muted);
+    else
+        button(x + 17, y + 55, 90, "保存", 1);
+    text(x + 126, y + 61, open ? node.name : "没有打开文件", ink);
     if (editor_changed)
         text(x + w->w - 110, y + 61, "● 未保存", accent);
     rect(x + 17, y + 99, w->w - 34, 1, line);
@@ -2345,6 +2347,10 @@ static void toggle_max(int id) {
     }
 }
 static void paste_file(void) {
+    if (may_vfs_read_only(folder)) {
+        notify("只读系统目录");
+        return;
+    }
     if (clip < 4 || !files[clip].used) {
         notify("请先选择文件并复制");
         return;
@@ -2377,6 +2383,10 @@ static void paste_file(void) {
     notify("操作完成");
 }
 static void trash_selected(void) {
+    if (may_vfs_read_only(selected) || may_vfs_read_only(folder)) {
+        notify("只读系统文件");
+        return;
+    }
     if (selected < 4) {
         notify("请先选择普通文件或文件夹");
         return;
@@ -2386,7 +2396,7 @@ static void trash_selected(void) {
         return;
     }
     if (folder == 3) {
-        if (editor_file >= 0) {
+        if (editor_file >= 0 && editor_file < FS_MAX) {
             int p = editor_file;
             while (p && p != selected)
                 p = files[p].parent;
@@ -2413,6 +2423,10 @@ static void trash_selected(void) {
 }
 static void context_action(int i) {
     context_open = 0;
+    if (i != 0 && (may_vfs_read_only(selected) || may_vfs_read_only(folder))) {
+        notify("只读系统文件");
+        return;
+    }
     if (i == 0)
         open_file(selected);
     else if (i == 1)
@@ -2695,9 +2709,7 @@ static void left_click(void) {
                     selected = -1;
                 }
             } else if (ry >= 54 && ry < 84 && rx < 206) {
-                folder = files[folder].parent;
-                file_scroll = 0;
-                selected = -1;
+                files_up();
             } else if (ry >= 99 && ry < 129) {
                 if (rx >= w->w - 120 && rx < w->w - 76) {
                     file_scroll -= 5;
@@ -2707,6 +2719,8 @@ static void left_click(void) {
                     build_file_list();
                     if (file_scroll + 5 < file_count)
                         file_scroll += 5;
+                } else if (may_vfs_read_only(folder)) {
+                    notify("只读系统目录");
                 } else if (rx >= 164 && rx < 266)
                     begin_modal(1, -1);
                 else if (rx >= 278 && rx < 396)
@@ -2893,6 +2907,7 @@ static void key_event(int k) {
             command[cmdlen] = 0;
         }
     } else if (focus == 3 && windows[3].open && !windows[3].min && editor_file >= 0) {
+        if (may_vfs_read_only(editor_file)) return;
         int n = strlen(editor_buf);
         if (k == 0x106) {
             save_editor();
@@ -2915,9 +2930,7 @@ static void key_event(int k) {
         else if (k == 0x103)
             trash_selected();
         else if (k == '\b') {
-            folder = files[folder].parent;
-            file_scroll = 0;
-            selected = -1;
+            files_up();
         } else if (k == 0x101 || k == 0x102) {
             build_file_list();
             int at = -1;
@@ -3174,6 +3187,7 @@ static void installed_first_boot(void) {
 void kernel_main(u32 magic, u32 info) {
     hardware_init(magic, info);
     fs_init();
+    may_vfs_init();
     preferences_load();
     boot_splash_step(4, "Applying desktop settings");
 #ifndef MAYOS_LINUX
@@ -3229,7 +3243,7 @@ void kernel_main(u32 magic, u32 info) {
             u32 visible = 0;
             for (int i = 0; i < WINDOW_COUNT; i++)
                 visible += windows[i].open && !windows[i].min;
-            if (may_task_poll(ticks, memory_mb, free_pages, visible)) dirty = 1;
+            if (may_task_poll(ticks, visible)) dirty = 1;
         }
 #endif
 #ifndef MAYOS_LINUX

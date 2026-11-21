@@ -1,7 +1,9 @@
 #include "core.h"
 #include "io.h"
 #include "framebuffer.h"
+#include "procfs.h"
 #include "task_manager.h"
+#include "version.h"
 #include "net.h"
 #include "security_tls.h"
 #include "pci.h"
@@ -96,6 +98,39 @@ static MaySurface display;
 static int display_scale_mode;
 static u8 pages[32768];
 static u32 page_count;
+#ifdef MAYOS_PROCFS
+static u32 managed_pages;
+volatile u64 may_proc_ticks, may_proc_idle_ticks;
+volatile int may_proc_waiting;
+static u64 proc_frames;
+
+void platform_idle(void) {
+    may_proc_waiting = 1;
+    __asm__ volatile("hlt" ::: "memory");
+    may_proc_waiting = 0;
+}
+
+void mayos_proc_snapshot(MayProcSnapshot *snapshot) {
+    do {
+        snapshot->total_ticks = may_proc_ticks;
+        snapshot->idle_ticks = may_proc_idle_ticks;
+    } while (snapshot->total_ticks != may_proc_ticks);
+    snapshot->frames = proc_frames;
+    snapshot->managed_pages = managed_pages;
+    snapshot->free_pages = free_pages;
+    snapshot->firmware_mb = memory_mb;
+    copy(snapshot->cpu, cpu_name, sizeof(snapshot->cpu));
+    copy(snapshot->version, MAYOS_VERSION, sizeof(snapshot->version));
+    may_proc_io(snapshot);
+    const MayNetInfo *net = may_net_info();
+    snapshot->net_present = net->present != 0;
+    snapshot->rx_bytes = net->bytes_rx;
+    snapshot->tx_bytes = net->bytes_tx;
+    snapshot->rx_packets = net->packets_rx;
+    snapshot->tx_packets = net->packets_tx;
+    snapshot->rx_errors = net->rx_errors;
+}
+#endif
 extern char kernel_end;
 void *page_alloc(void) {
     for (u32 i = 0; i < page_count; i++)
@@ -281,6 +316,9 @@ static void memory_init(const u8 *m, u32 flags) {
         if (pages[i] == 0)
             free_pages++;
     }
+#ifdef MAYOS_PROCFS
+    managed_pages = free_pages;
+#endif
     char value[12];
     serial("MayOS: available memory MiB=");
     number(value, memory_mb);
@@ -436,6 +474,9 @@ void hardware_init(u32 magic, u32 info) {
 }
 void present(u32 *p) {
     surface_present(&display, p, display_scale_mode);
+#ifdef MAYOS_PROCFS
+    proc_frames++;
+#endif
 }
 void display_set_scale_mode(int mode) {
     if (mode >= 0 && mode <= 3) display_scale_mode = mode;

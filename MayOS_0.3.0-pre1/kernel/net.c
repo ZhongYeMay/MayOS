@@ -173,6 +173,7 @@ static int send_frame(u32 length) {
         return 0;
     }
     nic.packets_tx++;
+    nic.bytes_tx += length;
     return 1;
 }
 
@@ -449,6 +450,7 @@ void may_net_poll(void) {
             if (length <= 0) break;
             receive_frame(ipv4_receive, (u32)length);
             nic.packets_rx++;
+            nic.bytes_rx += (u32)length;
         }
     } else {
         const u16 io = nic.io_base;
@@ -473,6 +475,7 @@ void may_net_poll(void) {
                 receive_frame(ipv4_receive, frame_length);
             }
             nic.packets_rx++;
+            nic.bytes_rx += frame_length;
             rx_cursor = (rx_cursor + 4u + length + 3u) &
                         ~(u32)3u;
             rx_cursor &= (RTL_RING_BYTES - 1u);

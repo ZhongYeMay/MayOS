@@ -148,7 +148,8 @@ python3 scripts/linux.py build --version 7.3.1 --offline --rebuild --jobs 4
 - 文件列表双击或 Enter 打开；右键菜单提供复制、剪切、重命名、回收站与属性。Backspace 返回上级，Delete 移入回收站；回收站内 Delete 永久删除。
 - 编辑器支持文末输入、退格与 Ctrl+S 保存，关闭未保存文件时提示。
 - F1 打开 MayShell；↑ 调用上一条命令，↓ 清空；Esc 关闭菜单或弹层。
-- F2、应用菜单或 MayShell 的 `taskmgr` 打开 **MayOS Task Manager**。MayKernel 显示固件可用内存、分配器空闲页数、运行时间和可见窗口。Linux64 还显示 CPU 历史、内存及磁盘和网卡速率，并可按名称过滤进程。选择进程后按 Delete，Enter 确认发送 SIGTERM，Esc 取消。
+- F2、应用菜单或 MayShell 的 `taskmgr` 打开 **MayOS Task Manager**。双内核显示 CPU 历史、RAM、磁盘读写、网络和图形活动。MayKernel 的 CPU 读数由 PIT 采样得出，RAM 和磁盘读数来自页分配器和 MayFS。Linux64 还可按名称过滤进程，Delete 后按 Enter 确认结束任务，Esc 取消。
+- GPU 栏在 Linux64 驱动提供 `gpu_busy_percent` 时显示硬件利用率。当前固件帧缓冲路径显示实际画面提交次数，并标明硬件利用率不可用。
 - “设置 → 关于系统”显示当前内核、处理器、内存和测试声明；“开源组件”展示第三方说明。
 
 构建双内核任务管理器预览需要 Rust 1.85 或更新版本。Linux64 图形构建会编译 Rust 应用；MayKernel 通过现有 Rust 构建选项启用。
@@ -158,6 +159,8 @@ rustup target add x86_64-unknown-none
 make dual MAYOS_RUST=1 LINUX_VERSION=7.3.1
 python3 scripts/task_manager_smoke.py --iso build/mayos-dual.iso
 ```
+
+启用 `MAYOS_RUST=1` 的 MayKernel 提供只读 `/proc`。在文件管理器从根目录进入，或在 MayShell 运行 `ls /proc`、`cat /proc/stat`、`cat /proc/meminfo`、`cat /proc/diskstats` 和 `cat /proc/net/dev`。同时提供 `cpuinfo`、`uptime`、`version`、`mounts` 和 `sys/kernel/{ostype,osrelease}`。每次打开时生成快照，目录节点与快照均在内存中。已有同名 MayFS 项目优先保留。进程目录与写入式 sysctl 尚未接入。
 
 ```text
 fastfetch

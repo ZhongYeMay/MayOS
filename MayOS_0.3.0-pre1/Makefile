@@ -109,7 +109,7 @@ CFLAGS += -DMAYOS_STAGE_DISK_DIAGNOSTIC
 OBJECTS += build/update_stage_codec.o build/update_stage_disk.o
 endif
 RUST_LIB :=
-RUST_TASK_SOURCES := rust/task_manager/view.rs
+RUST_TASK_SOURCES := rust/task_manager/view.rs rust/maykernel_policy/src/procfs.rs
 ifeq ($(MAYOS_RUST),1)
 CFLAGS += -DMAYOS_RUST_CORE
 OBJECTS += build/update_stream_integrity.o
@@ -183,6 +183,7 @@ build/security_tls_provider.o: kernel/security_tls_provider.h kernel/security_tl
 build/security_clock.o: kernel/security_clock.h kernel/io.h
 build/security_entropy.o: kernel/security_entropy.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/task_manager.h
+build/core.o build/gui.o build/fs.o: kernel/procfs.h
 build/gui.o: kernel/task_manager.h
 build/acpi.o: kernel/acpi.h
 build/pci.o: kernel/pci.h kernel/io.h
@@ -194,8 +195,8 @@ build/net.o: kernel/pci.h kernel/e1000.h
 build/fs.o: kernel/pci.h kernel/ahci.h kernel/nvme.h
 build/hda.o: kernel/hda.h kernel/pci.h
 build/galgame.o: kernel/galgame.h
-build/boot64.o: kernel/boot64.S | build
-	$(CC) -m64 -c $< -o $@
+build/boot64.o: kernel/boot64.S build/config-flags.txt | build
+	$(CC) -m64 $(if $(filter 1,$(MAYOS_RUST)),-DMAYOS_RUST_CORE) -c $< -o $@
 build/%.o: kernel/%.c kernel/core.h kernel/io.h kernel/version.h build/font.h build/config-flags.txt
 	$(CC) $(CFLAGS) -c $< -o $@
 build/mayos.elf: $(OBJECTS) $(RUST_LIB) $(BEARSSL_LIB) kernel/linker64.ld

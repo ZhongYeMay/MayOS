@@ -143,6 +143,12 @@ void number(char *buffer, u32 value) {
 }
 
 #ifdef MAYOS_LINUX_TASK_MANAGER
+static u64 task_frames;
+
+u64 may_task_frame_count(void) {
+    return task_frames;
+}
+
 u32 may_task_read(const char *path, u8 *buffer, u32 capacity) {
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) return 0;
@@ -404,6 +410,9 @@ void hardware_init(u32 magic, u32 info) {
 }
 
 void present(u32 *pixels) {
+#ifdef MAYOS_LINUX_TASK_MANAGER
+    task_frames++;
+#endif
     if (display_scale_mode != 0 || display.width != W || display.height != H || display.bpp != 32 ||
         display.red_bits != 8 || display.green_bits != 8 || display.blue_bits != 8 ||
         (display.alpha_bits && display.alpha_bits != 8)) {

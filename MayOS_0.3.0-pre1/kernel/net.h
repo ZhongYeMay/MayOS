@@ -9,6 +9,8 @@ typedef struct {
     u16 io_base; /* RTL8139 I/O BAR, zero for the E1000/E1000e backend. */
     u32 packets_rx;
     u32 packets_tx;
+    u64 bytes_rx;
+    u64 bytes_tx;
     u32 rx_errors;
     int present;
     int gateway_arp_reply;

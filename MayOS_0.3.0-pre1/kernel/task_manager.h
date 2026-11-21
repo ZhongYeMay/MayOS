@@ -5,7 +5,7 @@
 
 #if defined(MAYOS_RUST_CORE) || defined(MAYOS_LINUX_TASK_MANAGER)
 #define MAYOS_TASK_MANAGER 1
-int may_task_poll(u32 ticks, u32 ram_mb, u32 free_frames, u32 visible_windows);
+int may_task_poll(u32 ticks, u32 visible_windows);
 void may_task_draw(int x, int y, int w, int h, int dark);
 #ifdef MAYOS_LINUX
 void may_task_click(int x, int y, int w, int h);

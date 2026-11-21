@@ -4,6 +4,8 @@ mod ab_policy;
 mod release_url;
 mod http_framing;
 mod http_body_budget;
+#[cfg(any(test, target_os = "none"))]
+mod procfs;
 #[cfg(target_os = "none")]
 #[path = "../../task_manager/view.rs"]
 mod task_manager;

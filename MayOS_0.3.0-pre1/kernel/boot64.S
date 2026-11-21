@@ -100,6 +100,13 @@ long_mode_entry:
 timer_stub:
     pushq %rax
     incl ticks(%rip)
+#ifdef MAYOS_RUST_CORE
+    incq may_proc_ticks(%rip)
+    cmpl $0, may_proc_waiting(%rip)
+    je .Ltimer_eoi
+    incq may_proc_idle_ticks(%rip)
+.Ltimer_eoi:
+#endif
     movb $0x20, %al
     outb %al, $0x20
     popq %rax

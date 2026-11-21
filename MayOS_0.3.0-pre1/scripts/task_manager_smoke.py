@@ -28,6 +28,7 @@ def main():
             vm.key("f1")
             vm.keyboard_command("taskmgr")
             vm.wait("MayOS: Task Manager opened")
+            time.sleep(2.2)
             vm.shot("task-manager-maykernel")
             print("PASS: MayKernel opens the native Rust resource window from MayShell", flush=True)
         finally:

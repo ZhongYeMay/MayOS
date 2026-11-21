@@ -1,4 +1,5 @@
 #include "core.h"
+#include "procfs.h"
 #include "version.h"
 #ifndef MAYOS_LINUX
 #include "io.h"
@@ -25,6 +26,15 @@ static int storage_nvme;
 static u16 ata_command_base = 0x1f0, ata_control_base = 0x3f6;
 static int backup_enabled;
 static int active_slot;
+#ifdef MAYOS_PROCFS
+static u64 proc_disk_reads, proc_disk_writes;
+
+void may_proc_io(MayProcSnapshot *snapshot) {
+    snapshot->disk_present = disk_ready != 0;
+    snapshot->disk_reads = proc_disk_reads;
+    snapshot->disk_writes = proc_disk_writes;
+}
+#endif
 static u32 fs_generation;
 #ifdef MAYOS_FS_POWERLOSS_SELFTEST
 /* Diagnostic-only compile flag. Never present in the distributable kernel. */
@@ -79,11 +89,20 @@ static int ata_sector(u32 lba, void *buf, int write) {
 }
 static int disk_sector(u32 lba, void *buf, int write) {
     if (lba >= disk_sectors) return 0;
+    int result;
     if (storage_nvme)
-        return write ? nvme_write_sector(lba, buf) : nvme_read_sector(lba, buf);
-    if (storage_ahci)
-        return write ? ahci_write_sector(lba, buf) : ahci_read_sector(lba, buf);
-    return ata_sector(lba, buf, write);
+        result = write ? nvme_write_sector(lba, buf) : nvme_read_sector(lba, buf);
+    else if (storage_ahci)
+        result = write ? ahci_write_sector(lba, buf) : ahci_read_sector(lba, buf);
+    else
+        result = ata_sector(lba, buf, write);
+#ifdef MAYOS_PROCFS
+    if (result) {
+        if (write) proc_disk_writes++;
+        else proc_disk_reads++;
+    }
+#endif
+    return result;
 }
 static int sector(u32 lba, void *buf, int write) {
     if (lba >= FS_TOTAL_SECTORS || lba >= fs_blocks) return 0;
@@ -343,13 +362,126 @@ int fs_find(int parent, const char *name) {
             return i;
     return -1;
 }
+#ifdef MAYOS_PROCFS
+static int proc_mounted;
+#endif
+
+void may_vfs_init(void) {
+#ifdef MAYOS_PROCFS
+    proc_mounted = fs_find(0, "proc") < 0;
+    serial(proc_mounted ? "MayOS: Rust procfs mounted read-only at /proc\n"
+                        : "MayOS: /proc mount skipped; existing MayFS entry preserved\n");
+#endif
+}
+
+int may_vfs_info(int node, MayVfsNode *info) {
+    if (node >= 0 && node < FS_MAX && files[node].used) {
+        const File *file = &files[node];
+        *info = (MayVfsNode){file->name, (int)file->parent, (int)file->dir, 0, file->size};
+        return 1;
+    }
+#ifdef MAYOS_PROCFS
+    const MayProcEntry *entry = proc_mounted ? mayos_proc_entry(node) : 0;
+    if (entry) {
+        *info = (MayVfsNode){entry->name, entry->parent, entry->directory, 1, 0};
+        return 1;
+    }
+#endif
+    return 0;
+}
+
+int may_vfs_next(int directory, int after) {
+    MayVfsNode parent;
+    if (!may_vfs_info(directory, &parent) || !parent.directory) return -1;
+    if (after < 0) after = 0;
+    if (directory < FS_MAX && after < FS_MAX) {
+        for (int i = after + 1; i < FS_MAX; i++)
+            if (files[i].used && files[i].parent == (u32)directory)
+                return i;
+    }
+#ifdef MAYOS_PROCFS
+    if (proc_mounted) return mayos_proc_next(directory, after);
+#endif
+    return -1;
+}
+
+int may_vfs_lookup(const char *path, int base) {
+    if (*path == '/') base = 0;
+    while (*path == '/') path++;
+    MayVfsNode info;
+    if (!may_vfs_info(base, &info)) return -1;
+    while (*path) {
+        if (!info.directory) return -1;
+        char name[48];
+        u32 length = 0;
+        while (*path && *path != '/') {
+            if (length == sizeof(name) - 1) return -1;
+            name[length++] = *path++;
+        }
+        name[length] = 0;
+        if (!strcmp(name, "..")) {
+            base = info.parent;
+        } else if (strcmp(name, ".")) {
+            int child = -1;
+            for (int node = may_vfs_next(base, -1); node >= 0; node = may_vfs_next(base, node)) {
+                if (may_vfs_info(node, &info) && !strcmp(name, info.name)) {
+                    child = node;
+                    break;
+                }
+            }
+            base = child;
+        }
+        if (!may_vfs_info(base, &info) || (*path == '/' && !info.directory)) return -1;
+        while (*path == '/') path++;
+    }
+    return base;
+}
+
+int may_vfs_read_only(int node) {
+    MayVfsNode info;
+    return may_vfs_info(node, &info) && info.read_only;
+}
+
+int may_vfs_open(int node, MayVfsReader *reader) {
+    MayVfsNode info;
+    if (!may_vfs_info(node, &info) || info.directory) return 0;
+    reader->offset = 0;
+#ifdef MAYOS_PROCFS
+    if (info.read_only) {
+        int length = mayos_proc_render(node, reader->data, sizeof(reader->data));
+        if (length < 0) return 0;
+        reader->length = (u32)length;
+        return 1;
+    }
+#endif
+    reader->length = info.size < FILE_CAP ? info.size : FILE_CAP;
+    memcpy(reader->data, files[node].data, reader->length);
+    return 1;
+}
+
+u32 may_vfs_read(MayVfsReader *reader, u8 *buffer, u32 capacity) {
+    if (reader->offset >= reader->length) return 0;
+    u32 remaining = reader->length - reader->offset;
+    u32 count = capacity < remaining ? capacity : remaining;
+    memcpy(buffer, reader->data + reader->offset, count);
+    reader->offset += count;
+    return count;
+}
+
+static int valid_name(int directory, const char *name) {
+    if (!name[0] || strlen(name) >= 48 || !strcmp(name, ".") || !strcmp(name, "..")) return 0;
+#ifdef MAYOS_PROCFS
+    if (proc_mounted && directory == 0 && !strcmp(name, "proc")) return 0;
+#else
+    (void)directory;
+#endif
+    for (const char *s = name; *s; s++)
+        if (*s == '/' || *s < ' ') return 0;
+    return 1;
+}
+
 int fs_create(int p, const char *n, int dir) {
-    if (p < 0 || p >= FS_MAX || !files[p].used || !files[p].dir || !n[0] || strlen(n) >= 48 ||
-        !strcmp(n, ".") || !strcmp(n, ".."))
-        return -1;
-    for (const char *s = n; *s; s++)
-        if (*s == '/' || *s < ' ')
-            return -1;
+    if (p < 0 || p >= FS_MAX || !files[p].used || !files[p].dir || !valid_name(p, n)) return -1;
     if (fs_find(p, n) >= 0)
         return -1;
     for (int i = 1; i < FS_MAX; i++)
@@ -363,6 +495,15 @@ int fs_create(int p, const char *n, int dir) {
         }
     return -1;
 }
+int fs_rename(int node, const char *name) {
+    if (node < 4 || node >= FS_MAX || !files[node].used) return 0;
+    int directory = (int)files[node].parent;
+    if (!valid_name(directory, name)) return 0;
+    int duplicate = fs_find(directory, name);
+    if (duplicate >= 0 && duplicate != node) return 0;
+    copy(files[node].name, name, sizeof(files[node].name));
+    return 1;
+}
 int fs_remove(int i) {
     if (i < 4 || i >= FS_MAX || !files[i].used)
         return 0;
@@ -374,7 +515,7 @@ int fs_remove(int i) {
 }
 int fs_move(int i, int p) {
     if (i < 4 || i >= FS_MAX || !files[i].used || p < 0 || p >= FS_MAX || !files[p].dir ||
-        !files[p].used || fs_find(p, files[i].name) >= 0)
+        !files[p].used || !valid_name(p, files[i].name) || fs_find(p, files[i].name) >= 0)
         return 0;
     for (int a = p; a; a = files[a].parent)
         if (a == i)

@@ -53,6 +53,7 @@ INPUT_FILES = {
     "task_manager_linux_sha256": ROOT / "rust/task_manager/linux.rs",
     "task_manager_crate_sha256": ROOT / "rust/task_manager/lib.rs",
     "task_manager_header_sha256": ROOT / "kernel/task_manager.h",
+    "desktop_vfs_header_sha256": ROOT / "kernel/procfs.h",
     "boot_art_generator_sha256": ROOT / "scripts/boot_art.py",
     "boot_brand_sha256": ROOT / "assets/limine-mayos-brand.png",
     "explorer_history_sha256": ROOT / "kernel/explorer_history.h",

@@ -92,17 +92,69 @@ impl Canvas {
 const NAV: i32 = 160;
 const START: i32 = NAV + 24;
 
+#[derive(Default)]
+struct Performance {
+    cpu: Option<u32>,
+    ram: Option<(u64, u64)>,
+    network: Option<(u64, u64)>,
+    disk: Option<(u64, u64)>,
+    disk_present: bool,
+    gpu: Option<u32>,
+    frame_rate: Option<u64>,
+}
+
 struct State {
     sampled: Option<u32>,
-    ram_mb: u32,
-    free_pages: u32,
     window_count: u32,
+    performance: Performance,
+    cpu_graph: [Option<u32>; 48],
+    #[cfg(target_os = "none")]
+    previous: Option<crate::procfs::Snapshot>,
     #[cfg(target_os = "linux")]
     linux: linux::Linux,
     #[cfg(target_os = "linux")]
-    cpu_graph: [Option<u32>; 48],
-    #[cfg(target_os = "linux")]
     page: ProcessesPage,
+}
+
+#[cfg(target_os = "none")]
+fn native_performance(state: &mut State) -> Performance {
+    let data = crate::procfs::snapshot();
+    let mut performance = Performance {
+        ram: Some((
+            u64::from(data.managed_pages.saturating_sub(data.free_pages)) * 4,
+            u64::from(data.managed_pages) * 4,
+        )),
+        disk_present: data.disk_present != 0,
+        ..Performance::default()
+    };
+    if let Some(old) = state.previous.replace(data) {
+        let time = data.total_ticks.saturating_sub(old.total_ticks);
+        let idle = data.idle_ticks.saturating_sub(old.idle_ticks);
+        let rate = |value: u64, old: u64, scale: u64| {
+            value
+                .saturating_sub(old)
+                .saturating_mul(scale)
+                .checked_div(time)
+        };
+        performance.cpu = time
+            .saturating_sub(idle)
+            .saturating_mul(100)
+            .checked_div(time)
+            .map(|percent| percent as u32);
+        performance.frame_rate = rate(data.frames, old.frames, 100);
+        if data.disk_present != 0 {
+            performance.disk = rate(data.disk_reads, old.disk_reads, 51200).zip(rate(
+                data.disk_writes,
+                old.disk_writes,
+                51200,
+            ));
+        }
+        if data.net_present != 0 {
+            performance.network =
+                rate(data.rx_bytes, old.rx_bytes, 100).zip(rate(data.tx_bytes, old.tx_bytes, 100));
+        }
+    }
+    performance
 }
 
 #[cfg(target_os = "linux")]
@@ -152,34 +204,51 @@ impl ProcessesPage {
 
 static mut STATE: State = State {
     sampled: None,
-    ram_mb: 0,
-    free_pages: 0,
     window_count: 0,
+    performance: Performance {
+        cpu: None,
+        ram: None,
+        network: None,
+        disk: None,
+        disk_present: false,
+        gpu: None,
+        frame_rate: None,
+    },
+    cpu_graph: [None; 48],
+    #[cfg(target_os = "none")]
+    previous: None,
     #[cfg(target_os = "linux")]
     linux: linux::Linux::new(),
-    #[cfg(target_os = "linux")]
-    cpu_graph: [None; 48],
     #[cfg(target_os = "linux")]
     page: ProcessesPage::new(),
 };
 
 // The desktop invokes these entry points on its single UI thread.
 #[no_mangle]
-pub extern "C" fn may_task_poll(ticks: u32, ram_mb: u32, free_pages: u32, windows: u32) -> i32 {
+pub extern "C" fn may_task_poll(ticks: u32, windows: u32) -> i32 {
     let state = unsafe { &mut *addr_of_mut!(STATE) };
     let elapsed = state.sampled.map_or(100, |last| ticks.wrapping_sub(last));
     if elapsed < 100 {
         return 0;
     }
     state.sampled = Some(ticks);
-    state.ram_mb = ram_mb;
-    state.free_pages = free_pages;
     state.window_count = windows;
+    #[cfg(target_os = "none")]
+    {
+        state.performance = native_performance(state);
+    }
     #[cfg(target_os = "linux")]
     {
         state.linux.sample(elapsed, state.page.open);
-        state.cpu_graph.rotate_left(1);
-        state.cpu_graph[47] = state.linux.cpu_percent;
+        state.performance = Performance {
+            cpu: state.linux.cpu_percent,
+            ram: state.linux.ram.map(|ram| (ram.used_kib, ram.total_kib)),
+            network: state.linux.rates,
+            disk: state.linux.disk_rates,
+            disk_present: state.linux.disk_present,
+            gpu: state.linux.gpu,
+            frame_rate: state.linux.frame_rate,
+        };
         let count = state
             .linux
             .processes()
@@ -188,6 +257,8 @@ pub extern "C" fn may_task_poll(ticks: u32, ram_mb: u32, free_pages: u32, window
             .count();
         state.page.offset = state.page.offset.min(count.saturating_sub(1));
     }
+    state.cpu_graph.rotate_left(1);
+    state.cpu_graph[47] = state.performance.cpu;
     1
 }
 
@@ -243,6 +314,7 @@ pub extern "C" fn may_task_draw(x: i32, y: i32, w: i32, h: i32, dark: i32) {
 
 fn draw_performance(canvas: &Canvas, state: &State, w: i32) {
     let c = &canvas.colors;
+    let perf = &state.performance;
     let content = w - START - 24;
     let seconds = state.sampled.unwrap_or(0) / 100;
     canvas.text(START, 21, format_args!("Performance"), c.text);
@@ -257,144 +329,155 @@ fn draw_performance(canvas: &Canvas, state: &State, w: i32) {
         ),
         c.muted,
     );
-    #[cfg(not(target_os = "linux"))]
-    {
-        canvas.card(START, 65, content, 128);
-        canvas.text(START + 18, 82, format_args!("Physical memory"), c.text);
+    if cfg!(target_os = "none") {
+        canvas.text(25, 74, format_args!("MayKernel64"), c.muted);
         canvas.text(
-            START + 18,
-            114,
-            format_args!("Firmware usable RAM      {} MiB", state.ram_mb),
-            c.text,
-        );
-        canvas.text(
-            START + 18,
-            147,
-            format_args!(
-                "Free allocator frames    {} ({} MiB)",
-                state.free_pages,
-                state.free_pages / 256
-            ),
-            c.muted,
-        );
-        canvas.card(START, 211, content, 114);
-        canvas.text(
-            START + 18,
-            230,
-            format_args!("MayKernel desktop session"),
-            c.text,
-        );
-        canvas.text(
-            START + 18,
-            261,
-            format_args!("Visible windows   {}", state.window_count),
-            c.text,
-        );
-        canvas.text(
-            START + 18,
-            290,
-            format_args!("CPU load and process accounting are unavailable."),
+            25,
+            102,
+            format_args!("Windows {}", state.window_count),
             c.muted,
         );
     }
-    #[cfg(target_os = "linux")]
-    {
-        canvas.card(START, 62, content, 196);
-        canvas.text(START + 18, 78, format_args!("CPU utilization"), c.text);
-        if let Some(percent) = state.linux.cpu_percent {
-            canvas.text(
-                START + content - 62,
-                78,
-                format_args!("{percent:>3}%"),
-                c.text,
+
+    canvas.card(START, 62, content, 153);
+    let title = if cfg!(target_os = "none") {
+        "CPU busy (PIT sample)"
+    } else {
+        "CPU utilization"
+    };
+    canvas.text(START + 18, 77, format_args!("{title}"), c.text);
+    if let Some(percent) = perf.cpu {
+        canvas.text(
+            START + content - 62,
+            77,
+            format_args!("{percent:>3}%"),
+            c.text,
+        );
+    } else {
+        canvas.text(START + content - 90, 77, format_args!("Sampling"), c.muted);
+    }
+    let chart_w = content - 36;
+    for y in [112, 140, 168, 196] {
+        canvas.rect(START + 18, y, chart_w, 1, c.border);
+    }
+    let column = chart_w / 48;
+    for (index, point) in state.cpu_graph.iter().enumerate() {
+        if let Some(point) = point {
+            let height = ((*point).min(100) as i32 * 84 / 100).max(2);
+            canvas.rect(
+                START + 18 + index as i32 * column,
+                196 - height,
+                column - 2,
+                height,
+                c.fill,
             );
-        } else {
-            canvas.text(START + content - 90, 78, format_args!("Sampling"), c.muted);
-        }
-        let chart_w = content - 36;
-        for y in [121, 159, 197, 235] {
-            canvas.rect(START + 18, y, chart_w, 1, c.border);
-        }
-        let column = chart_w / 48;
-        for (index, point) in state.cpu_graph.iter().enumerate() {
-            if let Some(point) = point {
-                let height = ((*point).min(100) as i32 * 114 / 100).max(2);
-                canvas.rect(
-                    START + 18 + index as i32 * column,
-                    235 - height,
-                    column - 2,
-                    height,
-                    c.fill,
-                );
-            }
-        }
-        let tile = (content - 28) / 3;
-        let network = START + tile + 14;
-        let disk = network + tile + 14;
-        canvas.card(START, 274, tile, 128);
-        canvas.text(START + 18, 291, format_args!("Memory"), c.text);
-        if let Some(ram) = state.linux.ram {
-            canvas.text(
-                START + 18,
-                321,
-                format_args!(
-                    "{} / {} MiB used",
-                    ram.used_kib / 1024,
-                    ram.total_kib / 1024
-                ),
-                c.text,
-            );
-            if ram.total_kib != 0 {
-                let width = tile - 36;
-                let used = ram.used_kib.saturating_mul(width as u64) / ram.total_kib;
-                canvas.rounded(START + 18, 358, width, 8, 4, c.border);
-                canvas.rect(START + 18, 358, used as i32, 8, c.fill);
-            }
-        } else {
-            canvas.text(START + 18, 321, format_args!("Unavailable"), c.muted);
-        }
-        canvas.card(network, 274, tile, 128);
-        canvas.text(network + 18, 291, format_args!("Network"), c.text);
-        if let Some((rx, tx)) = state.linux.rates {
-            canvas.text(
-                network + 18,
-                321,
-                format_args!("Receive {} KiB/s", rx / 1024),
-                c.text,
-            );
-            canvas.text(
-                network + 18,
-                351,
-                format_args!("Send    {} KiB/s", tx / 1024),
-                c.text,
-            );
-        } else {
-            canvas.text(network + 18, 321, format_args!("Waiting for data"), c.muted);
-        }
-        canvas.card(disk, 274, tile, 128);
-        canvas.text(disk + 18, 291, format_args!("Disk I/O"), c.text);
-        if let Some((read, written)) = state.linux.disk_rates {
-            canvas.text(
-                disk + 18,
-                321,
-                format_args!("Read  {} KiB/s", read / 1024),
-                c.text,
-            );
-            canvas.text(
-                disk + 18,
-                351,
-                format_args!("Write {} KiB/s", written / 1024),
-                c.text,
-            );
-        } else {
-            let message = if state.linux.disk_present {
-                "Waiting for data"
-            } else {
-                "No visible disks"
-            };
-            canvas.text(disk + 18, 321, format_args!("{message}"), c.muted);
         }
     }
+
+    let tile = (content - 15) / 2;
+    let right = START + tile + 15;
+    let label = if cfg!(target_os = "none") {
+        "RAM / allocator"
+    } else {
+        "RAM"
+    };
+    canvas.card(START, 229, tile, 100);
+    canvas.text(START + 18, 242, format_args!("{label}"), c.text);
+    if let Some((used, total)) = perf.ram {
+        canvas.text(
+            START + 18,
+            268,
+            format_args!("{}/{} MiB used", used / 1024, total / 1024),
+            c.text,
+        );
+        let width = tile - 36;
+        if let Some(pixels) = used.saturating_mul(width as u64).checked_div(total) {
+            canvas.rounded(START + 18, 303, width, 6, 3, c.border);
+            canvas.rect(START + 18, 303, pixels as i32, 6, c.fill);
+        }
+    } else {
+        canvas.text(START + 18, 268, format_args!("Unavailable"), c.muted);
+    }
+
+    canvas.card(right, 229, tile, 100);
+    canvas.text(right + 18, 242, format_args!("Network"), c.text);
+    if let Some((rx, tx)) = perf.network {
+        show_rate(canvas, right + 18, 268, "Receive", rx);
+        show_rate(canvas, right + 18, 294, "Send", tx);
+    } else {
+        canvas.text(
+            right + 18,
+            268,
+            format_args!("Waiting for interface data"),
+            c.muted,
+        );
+    }
+
+    canvas.card(START, 343, tile, 100);
+    let label = if cfg!(target_os = "none") {
+        "Disk I/O / MayFS"
+    } else {
+        "Disk I/O"
+    };
+    canvas.text(START + 18, 356, format_args!("{label}"), c.text);
+    if let Some((read, written)) = perf.disk {
+        show_rate(canvas, START + 18, 382, "Read", read);
+        show_rate(canvas, START + 18, 408, "Write", written);
+    } else {
+        let message = if perf.disk_present {
+            "Waiting for data"
+        } else {
+            "No visible disks"
+        };
+        canvas.text(START + 18, 382, format_args!("{message}"), c.muted);
+    }
+
+    canvas.card(right, 343, tile, 100);
+    canvas.text(right + 18, 356, format_args!("GPU"), c.text);
+    if let Some(busy) = perf.gpu {
+        canvas.text(
+            right + 18,
+            382,
+            format_args!("Hardware utilization   {busy}%"),
+            c.text,
+        );
+    } else {
+        canvas.text(
+            right + 18,
+            382,
+            format_args!("Hardware utilization unavailable"),
+            c.muted,
+        );
+    }
+    if let Some(fps) = perf.frame_rate {
+        canvas.text(
+            right + 18,
+            408,
+            format_args!("Framebuffer submits   {fps}/s"),
+            c.text,
+        );
+    } else {
+        canvas.text(
+            right + 18,
+            408,
+            format_args!("Sampling framebuffer"),
+            c.muted,
+        );
+    }
+}
+
+fn show_rate(canvas: &Canvas, x: i32, y: i32, name: &str, bytes: u64) {
+    let (value, unit) = if bytes >= 1024 {
+        (bytes / 1024, "KiB/s")
+    } else {
+        (bytes, "B/s")
+    };
+    canvas.text(
+        x,
+        y,
+        format_args!("{name:<8} {value} {unit}"),
+        canvas.colors.text,
+    );
 }
 
 #[cfg(target_os = "linux")]

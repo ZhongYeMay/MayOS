@@ -8,6 +8,7 @@ extern "C" {
     fn may_task_signal(fd: i32, terminate: i32) -> i32;
     fn may_task_page_size() -> u32;
     fn may_task_hardware_disk(major: u32, minor: u32) -> i32;
+    fn may_task_frame_count() -> u64;
 }
 
 const LIMIT: usize = 128;
@@ -200,7 +201,7 @@ fn parse_process(pid: u32, data: &[u8], page_size: u32) -> Option<Process> {
     Some(process)
 }
 
-struct PathBuffer([u8; 32], usize);
+struct PathBuffer([u8; 80], usize);
 
 impl Write for PathBuffer {
     fn write_str(&mut self, text: &str) -> fmt::Result {
@@ -215,10 +216,27 @@ impl Write for PathBuffer {
 }
 
 fn process(pid: u32, buffer: &mut [u8], page_size: u32) -> Option<Process> {
-    let mut path = PathBuffer([0; 32], 0);
+    let mut path = PathBuffer([0; 80], 0);
     write!(path, "/proc/{pid}/stat").ok()?;
     let path = core::ffi::CStr::from_bytes_until_nul(&path.0).ok()?;
     parse_process(pid, read(path, buffer), page_size)
+}
+
+fn gpu_percent(data: &[u8]) -> Option<u32> {
+    let value = decimal(fields(data).next()?)?;
+    (value <= 100).then_some(value as u32)
+}
+
+fn gpu_activity(buffer: &mut [u8]) -> Option<u32> {
+    for card in 0..16 {
+        let mut path = PathBuffer([0; 80], 0);
+        write!(path, "/sys/class/drm/card{card}/device/gpu_busy_percent").ok()?;
+        let path = core::ffi::CStr::from_bytes_until_nul(&path.0).ok()?;
+        if let Some(value) = gpu_percent(read(path, buffer)) {
+            return Some(value);
+        }
+    }
+    None
 }
 
 pub(super) struct Linux {
@@ -230,6 +248,9 @@ pub(super) struct Linux {
     pub disk_rates: Option<(u64, u64)>,
     pub disk_present: bool,
     pub ram: Option<Memory>,
+    pub gpu: Option<u32>,
+    previous_frames: Option<u64>,
+    pub frame_rate: Option<u64>,
     processes: [Process; LIMIT],
     shown: usize,
     pub total_processes: u32,
@@ -246,6 +267,9 @@ impl Linux {
             disk_rates: None,
             disk_present: false,
             ram: None,
+            gpu: None,
+            previous_frames: None,
+            frame_rate: None,
             processes: [Process::EMPTY; LIMIT],
             shown: 0,
             total_processes: 0,
@@ -270,6 +294,13 @@ impl Linux {
         self.disk_rates = rates(self.disk_counters, disks, elapsed);
         self.disk_present = disks.is_some();
         self.disk_counters = disks;
+        self.gpu = gpu_activity(&mut buffer);
+        let frames = unsafe { may_task_frame_count() };
+        self.frame_rate = self
+            .previous_frames
+            .and_then(|previous| frames.checked_sub(previous))
+            .and_then(|delta| delta.saturating_mul(100).checked_div(u64::from(elapsed)));
+        self.previous_frames = Some(frames);
         if process_page {
             self.refresh_processes(&mut buffer);
         }
@@ -352,6 +383,14 @@ mod tests {
             rates(Some((5, 8)), Some((4005, 1008)), 200),
             Some((2000, 500))
         );
+    }
+
+    #[test]
+    fn parses_real_gpu_utilization_without_treating_absence_as_zero() {
+        assert_eq!(gpu_percent(b" 0\n"), Some(0));
+        assert_eq!(gpu_percent(b"73\n"), Some(73));
+        assert_eq!(gpu_percent(b""), None);
+        assert_eq!(gpu_percent(b"101"), None);
     }
 
     #[test]
