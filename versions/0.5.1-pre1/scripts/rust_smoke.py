@@ -11,7 +11,7 @@ from smoke import VM, BUILD
 FS_COUNT = 48
 RECORD = 4160
 MANIFEST = (
-    b"name=MayOS\nversion=0.5.0-pre3\narchitecture=x86_64\n"
+    b"name=MayOS\nversion=0.5.1-pre2\narchitecture=x86_64\n"
     b"kernel=MayKernel\nrelease_date=2026-11-18\nsize_bytes=3\n"
     b"sha256=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n"
     b"eta_minutes=1\nchangelog=Rust C ABI test\n"
