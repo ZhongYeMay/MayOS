@@ -1,0 +1,66 @@
+name: Publish verified MayOS 0.5.0-pre2 ISO
+
+on:
+  push:
+    branches: [release/mayos-0.5.0-pre2]
+    paths: ['.github/workflows/publish-native-050-pre2.yml']
+  workflow_dispatch:
+
+permissions: {}
+concurrency: publish-native-050-pre2
+
+jobs:
+  publish:
+    if: github.repository == 'ZhongYeMay/MayOS' && github.ref == 'refs/heads/release/mayos-0.5.0-pre2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: 0d44bb75f95f98b6c54d13850cc55d34b5cbe75b
+      RUN_ID: '44853367083'
+    steps:
+      - name: Verify successful build identity
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" \
+            | jq -e --arg sha "$SOURCE_SHA" '.head_sha == $sha and .conclusion == "success"'
+      - uses: actions/download-artifact@v4
+        with:
+          name: mayos-native-prerelease
+          path: dist
+          run-id: ${{ env.RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Recheck checksums and publish the exact artifacts
+        env:
+          RELEASE_NOTES: |
+            ## MayOS 0.5.0-pre2 · MayKernel 驱动预览
+
+            本次发布提供 MayKernel x86_64 独立 ISO。GRUB 启动镜像已通过 QEMU BIOS 和 OVMF UEFI 回归，建议在虚拟机中使用独立测试磁盘。
+
+            - AHCI SATA 和 NVMe 接入 MayFS，已验证写入、缓存刷新和冷启动读回。旧 IDE/ATA 路径也通过回归。
+            - RTL8139、E1000 和 E1000e 共用 MayKernel 的轮询网络栈。QEMU 验证了 ARP、DHCP、DNS、UDP 回显和 TCP 重传。
+            - ACPI/PCIe 枚举、xHCI 端口检测和 HDA 编解码器探测已通过混合硬件拓扑测试。
+            - 此版本包含签名更新开发线的代码。隔离 ATA 更新诊断覆盖 64 KiB 写盘、重启后复验与篡改拒绝。该诊断使用专用构建。
+
+            USB 键鼠输入、VirtIO-net、HDA 音频播放和在线更新安装仍在开发。实体机与 Secure Boot 兼容性有待验证。
+
+            下载 ISO、源码或 QEMU 桌面截图后，可用 `SHA256SUMS.txt` 校验文件。Linux 双内核体验可使用现有的 [0.5.0-pre1 双内核镜像](https://github.com/ZhongYeMay/MayOS/releases/tag/v0.5.0-pre1)。
+
+            - [本版 ISO 的 QEMU 测试](https://github.com/ZhongYeMay/MayOS/actions/runs/44853367083)
+            - [驱动适配](https://github.com/ZhongYeMay/MayOS/pull/46)
+            - [隔离 ATA 更新诊断](https://github.com/ZhongYeMay/MayOS/actions/runs/44852528736)
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          sha256sum -c SHA256SUMS.txt
+          test -s MayOS-0.5.0-pre2-MayKernel-x86_64.iso
+          test -s MayOS-0.5.0-pre2-desktop-QEMU.png
+          test -s MayOS-0.5.0-pre2-source.zip
+          gh release create v0.5.0-pre2 \
+            MayOS-0.5.0-pre2-MayKernel-x86_64.iso MayOS-0.5.0-pre2-desktop-QEMU.png \
+            MayOS-0.5.0-pre2-source.zip SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --prerelease --latest=false \
+            --title "MayOS 0.5.0-pre2 — MayKernel 驱动预览" --notes "$RELEASE_NOTES"

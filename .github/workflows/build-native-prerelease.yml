@@ -3,6 +3,7 @@ name: Build and verify MayOS native prerelease
 on:
   push:
     branches: [release/mayos-0.5.0-pre2]
+    paths-ignore: ['.github/workflows/publish-native-050-pre2.yml']
   workflow_dispatch:
 
 permissions:
