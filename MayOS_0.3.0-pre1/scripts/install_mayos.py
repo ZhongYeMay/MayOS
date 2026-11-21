@@ -134,8 +134,12 @@ def install(iso, expected, output, imported=None):
                 "--locales=", "--themes=", "--compress=xz", "-o", str(loader),
                 f"boot/grub/grub.cfg={config}")
         command("grub-file", "--is-x86_64-efi", str(loader))
-        command("mformat", "-C", "-F", "-T", str(ESP_BLOCKS), "-N", serial,
+        command("mformat", "-C", "-F", "-T", str(ESP_BLOCKS), "-N", "0x" + serial,
                 "-v", "MAYOSBOOT", "-i", str(fat), "::")
+        with fat.open("rb") as handle:
+            handle.seek(67)  # FAT32 extended BPB volume serial
+            if int.from_bytes(handle.read(4), "little") != int(serial, 16):
+                raise ValueError("EFI filesystem serial does not match its GRUB boot target")
         command("mmd", "-i", str(fat), "::/EFI", "::/EFI/BOOT", "::/slots")
         command("mcopy", "-i", str(fat), str(loader), "::/EFI/BOOT/BOOTX64.EFI")
         command("mcopy", "-i", str(fat), str(kernel), "::/slots/A.elf")
