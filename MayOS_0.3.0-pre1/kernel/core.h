@@ -74,6 +74,7 @@ typedef struct {
 } File;
 extern File files[FS_MAX];
 extern int disk_ready;
+int platform_ram_only(void);
 void fs_init(void);
 /* Separate checksummed record in the unused tail of a MayFS snapshot. */
 int fs_prefs_read(u8 *destination, u32 bytes);

@@ -45,12 +45,13 @@ class Session:
         disk = BUILD / (self.tag + '-disk.img')
         with disk.open('wb') as handle:
             handle.truncate(8 * 1024 * 1024)
-        command = [args.qemu, '-machine', 'pc', '-accel', 'tcg', '-cpu', 'max',
+        command = [args.qemu, '-machine', getattr(args, 'machine', 'pc'), '-accel', 'tcg', '-cpu', 'max',
                    '-m', '512', '-vga', 'std', '-display', 'none', '-nic', 'none',
                    '-cdrom', str(args.iso), '-boot', 'd', '-S',
                    '-drive', f'file={disk},format=raw,if=ide,index=0',
                    '-serial', f'file:{self.log}',
                    '-qmp', f'unix:{self.sock},server=on,wait=off']
+        command.extend(getattr(args, 'extra_qemu_args', ()))
         if os.environ.get('QEMU_DATA_DIR'):
             command += ['-L', os.environ['QEMU_DATA_DIR']]
         if args.firmware == 'uefi':

@@ -559,7 +559,12 @@ void fs_init(void) {
         }
         disk_sectors = ata_capacity();
     }
-    select_mayfs_region();
+    if (platform_ram_only()) {
+        fs_start = fs_blocks = 0;
+        serial("MayOS: hardware trial uses RAM only; disk writes disabled\n");
+    } else {
+        select_mayfs_region();
+    }
     disk_ready = fs_blocks >= FS_SECTORS;
     backup_enabled = 0;
     active_slot = 0;

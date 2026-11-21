@@ -30,6 +30,11 @@ menuentry "Linux @LINUX_VERSION@ - compatibility rescue (x86_64)" --id linux-saf
     initrd /boot/linux/initramfs.cpio.gz
     boot
 }
+menuentry "MayOS - test hardware (RAM only)" --id mayos-ram {
+    multiboot /boot/mayos.elf mayos.ram
+    set gfxpayload=$gfxmode
+    boot
+}
 else
 menuentry "MayOS requires an x86_64 CPU" {
  echo "Both MayKernel and MayOS Linux require x86_64 long mode."

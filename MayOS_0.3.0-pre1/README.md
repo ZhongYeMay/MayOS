@@ -143,6 +143,13 @@ python3 scripts/linux.py build --version 7.3.1 --offline --rebuild --jobs 4
 
 ## 桌面操作
 
+### 0.5.2-pre3 现代 x86-64 硬件试用
+
+- MayKernel64 支持直连 xHCI 根端口、符合 USB HID Boot Protocol 的有线键盘和相对移动鼠标。保留传统 PS/2 输入路径；固件明确标记没有 8042 时跳过 PS/2。
+- UEFI 可将 xHCI 和 NVMe 的 PCI MMIO BAR 放在 64 GiB 以上。两类驱动通过独立的不可缓存窗口访问寄存器，DMA 缓冲区仍使用内核现有低地址分配器。
+- 在 GRUB 选择 **Test hardware (RAM only)** 开始试用。可在 MayShell 运行 **hardware**，查看固件帧缓冲、USB 键鼠数量、NVMe 命名空间和存储模式。内存会话中的修改不会同步到硬盘。
+- QEMU Q35/OVMF 验证了禁用 PS/2 的双 xHCI 拓扑、USB 键盘重连、NVMe 冷启动读回，以及试用模式下 SATA 和 NVMe 镜像逐字节保持。实体机型号与固件组合、USB 集线器、I²C 触摸板及 4Kn NVMe 待验证。
+
 ### 0.5.2-pre2 中日韩输入与安装
 
 - 在文本编辑器、新建文件或重命名对话框按 F3，或点击输入方式按钮。可依次选择直接输入、无声调全拼、标准键位注音、日语罗马字转平假名／片假名、韩语两套式与 Unicode 码点输入。

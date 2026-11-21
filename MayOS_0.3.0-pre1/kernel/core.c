@@ -390,6 +390,28 @@ static void mouse_cmd(u8 v) {
     if (wait_read())
         inb(0x60);
 }
+static int ps2_available;
+static int ram_only;
+int platform_ram_only(void) { return ram_only; }
+
+static int boot_ram_only(const u8 *info, u32 flags) {
+    if (!(flags & (1u << 2))) return 0;
+    uptr address = *(const u32 *)(info + 16);
+    if (!address) return 0;
+    const char *line = (const char *)address;
+    const char option[] = "mayos.ram";
+    for (u32 begin = 0, at = 0; at < 256; at++) {
+        if (line[at] && line[at] != ' ' && line[at] != '\t') continue;
+        if (at - begin == sizeof(option) - 1) {
+            u32 len = 0;
+            while (option[len] && option[len] == line[begin + len]) len++;
+            if (!option[len]) return 1;
+        }
+        if (!line[at]) return 0;
+        begin = at + 1;
+    }
+    return 0;
+}
 static void ps2_init(void) {
     wait_write();
     outb(0x64, 0xa8);
@@ -442,6 +464,7 @@ void hardware_init(u32 magic, u32 info) {
     serial("MayOS: firmware framebuffer "); number(display_number, display.width); serial(display_number); serial("x");
     number(display_number, display.height); serial(display_number); serial("x"); number(display_number, display.bpp); serial(display_number); serial("\n");
     boot_splash_begin("MayKernel64");
+    ram_only = boot_ram_only(m, flags);
     memory_init(m, flags);
     u32 a, b, c, d;
     a = 0x80000000U;
@@ -456,10 +479,12 @@ void hardware_init(u32 magic, u32 info) {
         memcpy(cpu_name + i * 16 + 12, &d, 4);
     }
     cpu_name[48] = 0;
-    ps2_init();
     timer_init();
     boot_splash_step(2, "Probing devices");
     acpi_init();
+    ps2_available = acpi_has_8042() && inb(0x64) != 0xff;
+    if (ps2_available) ps2_init();
+    else serial("MayOS: legacy PS/2 controller absent\n");
     pci_init();
     xhci_init();
     hda_init();
@@ -469,7 +494,8 @@ void hardware_init(u32 magic, u32 info) {
     serial("MayOS: intentional invalid-opcode exception self-test\n");
     __asm__ volatile("ud2");
 #endif
-    serial("MayOS: framebuffer, memory, PIT and PS/2 ready\n");
+    serial(ps2_available ? "MayOS: framebuffer, memory, PIT and PS/2 ready\n"
+                         : "MayOS: framebuffer, memory and PIT ready\n");
     boot_splash_step(3, "Opening MayFS");
 }
 void present(u32 *p) {
@@ -507,9 +533,20 @@ static const char shifted[] =
 int input_poll(int *mx, int *my, int *buttons, int *key) {
     static u8 packet[3], n = 0;
     static int shift = 0, ext = 0, ctrl = 0;
-    *key = 0;
-    int changed = 0;
-    for (int k = 0; k < 128 && (inb(0x64) & 1); k++) {
+    static int ps2_buttons;
+    XhciInput usb;
+    xhci_poll(&usb);
+    *key = usb.key;
+    int changed = usb.changed;
+    *mx += usb.dx;
+    *my += usb.dy;
+    if (*mx < 0) *mx = 0;
+    if (*mx >= W) *mx = W - 1;
+    if (*my < 0) *my = 0;
+    if (*my >= H) *my = H - 1;
+    *buttons = ps2_buttons | usb.buttons;
+    if (*key) return 1;
+    for (int k = 0; ps2_available && k < 128 && (inb(0x64) & 1); k++) {
         u8 status = inb(0x64), v = inb(0x60);
         if (status & 32) {
             if (!n && !(v & 8))
@@ -530,7 +567,8 @@ int input_poll(int *mx, int *my, int *buttons, int *key) {
                         *my = 0;
                     if (*my >= H)
                         *my = H - 1;
-                    *buttons = packet[0] & 7;
+                    ps2_buttons = packet[0] & 7;
+                    *buttons = ps2_buttons | usb.buttons;
                     changed = 1;
                 }
             }

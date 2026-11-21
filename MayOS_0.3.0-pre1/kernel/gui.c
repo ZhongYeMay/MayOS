@@ -11,7 +11,9 @@
 #include "material_icons.h"
 #ifndef MAYOS_LINUX
 #include "galgame.h"
+#include "nvme.h"
 #include "pci.h"
+#include "xhci.h"
 #endif
 #ifdef MAYOS_LINUX
 #include "explorer_history.h"
@@ -1094,7 +1096,7 @@ static void shell(void) {
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
         emit("theme light|dark  net status|dhcp|resolve DOMAIN|qemu-probe|udp-probe|dns-probe|tcp-probe|tcp-loss-probe");
         emit("tls status|check <host> (native MayKernel HTTPS security check)");
-        emit("lspci  reboot  shutdown");
+        emit("hardware  lspci  reboot  shutdown");
 #ifdef MAYOS_TASK_MANAGER
         emit("taskmgr  (F2 opens MayOS Task Manager)");
 #endif
@@ -1384,6 +1386,26 @@ static void shell(void) {
         emit("Trusted CA roots: not installed");
         emit("X.509 chain + hostname validation: not implemented");
         emit("No HTTPS, no GitHub download, no system installation");
+#endif
+    } else if (!strcmp(c, "hardware")) {
+#ifdef MAYOS_LINUX
+        emit("Linux desktop: MayKernel hardware diagnostics unavailable");
+#else
+        MayDisplayInfo display;
+        display_get_info(&display);
+        char width[12], height[12], message[80] = "Firmware framebuffer: ";
+        number(width, display.width);
+        number(height, display.height);
+        copy(message + strlen(message), width, sizeof(message) - strlen(message));
+        copy(message + strlen(message), "x", sizeof(message) - strlen(message));
+        copy(message + strlen(message), height, sizeof(message) - strlen(message));
+        emit(message);
+        emitnum("xHCI controllers: ", (u32)xhci_controller_count(), "");
+        emitnum("USB boot keyboards: ", (u32)xhci_boot_input_count(1), "");
+        emitnum("USB boot mice: ", (u32)xhci_boot_input_count(2), "");
+        if (nvme_sector_count()) emit("NVMe: 512-byte namespace detected");
+        if (platform_ram_only()) emit("Storage: RAM-only hardware trial");
+        else emit(disk_ready ? "Storage: writable MayFS" : "Storage: RAM fallback");
 #endif
     } else if (!strcmp(c, "lspci")) {
 #ifdef MAYOS_LINUX

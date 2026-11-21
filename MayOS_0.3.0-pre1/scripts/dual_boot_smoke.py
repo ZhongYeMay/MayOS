@@ -24,7 +24,8 @@ from smoke import BUILD, entries
 class BootVM:
     def __init__(self, *, iso: Path | None, disk: Path, tag: str, qemu: str,
                  memory: int, timeout: float, ovmf_code: Path | None = None,
-                 ovmf_vars: Path | None = None, cpu: str = 'max'):
+                 ovmf_vars: Path | None = None, cpu: str = 'max',
+                 machine: str = 'pc', extra_args=()):
         self.timeout = timeout
         self.serial_path = BUILD / f'{tag}-serial.sock'
         self.qmp_path = BUILD / f'{tag}-qmp.sock'
@@ -38,13 +39,14 @@ class BootVM:
         self.proc = None
         self._log_file = self.log.open('wb')
         self._stderr_file = self.stderr_path.open('w')
-        args = [qemu, '-machine', 'pc', '-accel', 'tcg', '-cpu', cpu,
+        args = [qemu, '-machine', machine, '-accel', 'tcg', '-cpu', cpu,
                 '-m', str(memory), '-vga', 'std', '-display', 'none',
                 '-boot', 'd' if iso is not None else 'c',
                 '-drive', f'file={disk},format=raw,if=ide,index=0',
                 '-serial', f'unix:{self.serial_path},server=on,wait=off',
                 '-qmp', f'unix:{self.qmp_path},server=on,wait=off',
                 '-nic', 'user,model=e1000', '-no-reboot', '-S']
+        args.extend(extra_args)
         if iso is not None:
             args += ['-cdrom', str(iso)]
         if (ovmf_code is None) != (ovmf_vars is None):

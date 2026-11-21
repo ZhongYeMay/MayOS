@@ -1,6 +1,7 @@
 #include "core.h"
 #include "pci.h"
 #include "nvme.h"
+#include "mmio.h"
 
 #define NVME_QUEUE_SIZE 64
 #define NVME_TIMEOUT 20000000u
@@ -33,7 +34,7 @@ static NvmeCommand io_sq[NVME_QUEUE_SIZE] __attribute__((aligned(4096)));
 static NvmeCompletion io_cq[NVME_QUEUE_SIZE] __attribute__((aligned(4096)));
 static u8 identify_page[4096] __attribute__((aligned(4096)));
 static NvmeQueue admin_queue, io_queue;
-static volatile u8 *registers;
+static volatile u8 *registers, *doorbells;
 static u32 doorbell_stride, namespace_id;
 static u64 namespace_sectors;
 
@@ -61,7 +62,7 @@ static int submit(NvmeQueue *queue, const NvmeCommand *source) {
     queue->sq[queue->tail] = command;
     queue->tail = (queue->tail + 1u) % NVME_QUEUE_SIZE;
     __asm__ volatile("mfence" ::: "memory");
-    *(volatile u32 *)(registers + 0x1000u +
+    *(volatile u32 *)(doorbells +
         (2u * queue->qid) * doorbell_stride) = queue->tail;
     for (u32 timeout = 0; timeout < NVME_TIMEOUT; timeout++) {
         volatile NvmeCompletion *completion = &queue->cq[queue->head];
@@ -72,7 +73,7 @@ static int submit(NvmeQueue *queue, const NvmeCommand *source) {
             queue->head = 0;
             queue->phase ^= 1u;
         }
-        *(volatile u32 *)(registers + 0x1000u +
+        *(volatile u32 *)(doorbells +
             (2u * queue->qid + 1u) * doorbell_stride) = queue->head;
         return (status >> 1) == 0;
     }
@@ -123,20 +124,23 @@ static int identify_namespace(void) {
 
 int nvme_init(void) {
     registers = 0;
+    doorbells = 0;
     namespace_sectors = 0;
     const PciDevice *device = pci_find_class(0x01, 0x08, -1);
     if (!device || device->prog_if != 0x02) return 0;
     u32 bar0 = device->bar[0];
-    if ((bar0 & 1u) || !(bar0 & ~0x0fu)) return 0;
+    if (bar0 & 1u) return 0;
     u64 address = bar0 & ~0x0fu;
     if ((bar0 & 6u) == 4u) address |= (u64)device->bar[1] << 32;
-    if (address >= (64ULL << 30)) return 0;
-    registers = (volatile u8 *)(unsigned long)address;
+    if (!address || !(registers = mmio_map(address, 0x1000))) return 0;
     pci_enable_memory_busmaster(device);
     u64 capabilities = reg64(0x00);
     if (!(capabilities & (1ULL << 37)) || ((capabilities >> 48) & 0x0fu))
         return 0; /* NVM command set and 4 KiB minimum pages required. */
     doorbell_stride = 4u << ((capabilities >> 32) & 0x0fu);
+    doorbells = mmio_map(address + 0x1000, 3u * doorbell_stride + 4u);
+    if (!doorbells) return 0;
+    if (address >= (64ULL << 30)) serial("MayOS: NVMe uses a 64-bit high MMIO BAR\n");
     set32(0x14, reg32(0x14) & ~1u);
     if (!wait_ready(0)) return 0;
     memset(admin_sq, 0, sizeof(admin_sq)); memset(admin_cq, 0, sizeof(admin_cq));

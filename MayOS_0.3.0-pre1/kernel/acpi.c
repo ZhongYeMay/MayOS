@@ -125,6 +125,19 @@ int acpi_has_table(const char signature[4]) {
     return 0;
 }
 
+int acpi_has_8042(void) {
+    for (int i = 0; i < table_count; i++) {
+        const SdtHeader *header = tables[i];
+        if (bytes_equal(header->signature, "FACP", 4) &&
+            header->revision >= 2 && header->length >= 111) {
+            const u8 *fadt = (const u8 *)header;
+            return (fadt[109] & 2) != 0;
+        }
+    }
+    /* BIOS and older tables without the IAPC boot architecture flags. */
+    return 1;
+}
+
 volatile u32 *acpi_pci_config_address(u8 bus, u8 slot, u8 function, u8 offset) {
     for (int i = 0; i < mcfg_count; i++) {
         const McfgRange *range = &mcfg_ranges[i];
