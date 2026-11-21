@@ -1,0 +1,55 @@
+name: MayOS versioned source integrity and cloud backup artifact
+on:
+  push:
+    branches:
+      - refactor/versioned-source-layout-20261121
+    tags:
+      - 'v*'
+  pull_request:
+    paths:
+      - 'versions/**'
+      - 'MayOS_0.3.0-pre1'
+      - 'scripts/verify_version_layout.py'
+      - '.github/workflows/versioned-source-backup.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Assert version-specific historical Git trees and build alias
+        run: python3 scripts/verify_version_layout.py
+      - name: Compile active MayOS source via relocated legacy build alias
+        run: |
+          set -euo pipefail
+          make -C MayOS_0.3.0-pre1 test-update test-update-verify
+      - name: Produce restorable source archive and SHA-256
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+          short="${GITHUB_SHA:0:12}"
+          base="MayOS-source-${short}"
+          git archive --format=tar --prefix="${base}/" HEAD | gzip -9 > "backup/${base}.tar.gz"
+          gzip -t "backup/${base}.tar.gz"
+          tar -tzf "backup/${base}.tar.gz" > backup/archive-file-list.txt
+          grep -q "^${base}/versions/0.5.1-pre1/Makefile$" backup/archive-file-list.txt
+          grep -q "^${base}/versions/0.5.0-pre2/Makefile$" backup/archive-file-list.txt
+          grep -q "^${base}/versions/catalog.json$" backup/archive-file-list.txt
+          sha256sum "backup/${base}.tar.gz" > "backup/${base}.sha256"
+          sha256sum -c "backup/${base}.sha256"
+          echo "PASS: complete versioned Git source archive validated"
+      - name: Retain immutable source ZIP artifact for Google Drive backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-all-versions-source-backup
+          retention-days: 90
+          if-no-files-found: error
+          path: |
+            backup/MayOS-source-*.tar.gz
+            backup/MayOS-source-*.sha256
+            backup/archive-file-list.txt
