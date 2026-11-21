@@ -41,6 +41,15 @@
 </div>
 </section>
 <section class="container updates-section">
+<div class="updates-unreleased" id="procfs-development" aria-labelledby="procfs-development-title">
+<div class="updates-unreleased-heading">
+<span class="updates-kicker">开发预览 · QEMU 实测</span>
+<h2 id="procfs-development-title">双内核任务管理器与 MayKernel /proc</h2>
+</div>
+<p>MayKernel64 和 Linux64 的 Rust 任务管理器都提供 CPU、GPU、磁盘、内存与网络活动视图。Linux64 可读取驱动提供的 GPU 利用率。MayKernel64 和本次 QEMU 测试中的 Linux64 均显示实际帧缓冲提交频率。</p>
+<p>MayKernel64 新增 Rust 编写的只读 <code>/proc</code>，可通过终端和文件管理器查看 CPU、内存、运行时间、磁盘、网络及内核信息。旧磁盘上的同名目录会保留。</p>
+<p><a class="link" href="demos.html#task-manager-preview">查看双内核实测截图</a> · <a class="link" href="https://github.com/ZhongYeMay/MayOS/commit/17854ef3e9b8a6c2a252f9c7ef8c1d8dcc7dc0a7">查看源码</a></p>
+</div>
 <div class="updates-unreleased" aria-label="当前开发版本">
 <div class="updates-unreleased-heading">
 <span class="updates-kicker">设计阶段</span>
