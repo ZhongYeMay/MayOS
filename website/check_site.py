@@ -12,6 +12,7 @@ CURRENT = "0.5.1-pre1"
 MULTILINGUAL = "0.5.2-pre1"
 CJK_PREVIEW = "0.5.2-pre2"
 HARDWARE_PREVIEW = "0.5.2-pre3"
+POINTER_PREVIEW = "0.5.2-pre4"
 HISTORIC_DEMOS = "0.4.1-pre2"
 DEMO_RELEASE = "0.4.0-pre3"
 PREFIX = "MayOS-0.4.0-pre3-all-features-"
@@ -79,6 +80,8 @@ assert "cjk-input" in docs["demos.html"][0].ids
 assert "cjk-installer" in docs["download.html"][0].ids
 assert "hardware-preview" in docs["requirements.html"][0].ids
 assert "modern-hardware" in docs["demos.html"][0].ids
+assert "pointer-preview" in docs["download.html"][0].ids
+assert "windows-pointers" in docs["demos.html"][0].ids
 assert f"/releases/tag/v{MULTILINGUAL}" in docs["download.html"][1]
 assert f"/releases/tag/v{CURRENT}" in docs["index.html"][1]
 assert HISTORIC_DEMOS in docs["demos.html"][1], "historic QEMU demo missing"
@@ -143,7 +146,8 @@ assert history["repository"] == "ZhongYeMay/MayOS"
 assert len(history["releases"]) >= 10
 tags = [r["tag"] for r in history["releases"]]
 assert len(tags) == len(set(tags)), "duplicate release tag in snapshot"
-assert tags[0] == f"v{HARDWARE_PREVIEW}", "latest preview missing from the top of the history snapshot"
+assert tags[0] == f"v{POINTER_PREVIEW}", "latest preview missing from the top of the history snapshot"
+assert f"v{HARDWARE_PREVIEW}" in tags, "hardware preview missing from the history snapshot"
 assert f"v{CJK_PREVIEW}" in tags, "input method preview missing from the history snapshot"
 assert f"v{MULTILINGUAL}" in tags, "display-language preview missing from the history snapshot"
 assert f"v{CURRENT}" in tags, "installer release missing from the history snapshot"

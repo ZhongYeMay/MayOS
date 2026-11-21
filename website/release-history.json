@@ -6,6 +6,15 @@
   "description": "Published GitHub Releases, including prereleases and source-only previews. Unreleased branches are not releases.",
   "releases": [
     {
+      "tag": "v0.5.2-pre4",
+      "name": "MayOS 0.5.2-pre4 — Windows 鼠标指针",
+      "published_at": "2026-11-21T18:19:13Z",
+      "prerelease": true,
+      "body": "## MayOS 0.5.2-pre4 · Windows 鼠标指针\n\n- 「设置 → 个性化 → 鼠标指针」支持大小、黑白样式、预览、应用和恢复默认。\n- 支持 Windows 静态 CUR 和动画 ANI，保留点击热点、透明度、动画帧顺序和停留时间。旧版 PPM 仍可使用。\n- 文档中的 Cursor.cur 和 Cursor.ani 可直接选择。更大的文件可用源码中的 scripts/import_cursor.py 导入新的 ISO。预装示例的演示 ISO 启动后，可直接选择「镜像导入」并应用。\n\nQEMU 已验证 BIOS 静态 CUR、UEFI 的 ANI 无移动播放、重启恢复、默认重置及 Linux64 会话播放。测试覆盖带透明度的 PNG、索引图像、旧位图掩码和截断文件。演示 ISO 使用超过 4095 字节的 ANI。\n\n镜像导入上限为 256 KiB，ANI 支持 24 帧和 96 个播放步骤。适用范围为桌面的普通指针。Windows 指针套装和各状态映射留待后续。\n\n### 下载\n\n- [MayKernel64 启动 ISO](https://raw.githubusercontent.com/ZhongYeMay/MayOS/d249fca81125b17e90d789a8ff8d7b99567f6d85/MayOS-0.5.2-pre4-MayKernel-x86_64.iso)\n- [预装 ANI 的演示 ISO](https://raw.githubusercontent.com/ZhongYeMay/MayOS/d249fca81125b17e90d789a8ff8d7b99567f6d85/MayOS-0.5.2-pre4-Pointer-Demo-x86_64.iso)\n- [静态 CUR 样例](https://raw.githubusercontent.com/ZhongYeMay/MayOS/d249fca81125b17e90d789a8ff8d7b99567f6d85/MayOS-Mint.cur)\n- [动态 ANI 样例](https://raw.githubusercontent.com/ZhongYeMay/MayOS/d249fca81125b17e90d789a8ff8d7b99567f6d85/MayOS-Pulse.ani)\n- [SHA-256 校验清单](https://raw.githubusercontent.com/ZhongYeMay/MayOS/d249fca81125b17e90d789a8ff8d7b99567f6d85/SHA256SUMS.txt)\n- [源码 ZIP 和镜像导入工具](https://raw.githubusercontent.com/ZhongYeMay/MayOS/d249fca81125b17e90d789a8ff8d7b99567f6d85/MayOS-0.5.2-pre4-source.zip)\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.5.2-pre4",
+      "assets_count": 0
+    },
+    {
       "tag": "v0.5.2-pre3",
       "name": "MayOS 0.5.2-pre3 — 现代硬件试用",
       "published_at": "2026-11-21T17:44:36Z",
