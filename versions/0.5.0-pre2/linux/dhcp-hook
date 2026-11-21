@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+: "${interface:?missing interface}"
+resolver=${MAYOS_RESOLV_CONF:-/etc/resolv.conf}
+case "${1:-}" in
+    deconfig)
+        ip -4 addr flush dev "$interface"
+        ip -4 route flush dev "$interface"
+        : > "$resolver"
+        ;;
+    bound|renew)
+        : "${ip:?missing leased address}"
+        ifconfig "$interface" "$ip" netmask "${subnet:-255.255.255.0}" up
+        ip -4 route flush default dev "$interface"
+        for gateway in ${router:-}; do
+            case "$gateway" in *[!0-9.]*|'') continue;; esac
+            ip route add default via "$gateway" dev "$interface"
+            break
+        done
+        # Lease values are data: never evaluate or source them.
+        : > "${resolver}.new"
+        for server in ${dns:-}; do
+            case "$server" in *[!0-9.]*|'') continue;; esac
+            printf 'nameserver %s\n' "$server" >> "${resolver}.new"
+        done
+        mv "${resolver}.new" "$resolver"
+        echo "MayOS network: $interface leased $ip"
+        ;;
+esac

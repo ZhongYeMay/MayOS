@@ -4,6 +4,17 @@
 
 MayOS 是一个不断迭代的系统开发项目。最新版源码提供自研 x86_64 64 位 MayKernel 桌面、Linux x86_64 用户态图形桌面、BusyBox 救援终端，以及共享的文件管理器、设置、终端与编辑器。
 
+## 各版本独立源码目录
+
+GitHub 默认分支将每个版本的源码放在根目录下的 [`versions/`](versions/README.md) 中，**不再把多个版本集中存放在 `MayOS_0.3.0-pre1` 目录**：
+
+- [当前主分支开发源码 `0.5.0-pre2-dev`](versions/0.5.0-pre2-dev/README.md)
+- [已发布 `0.5.0-pre2` 源码](versions/0.5.0-pre2/README.md)
+- [已发布 `0.5.0-pre1` 源码](versions/0.5.0-pre1/README.md)
+- [其他历史版本与校验清单](versions/catalog.json)
+
+`MayOS_0.3.0-pre1` 仅是指向当前开发版的 **Git 符号链接**，供尚未迁移的构建脚本使用，并非真实源码文件夹；历史版本不通过此入口访问。所有正式版本源代码根据对应 Git 标签原始树对象保留。
+
 ## 代码和网站
 
 - [当前项目源码与构建说明](MayOS_0.3.0-pre1/README.md)

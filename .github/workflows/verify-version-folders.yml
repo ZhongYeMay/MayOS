@@ -1,0 +1,41 @@
+name: Verify top-level version folders and legacy build compatibility
+on:
+  pull_request:
+    paths:
+      - 'versions/**'
+      - 'MayOS_0.3.0-pre1'
+      - 'scripts/verify_version_layout.py'
+      - 'README.md'
+      - '.github/workflows/verify-version-folders.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'versions/**'
+      - 'MayOS_0.3.0-pre1'
+      - 'scripts/verify_version_layout.py'
+      - '.github/workflows/verify-version-folders.yml'
+permissions:
+  contents: read
+jobs:
+  layout-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate all 12 tagged versions and current main source
+        run: python3 scripts/verify_version_layout.py
+      - name: Assert old entrypoint is a Git symlink, not a directory
+        run: |
+          set -euo pipefail
+          test -L MayOS_0.3.0-pre1
+          test "$(readlink MayOS_0.3.0-pre1)" = "versions/0.5.0-pre2-dev"
+          test -e MayOS_0.3.0-pre1/Makefile
+          test -f versions/0.5.0-pre2/Makefile
+          test -f versions/0.5.0-pre1/Makefile
+      - name: Build update parser tests from new and legacy paths
+        run: |
+          set -euo pipefail
+          make -C versions/0.5.0-pre2-dev test-update test-update-verify
+          make -C MayOS_0.3.0-pre1 test-update test-update-verify
