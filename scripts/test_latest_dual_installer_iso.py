@@ -129,73 +129,22 @@ def main():
         try:
             deadline = time.monotonic() + 85
             while time.monotonic() < deadline:
-                if cold_log.exists() and "MayOS: desktop ready" in cold_log.read_text(errors="replace"):
+                transcript = cold_log.read_text(errors="replace") if cold_log.exists() else ""
+                if ("MayOS: MayFS GPT partition selected" in transcript or
+                        "MayOS: first boot setup ready" in transcript or
+                        "MayOS: desktop ready" in transcript):
                     break
-                if cold_log.exists() and "MayOS: first boot" in cold_log.read_text(errors="replace"):
-                    # First boot setup is expected to require user input.
-                    break
-                if cold_log.exists() and "MayOS Workstation" in cold_log.read_text(errors="replace"):
-                    break
-                if cold_log.exists() and "MayOS: MayFS GPT partition selected" in cold_log.read_text(errors="replace"):
-                    break
-                if cold_log.exists() and "MayOS: power off" in cold_log.read_text(errors="replace"):
-                    raise RuntimeError("cold boot unexpectedly powered off")
-                if cold_log.exists() and "grub rescue>" in cold_log.read_text(errors="replace"):
-                    raise RuntimeError("cold boot entered GRUB rescue")
-                if cold_log.exists() and "error:" in cold_log.read_text(errors="replace"):
-                    raise RuntimeError("cold boot reported GRUB error")
-                if cold_log.exists() and "MayOS: CPU long mode active" in cold_log.read_text(errors="replace"):
-                    break
-                if cold_log.exists() and "MayOS: boot" in cold_log.read_text(errors="replace"):
-                    break
-                if cold_log.exists() and "MayOS: first boot setup ready" in cold_log.read_text(errors="replace"):
-                    break
-                if cold_log.exists() and "MayOS: MayFS mounted" in cold_log.read_text(errors="replace"):
-                    break
-                if cold_log.exists() and "MayOS" in cold_log.read_text(errors="replace") and "Welcome" in cold_log.read_text(errors="replace"):
-                    break
-                if cold_log.exists() and "MayOS: using" in cold_log.read_text(errors="replace"):
-                    break
-                if cold_log.exists() and "MayOS: desktop" in cold_log.read_text(errors="replace"):
-                    break
-                if cold_log.exists() and "MayOS: " in cold_log.read_text(errors="replace"):
-                    # At least the installed MayKernel has executed rather than EFI only.
-                    break
-                if cold_log.exists() and "Linux version" in cold_log.read_text(errors="replace"):
-                    raise RuntimeError("installed disk booted installer Linux, not MayKernel")
-                if cold_log.exists() and "error" in cold_log.read_text(errors="replace").lower():
-                    raise RuntimeError("cold boot contained error")
-                if cold_log.exists() and "GRUB" in cold_log.read_text(errors="replace"):
-                    # Still in bootloader; wait for the kernel.
-                    pass
-                if cold_log.exists() and "Booting" in cold_log.read_text(errors="replace"):
-                    pass
-                if cold_log.exists() and "EFI" in cold_log.read_text(errors="replace"):
-                    pass
-                if cold_log.exists() and "SeaBIOS" in cold_log.read_text(errors="replace"):
-                    pass
-                if cold_log.exists() and "Starting" in cold_log.read_text(errors="replace"):
-                    pass
-                if cold_log.exists() and "MayOS" in cold_log.read_text(errors="replace"):
-                    pass
-                if cold_log.exists() and len(cold_log.read_bytes()) > 2_000_000:
-                    raise RuntimeError("cold boot produced excessive serial output")
-                if cold_log.exists() and "panic" in cold_log.read_text(errors="replace").lower():
-                    raise RuntimeError("cold boot kernel panic")
-                if cold_log.exists() and "MayOS: fatal" in cold_log.read_text(errors="replace"):
-                    raise RuntimeError("cold boot fatal error")
-                if cold_log.exists() and "MayOS: exception" in cold_log.read_text(errors="replace"):
-                    raise RuntimeError("cold boot exception")
-                if cold_log.exists() and "MayOS: first" in cold_log.read_text(errors="replace"):
-                    break
-                if cold_log.exists() and "MayOS: launch" in cold_log.read_text(errors="replace"):
-                    break
+                if qemu.poll() is not None:
+                    raise RuntimeError(f"Cold-boot QEMU exited early: {transcript[-1500:]}")
+                if "panic" in transcript.lower() or "grub rescue>" in transcript:
+                    raise RuntimeError(f"Installed MayKernel failed: {transcript[-1500:]}")
                 time.sleep(.25)
             else:
-                raise TimeoutError(f"No proof of ISO-free MayKernel boot: {cold_log}")
+                raise TimeoutError(f"No evidence of ISO-free UEFI MayKernel boot: {cold_log}")
         finally:
-            cold.kill()
-            cold.wait(timeout=10)
+            if qemu.poll() is None:
+                qemu.terminate()
+            qemu.wait(timeout=10)
         text = cold_log.read_text(errors="replace")
         assert "MayOS: " in text, "Installed disk did not boot MayKernel"
         print("PASS: installer wrote a blank 96MiB QEMU disk, GPT verifies, and ISO-free UEFI boot reached MayKernel", flush=True)
