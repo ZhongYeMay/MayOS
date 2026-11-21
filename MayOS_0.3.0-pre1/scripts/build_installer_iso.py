@@ -17,7 +17,7 @@ from live_upgrade import digest
 def modules(version):
     included = set()
     for driver in ("ata_piix", "ahci", "sd_mod", "nvme", "vfat", "nls_cp437",
-                   "nls_iso8859-1", "evdev", "psmouse", "usbhid", "hid_generic"):
+                   "nls_iso8859-1", "evdev", "psmouse", "xhci_pci", "usbhid", "hid_generic"):
         result = subprocess.run(
             ["modprobe", "--set-version", version, "--show-depends", driver],
             capture_output=True, text=True)

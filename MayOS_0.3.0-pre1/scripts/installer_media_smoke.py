@@ -131,6 +131,7 @@ def main():
             vm.send_serial("\r")
             vm.wait("MayOS installer graphical frontend ready")
             vm.wait("@SELECT")
+            vm.wait("MayOS installer pointer ready", timeout=15)
             vm.shot("installer-media-gui-welcome")
             click_continue(vm)
             vm.shot("installer-media-gui-disk")

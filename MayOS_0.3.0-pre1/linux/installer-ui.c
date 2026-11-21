@@ -308,18 +308,35 @@ static int graphics(void) {
 
 static void restore(void) { ioctl(tty, KDSETMODE, KD_TEXT); }
 
+static int refresh_inputs(struct pollfd *devices, int serial_fd) {
+    int count = 0;
+    for (int i = 0; i < MAX_INPUTS; i++) {
+        if (devices[i].fd < 0) {
+            char path[32];
+            snprintf(path, sizeof(path), "/dev/input/event%d", i);
+            devices[i].fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+            if (devices[i].fd >= 0 && serial_fd >= 0) {
+                unsigned char keys[KEY_MAX / 8 + 1] = {0};
+                if (ioctl(devices[i].fd, EVIOCGBIT(EV_KEY, sizeof(keys)), keys) >= 0 &&
+                    (keys[BTN_LEFT / 8] & (1 << (BTN_LEFT % 8))))
+                    dprintf(serial_fd, "MayOS installer pointer ready\n");
+            }
+        }
+        count += devices[i].fd >= 0;
+    }
+    return count;
+}
+
 int main(void) {
     if (!graphics()) return 1;
     atexit(restore);
+    int serial_fd = open("/dev/ttyS0", O_WRONLY | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
     static struct pollfd inputs[MAX_INPUTS + 1];
-    int count = 1;
-    for (int i = 0; i < MAX_INPUTS; i++) {
-        char path[32];
-        snprintf(path, sizeof(path), "/dev/input/event%d", i);
-        int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-        if (fd >= 0) inputs[count++] = (struct pollfd){fd, POLLIN, 0};
+    for (int i = 1; i <= MAX_INPUTS; i++) inputs[i] = (struct pollfd){-1, POLLIN, 0};
+    for (int attempt = 0; !refresh_inputs(inputs + 1, serial_fd); attempt++) {
+        if (attempt == 10) return 1;
+        usleep(500000);
     }
-    if (count == 1) return 1;
     int input[2], output[2];
     if (pipe(input) || pipe(output)) return 1;
     pid_t child = fork();
@@ -335,13 +352,18 @@ int main(void) {
     sender = input[1];
     signal(SIGPIPE, SIG_IGN);
     inputs[0] = (struct pollfd){output[0], POLLIN, 0};
-    int serial_fd = open("/dev/ttyS0", O_WRONLY | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
     if (serial_fd >= 0) dprintf(serial_fd, "MayOS installer graphical frontend ready\n");
     char line[512];
     size_t used = 0;
     paint();
     for (;;) {
-        if (poll(inputs, (nfds_t)count, -1) < 0) continue;
+        int ready = poll(inputs, MAX_INPUTS + 1, 250);
+        if (ready < 0) continue;
+        if (!ready) {
+            // PS/2 probing and USB enumeration can finish after the initial scan.
+            refresh_inputs(inputs + 1, serial_fd);
+            continue;
+        }
         if (inputs[0].revents & (POLLIN | POLLHUP)) {
             char data[512];
             ssize_t length = read(output[0], data, sizeof(data));
@@ -361,7 +383,12 @@ int main(void) {
                 } else if (used < sizeof(line) - 1) line[used++] = data[i];
             }
         }
-        for (int i = 1; i < count; i++) {
+        for (int i = 1; i <= MAX_INPUTS; i++) {
+            if (inputs[i].revents & (POLLHUP | POLLERR | POLLNVAL)) {
+                close(inputs[i].fd);
+                inputs[i].fd = -1;
+                continue;
+            }
             if (!(inputs[i].revents & POLLIN)) continue;
             struct input_event input_event;
             while (read(inputs[i].fd, &input_event, sizeof(input_event)) == sizeof(input_event))

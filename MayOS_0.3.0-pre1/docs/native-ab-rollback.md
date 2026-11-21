@@ -70,26 +70,31 @@ python3 scripts/build_installer_iso.py --iso build/mayos.iso \
   --sha256 "$MAYOS_SHA256" --kernel "$LINUX_KERNEL" --kernel-version "$LINUX_VERSION"
 ```
 
-Boot `build/mayos-installer.iso` and select the console installer. Enter a
-listed disk path, then type the full confirmation shown on screen. The
-installer takes the target exclusively and checks that every byte is
-zero before writing. Once readback passes, remove the ISO and start the
-installed disk in UEFI mode. Use a dedicated empty virtual disk at least
-80 MiB in size with 512-byte logical sectors. Keep the original MayFS
-disk separate when using the host migration procedure.
+Boot `build/mayos-installer.iso` and select **Install MayOS**. Choose an
+empty disk, review the target and select **Install**. The installer takes
+the target exclusively and checks that every byte is zero before writing.
+Once installation and readback finish, shut down, remove the ISO and start
+the installed disk in UEFI mode. On first boot, choose the desktop
+appearance and select **开始使用** to save it to MayFS.
+
+Use a dedicated empty virtual disk of at least 80 MiB with 512-byte logical
+sectors. Keep the original MayFS disk separate when using the host migration
+procedure. **Install MayOS (serial console)** accepts the listed disk path
+and the full confirmation shown on screen.
 
 ### Upgrade an installed disk from newer media
 
 Boot a newer installer ISO, select an existing MayOS installation with the
-current EFI layout, and enter the displayed `UPGRADE` confirmation. This
+current EFI layout, then select **Stage an upgrade** (or `UPGRADE` in the
+console). This
 queues its checked kernel for a single trial on the inactive slot. Remove the
 ISO and boot the hard disk, then check that the new desktop and files work.
 GRUB consumes the trial flag before launching the kernel. Any subsequent
 hard boot uses the previously confirmed slot until you commit the upgrade.
 
-Boot the same installer ISO again and enter the displayed `CONFIRM`
-confirmation to make the tested slot the default. Use `DISCARD` to leave
-the old slot selected. These actions operate on the EFI system partition
+Boot the same installer ISO again and select **Confirm trial** (or `CONFIRM`
+in the console) to make the tested slot the default. Select **Discard trial**
+(or `DISCARD`) to leave the old slot selected. These actions operate on the EFI system partition
 while sharing the existing MayFS data partition. Do not confirm an
 unsuccessful trial. Hardware targets, sudden-power-loss durability and
 BIOS hard-disk installation still need validation.
