@@ -87,7 +87,8 @@ assert "accent = dark ? dark_primary[accent_choice] : light_primary[accent_choic
 assert "0xececef" in source
 # Version is centralized; updating it must not count as a redesign.
 version_header = (GUI.parent / "version.h").read_text(encoding="utf-8")
-assert '#define MAYOS_VERSION "0.5.0-pre2-dev"' in version_header
+version = (GUI.parents[1] / "VERSION").read_text(encoding="utf-8").strip()
+assert f'#define MAYOS_VERSION "{version}"' in version_header
 assert '#include "version.h"' in source
 assert '#define MAYOS_RELEASE MAYOS_VERSION' in source
 assert 'reference_text(cx + 57, card_top + 48, "Version " MAYOS_RELEASE, muted, 0);' in source

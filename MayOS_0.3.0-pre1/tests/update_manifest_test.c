@@ -72,7 +72,7 @@ int main(void) {
         !expect(MAY_UPDATE_CURRENT)) return 5;
     load(good);
     if (!change("0.5.0-pre3", "0.5.0-pre2") ||
-        !expect(MAY_UPDATE_CANDIDATE)) return 6;
+        !expect(MAY_UPDATE_CURRENT)) return 6;
 
     load(good);
     if (!change("x86_64", "a86_64") ||
