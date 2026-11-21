@@ -1,4 +1,5 @@
 #include "core.h"
+#include "procfs.h"
 #include "version.h"
 #ifndef MAYOS_LINUX
 #include "io.h"
@@ -78,11 +79,16 @@ static int ata_sector(u32 lba, void *buf, int write) {
 }
 static int sector(u32 lba, void *buf, int write) {
     if (lba >= FS_TOTAL_SECTORS || lba >= disk_sectors) return 0;
+    int ok;
     if (storage_nvme)
-        return write ? nvme_write_sector(lba, buf) : nvme_read_sector(lba, buf);
-    if (storage_ahci)
-        return write ? ahci_write_sector(lba, buf) : ahci_read_sector(lba, buf);
-    return ata_sector(lba, buf, write);
+        ok = write ? nvme_write_sector(lba, buf) : nvme_read_sector(lba, buf);
+    else if (storage_ahci)
+        ok = write ? ahci_write_sector(lba, buf) : ahci_read_sector(lba, buf);
+    else
+        ok = ata_sector(lba, buf, write);
+    /* Count completed real I/O only; never count retries or failures. */
+    if (ok) mayperf_note_disk(write, 512);
+    return ok;
 }
 static u32 ata_capacity(void) {
     u16 identify[256];
