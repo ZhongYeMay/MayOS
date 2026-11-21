@@ -24,7 +24,7 @@ FS_POWERLOSS_SELFTEST ?= 0
 ifeq ($(FS_POWERLOSS_SELFTEST),1)
 CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
 endif
-OBJECTS := build/boot64.o build/core.o build/acpi.o build/pci.o build/ahci.o build/nvme.o build/xhci.o build/e1000.o build/hda.o build/fs.o build/gui.o build/galgame.o
+OBJECTS := build/boot64.o build/core.o build/acpi.o build/pci.o build/ahci.o build/nvme.o build/xhci.o build/e1000.o build/hda.o build/fs.o build/procfs.o build/gui.o build/galgame.o
 
 # MayKernel art: linked as its own raw RGBA archive into the freestanding ELF.
 # No SDL/WebP library, Linux ABI or webview code is linked into MayKernel.
