@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "active_version": "0.5.1-pre1",
+  "development_branch": "feat/mayos-0.5.1-disk-installer",
+  "legacy_symlink": "MayOS_0.3.0-pre1",
+  "released": [
+    {
+      "directory": "0.5.0-pre2",
+      "tag": "v0.5.0-pre2",
+      "source_tree_sha": "51e6a8030e5dcfdc214a0a7719259ce2bd3f470a"
+    },
+    {
+      "directory": "0.5.0-pre1",
+      "tag": "v0.5.0-pre1",
+      "source_tree_sha": "568d0198e6cd547beab9cc271defd9822933f8f9"
+    },
+    {
+      "directory": "0.4.1-pre2",
+      "tag": "v0.4.1-pre2",
+      "source_tree_sha": "d8a78e2271e82fe9b645854c24f5aae5be28873b"
+    },
+    {
+      "directory": "0.4.1-pre1",
+      "tag": "v0.4.1-pre1",
+      "source_tree_sha": "a4d8ce8269582f715370148dbe4d9b07d4ed199e"
+    },
+    {
+      "directory": "0.4.0-pre63",
+      "tag": "v0.4.0-pre63",
+      "source_tree_sha": "2dde3d19bc4fde0a6d753fb480c06dba33d15db6"
+    },
+    {
+      "directory": "summer-letters-mayos-native-r1",
+      "tag": "summer-letters-mayos-native-r1",
+      "source_tree_sha": "ffb8451065ecb1fc85454aae73f8615bf62435f9"
+    },
+    {
+      "directory": "0.4.0-pre7",
+      "tag": "v0.4.0-pre7",
+      "source_tree_sha": "d94fef52bd9e2f5023cd5ee6b7bf5b259a7406c0"
+    },
+    {
+      "directory": "0.4.0-pre3",
+      "tag": "v0.4.0-pre3",
+      "source_tree_sha": "8924462a8fd4e0b2df9be89e045c37ed87b64bbb"
+    },
+    {
+      "directory": "0.4.0-pre2",
+      "tag": "v0.4.0-pre2",
+      "source_tree_sha": "07e9391a737c24160ec2e64e8406484a5e23483f"
+    },
+    {
+      "directory": "0.4.0-pre1",
+      "tag": "v0.4.0-pre1",
+      "source_tree_sha": "8133b95a7f7c4f726f1ae15f44bc6f3390f7a53a"
+    },
+    {
+      "directory": "0.3.0",
+      "tag": "v0.3.0",
+      "source_tree_sha": "e91257c3d2e10f36e0e017375646b2c001598885"
+    },
+    {
+      "directory": "0.3.0-pre1-source.1",
+      "tag": "v0.3.0-pre1-source.1",
+      "source_tree_sha": "9176de1f7787dd16195687e1bda3f4f783543270"
+    }
+  ]
+}

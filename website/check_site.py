@@ -8,7 +8,8 @@ import os
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
-CURRENT = "0.4.1-pre2"
+CURRENT = "0.5.0-pre2"
+HISTORIC_DEMOS = "0.4.1-pre2"
 DEMO_RELEASE = "0.4.0-pre3"
 PREFIX = "MayOS-0.4.0-pre3-all-features-"
 
@@ -54,17 +55,21 @@ for page in ROOT.glob("*.html"):
     assert "javascript:" not in source.lower()
     docs[page.name] = (parsed, source)
 
-assert {"index.html", "demos.html", "download.html"} <= set(docs)
+assert {"index.html", "demos.html", "download.html", "requirements.html"} <= set(docs)
+for key in ("x86_64", "512 MiB", "80 MiB", "96 MiB", "Secure Boot", "0.5.1", "UEFI x64"):
+    assert key in docs["requirements.html"][1], ("hardware requirements missing", key)
+for page in ("index.html", "download.html"):
+    assert 'href="requirements.html"' in docs[page][1], ("missing hardware navigation", page)
 for name in ("index.html", "download.html"):
     assert CURRENT in docs[name][1], (name, "stale release")
     assert "0.3.0-pre2" not in docs[name][1], name
 assert "0.5.0-pre1-dev" in docs["index.html"][1], "development UI preview missing"
-assert "0.5.0-pre1-dev" in docs["download.html"][1], "download disclaimer missing"
 assert 'id="design-preview"' in docs["index.html"][1], "preview anchor missing"
 assert "不是 QEMU 实测画面" in docs["index.html"][1], "design preview must not be passed off as QEMU"
 assert "0.4.1-pre2" in docs["download.html"][1], "historic release download not retained"
-assert "v0.4.1-pre2" in docs["index.html"][1], "historic release link lost"
-assert CURRENT in docs["demos.html"][1], "latest real-QEMU demo missing"
+assert f"MayOS-{CURRENT}-MayKernel-x86_64.iso" in docs["download.html"][1]
+assert f"/releases/tag/v{CURRENT}" in docs["index.html"][1]
+assert HISTORIC_DEMOS in docs["demos.html"][1], "historic QEMU demo missing"
 
 pending = []
 for name, (doc, _) in docs.items():
@@ -126,6 +131,7 @@ assert history["repository"] == "ZhongYeMay/MayOS"
 assert len(history["releases"]) >= 10
 tags = [r["tag"] for r in history["releases"]]
 assert len(tags) == len(set(tags)), "duplicate release tag in snapshot"
+assert f"v{CURRENT}" in tags, "current prerelease missing from history snapshot"
 assert "v0.5.0-pre1" in tags and "v0.3.0" in tags, "historical release omitted"
 for entry in history["releases"]:
     assert entry["name"] and entry["published_at"]

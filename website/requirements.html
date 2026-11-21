@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#050506">
+<meta name="description" content="MayOS 0.5.0-pre2 与实验性 0.5.1 离线安装器的硬件配置、启动要求和安全限制。">
+<title>安装与最低硬件要求 · MayOS</title>
+<link rel="stylesheet" href="style.css"><script src="site.js" defer></script>
+</head>
+<body><a class="skip" href="#main">跳到主要内容</a>
+<header class="site-header"><div class="container nav-inner"><a class="brand" href="index.html" aria-label="MayOS 首页"><span class="brand-mark">M</span>MayOS</a><nav id="nav" class="nav-links" aria-label="主导航"><a href="index.html">概览</a><a href="download.html">下载</a><a href="requirements.html" aria-current="page">硬件要求</a><a href="demos.html">运行演示</a><a href="changelog.html">更新日志</a><a href="https://github.com/ZhongYeMay/MayOS" target="_blank" rel="noopener">GitHub</a></nav><div class="nav-actions"><button id="theme" type="button" class="icon-btn" aria-label="切换深浅主题">◐</button><button id="menu" type="button" class="icon-btn menu-toggle" aria-controls="nav" aria-expanded="false" aria-label="展开导航">☰</button></div></div></header>
+<main id="main">
+<section class="page-hero container"><p class="eyebrow">SYSTEM REQUIREMENTS · VERIFIED SCOPE</p>
+<h1>安装前，<br><span class="gradient-text">先核对兼容性。</span></h1>
+<p class="lead">区分已发布的 MayOS 0.5.0-pre2 启动预览与开发中的 0.5.1 硬盘安装器。以下是<strong>QEMU 实际测试配置与代码硬限制</strong>，不是实体电脑普遍兼容的保证。</p>
+<div class="specs"><span class="chip">x86_64 / 64 位</span><span class="chip">BIOS / UEFI x64</span><span class="chip">Secure Boot 关闭</span><span class="chip">先在 QEMU 测试</span></div>
+</section>
+<section class="container">
+<article class="download-panel" id="published"><p class="eyebrow">RELEASED · 0.5.0-pre2</p><h2>已发布 MayKernel 启动预览</h2>
+<p>目前验证环境为 QEMU x86_64，128 MiB 或以上的虚拟机内存用于基础 MayKernel 测试，标准 VGA/固件 framebuffer、PS/2 输入与 BIOS 或 OVMF UEFI x64。真实硬件最低内存、显卡和外围设备兼容范围尚未测定；不能将虚拟机验证结果当作通用最低配置。</p>
+<p><strong>注意：</strong>本预览版是独立 ISO 启动体验，不承诺硬盘安装器、Secure Boot、Wi-Fi、USB 输入、音频播放及广泛的实体机适配。</p>
+<div class="actions"><a class="btn secondary" href="download.html#native-pre2">下载当前预览版</a></div></article>
+<article class="download-panel" id="installer"><p class="eyebrow">DEVELOPMENT ONLY · 0.5.1 INSTALLER</p><h2>0.5.1 离线安装器：测试配置及硬限制</h2>
+<div class="resource-grid">
+<article class="resource-card"><h3>处理器与固件</h3><p>x86_64 64 位处理器；安装 ISO 在 QEMU 中测试 BIOS 与 UEFI x64；<strong>安装完成的硬盘目前仅验证 UEFI x64 启动</strong>，并需关闭 Secure Boot。</p></article>
+<article class="resource-card"><h3>内存与显示</h3><p><strong>512 MiB RAM</strong> 为安装介质已测试的 QEMU 配置，不是经实体机证明的绝对最低值；使用标准 VGA / OVMF framebuffer 与串口控制台进行验收。</p></article>
+<article class="resource-card"><h3>目标磁盘</h3><p>代码要求至少 <strong>80 MiB</strong>，512 字节逻辑扇区；QEMU 用 <strong>96 MiB</strong> 空白盘验证。当前允许的磁盘大小上限约 <strong>128 GiB</strong>（最大 268435455 扇区），不代表实用容量建议。</p></article>
+</div>
+<p>当前安装器仅接受 <code>/dev/sd[a-z]</code> 或 <code>/dev/nvme[0-9]n[0-9]</code> 形式的非可移动整盘，拒绝分区、只读盘、非 512 字节逻辑扇区与已有内容的目标。安装后需移除 ISO，并由目标硬盘通过 UEFI x64 引导。</p>
+<div class="info-strip"><p><strong>破坏性操作风险</strong><br>安装程序对确认的目标整盘写入 GPT 与 MayOS 镜像。即便使用“空白盘”限制和二次确认，也不能保证对任意真实电脑安全。请仅使用独立 QEMU 测试磁盘，不要在存有重要文件的电脑上尝试。该安装器尚无正式 0.5.1 Release。</p></div>
+<div class="actions"><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/tree/feat/mayos-0.5.1-disk-installer" target="_blank" rel="noopener">查看安装器开发源码</a><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/actions/workflows/mayos-disk-installer.yml" target="_blank" rel="noopener">QEMU 自动测试</a></div></article>
+<article class="download-panel" id="limitations"><h2>尚未验证的硬件与功能</h2><p>实体硬盘安装、多品牌 UEFI 固件、Secure Boot、USB 键盘与触摸板、无线网卡、独立显卡加速、完整音频栈、4K 原生扇区、超出当前磁盘边界的安装，以及可靠的掉电回滚均<strong>不在当前通过测试的范围内</strong>。无须联网即可执行离线安装；它不代表 MayKernel 已经具备安全的在线 HTTPS 自动升级能力。</p></article>
+</section>
+</main>
+<footer class="site-footer"><div class="container"><div class="footer-bottom"><span>© 2023–2026 MayOS Team</span><span>Experimental OS · Test on QEMU first</span></div></div></footer>
+</body></html>

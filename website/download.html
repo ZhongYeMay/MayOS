@@ -1,14 +1,25 @@
-<!doctype html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#050506"><meta name="description" content="下载 MayOS 0.4.1-pre2 双内核与独立 MayKernel ISO、视频、源代码和 SHA-256 校验文件。"><title>下载 · MayOS</title><link rel="stylesheet" href="style.css"><script src="site.js" defer></script></head><body><a href="#main" class="skip">跳到主要内容</a><header class="site-header"><div class="container nav-inner"><a class="brand" href="index.html" aria-label="MayOS 首页"><span class="brand-mark">M</span>MayOS</a><nav id="nav" class="nav-links" aria-label="主导航"><a href="index.html" >概览</a><a href="index.html#project">项目</a><a href="demos.html" >运行演示</a><a href="changelog.html">更新日志</a><a href="download.html" aria-current="page">下载</a><a href="https://github.com/ZhongYeMay/MayOS" target="_blank" rel="noopener">GitHub <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a></nav><div class="nav-actions"><button type="button" id="theme" class="icon-btn" aria-label="切换深浅主题" title="切换主题"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></button><button type="button" id="menu" class="icon-btn menu-toggle" aria-controls="nav" aria-expanded="false" aria-label="展开导航"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div></div></header><main id="main">
+<!doctype html><html lang="zh-CN" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#050506"><meta name="description" content="下载 MayOS 0.5.0-pre2 MayKernel x86_64 ISO、源码、QEMU 截图与 SHA-256 校验清单。"><title>下载 · MayOS</title><link rel="stylesheet" href="style.css"><script src="site.js" defer></script></head><body><a href="#main" class="skip">跳到主要内容</a><header class="site-header"><div class="container nav-inner"><a class="brand" href="index.html" aria-label="MayOS 首页"><span class="brand-mark">M</span>MayOS</a><nav id="nav" class="nav-links" aria-label="主导航"><a href="index.html" >概览</a><a href="index.html#project">项目</a><a href="demos.html" >运行演示</a><a href="changelog.html">更新日志</a><a href="download.html" aria-current="page">下载</a><a href="requirements.html">硬件要求</a><a href="https://github.com/ZhongYeMay/MayOS" target="_blank" rel="noopener">GitHub <svg class="icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a></nav><div class="nav-actions"><button type="button" id="theme" class="icon-btn" aria-label="切换深浅主题" title="切换主题"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></button><button type="button" id="menu" class="icon-btn menu-toggle" aria-controls="nav" aria-expanded="false" aria-label="展开导航"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div></div></header><main id="main">
 <section class="page-hero container">
- <div class="info-strip"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 4h.01"/></svg><p><strong>关于 0.5.0-pre1-dev</strong><br>全新的高级深色界面正在 <a href="https://github.com/ZhongYeMay/MayOS/pull/12">开发分支 PR #12</a> 中实现并测试，尚未创建 0.5.0 ISO Release。以下提供的是已发布的 <strong>0.4.1-pre2</strong>，其外观与首页的新版设计预览不同。</p></div>
- <p class="eyebrow">Get MayOS / released preview</p><h1>下载 MayOS。<br><span class="gradient-text">立即体验双内核桌面。</span></h1>
- <p class="lead">当前版本 <strong>0.4.1-pre2</strong> 已通过实际 QEMU BIOS / UEFI、桌面与文件系统回归验证。建议先在 QEMU 等虚拟机中体验，暂不适合生产设备。</p>
- <div class="specs"><span class="chip">v0.4.1-pre2</span><span class="chip">BIOS + UEFI</span><span class="chip">QEMU x86_64</span><span class="chip">严格参考图界面</span></div>
+ <p class="eyebrow">Get MayOS / driver preview</p><h1>下载 MayOS。<br><span class="gradient-text">体验原生驱动预览。</span></h1>
+ <p class="lead">最新预览版 <strong>0.5.0-pre2</strong> 提供 MayKernel x86_64 独立 ISO，已通过 QEMU BIOS / OVMF UEFI 启动回归。</p>
+ <div class="specs"><span class="chip">v0.5.0-pre2</span><span class="chip">BIOS + UEFI</span><span class="chip">QEMU x86_64</span></div>
 </section>
-<section class="container">
+<section class="container"><div class="info-strip"><p><strong>安装系统前先核对硬件要求</strong><br>MayOS 0.5.0-pre2 仍是实验性启动预览；开发中的 0.5.1 离线安装器要求 x86_64、测试内存 512 MiB、至少 80 MiB 的空白 512 字节扇区目标盘，安装后的硬盘仅验证 UEFI x64 启动。<a href="requirements.html">查看完整最低硬件要求、限制与数据安全提醒</a>。</p></div>
+ <article class="download-panel release-download" id="native-pre2">
+  <h2>MayKernel x86_64 独立 ISO</h2>
+  <p>AHCI 和 NVMe 已验证写入、缓存刷新和冷启动读回。RTL8139、E1000 和 E1000e 已验证 DHCP、DNS 和双向收发。xHCI 支持主控初始化与端口检测，HDA 支持编解码器探测。</p>
+  <div class="actions">
+   <a class="btn blue" href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/d04be69555c794cbc9076f82db9fbb5a41b71469/MayOS-0.5.0-pre2-MayKernel-x86_64.iso">下载 ISO · 23.46 MiB</a>
+   <a class="btn secondary" href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/d04be69555c794cbc9076f82db9fbb5a41b71469/SHA256SUMS.txt">SHA-256 校验</a>
+   <a class="link" href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/d04be69555c794cbc9076f82db9fbb5a41b71469/MayOS-0.5.0-pre2-source.zip">源码</a>
+   <a class="link" href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/d04be69555c794cbc9076f82db9fbb5a41b71469/MayOS-0.5.0-pre2-desktop-QEMU.png">QEMU 截图</a>
+   <a class="link" href="https://github.com/ZhongYeMay/MayOS/releases/tag/v0.5.0-pre2">发布说明</a>
+  </div>
+ </article>
+ <h2>历史镜像 · 0.4.1-pre2</h2>
  <div class="downloads">
   <article class="download-panel" id="dual">
-   <span class="eyebrow">Recommended / dual kernel</span>
+   <span class="eyebrow">Archive / dual kernel</span>
    <h2>双内核启动 ISO</h2>
    <p>同一镜像包含 MayKernel x86_64 和 Linux 7.3.1 x86_64，使用 GRUB 在启动时选择。保留 BIOS / UEFI 启动入口。</p>
    <div class="specs"><span class="chip">x86_64 BIOS / UEFI</span><span class="chip">MayKernel + Linux</span><span class="chip">已验证</span></div>
@@ -24,7 +35,7 @@
  </div>
  <div class="resource-grid">
   <article class="resource-card"><h3>启动演示 MP4</h3><p>观看两条 UEFI 启动过程及可操作桌面，并下载原始 MP4。</p><a class="link" href="demos.html">观看与下载视频</a></article>
-  <article class="resource-card"><h3>源码与许可</h3><p>获取与本次预览版对应的 MayOS 源码及构建脚本。</p><a class="link" href="https://github.com/ZhongYeMay/MayOS/releases/download/v0.4.1-pre2/MayOS-0.4.1-pre2-source.zip">下载源码归档</a></article>
+  <article class="resource-card"><h3>0.4.1-pre2 源码与许可</h3><p>获取历史镜像对应的 MayOS 源码及构建脚本。</p><a class="link" href="https://github.com/ZhongYeMay/MayOS/releases/download/v0.4.1-pre2/MayOS-0.4.1-pre2-source.zip">下载源码归档</a></article>
   <article class="resource-card"><h3>SHA-256 校验</h3><p>先校验完整 ISO，确认下载没有损坏。请使用对应版本的校验清单。</p><a class="link" href="https://github.com/ZhongYeMay/MayOS/releases/download/v0.4.1-pre2/SHA256SUMS.txt">下载校验文件</a></article>
  </div>
  <div class="info-strip"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg><p><strong>已验证范围</strong><br>MayOS 0.4.1-pre2 在 QEMU 中验证了 GUI、基础网络、文件系统、BIOS 及 UEFI 双内核启动。当前不宣称支持任意实体电脑、Secure Boot、Wi-Fi 管理器或完整 HTTPS 浏览器。</p></div>
