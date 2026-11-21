@@ -55,6 +55,7 @@ build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 build/material_icons.h: assets/material_symbols.py | build
 	$(PYTHON) assets/material_symbols.py
 build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h
+build/gui.o build/core.o build/fs.o build/e1000.o build/procfs.o: kernel/procfs.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S
 build/acpi.o: kernel/acpi.h
 build/pci.o: kernel/pci.h kernel/io.h
