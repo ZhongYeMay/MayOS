@@ -27,7 +27,7 @@ int fs_find(int parent,const char *name) {
 }
 static const char manifest[]=
 "name=MayOS\n"
-"version=0.5.0-pre3\n"
+"version=0.5.1-pre2\n"
 "architecture=x86_64\n"
 "kernel=MayKernel\n"
 "release_date=2026-11-18\n"

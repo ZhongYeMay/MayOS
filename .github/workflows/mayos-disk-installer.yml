@@ -22,6 +22,9 @@ jobs:
         working-directory: MayOS_0.3.0-pre1
         run: |
           make -j2 all
+          make test-update test-update-verify
+          cp build/mayos.iso build/installer-base.iso
+          make -j2 INSTALLER_TEST_VERSION=0.5.1-pre2 all
           python3 scripts/installer_smoke.py
           python3 scripts/phase1_storage_bounds_smoke.py
       - uses: actions/upload-artifact@v4

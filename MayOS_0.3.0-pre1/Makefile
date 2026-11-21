@@ -14,6 +14,10 @@ BOOT_FIRMWARE ?= hybrid
 OVMF_CODE ?= /usr/share/OVMF/OVMF_CODE_4M.fd
 OVMF_VARS ?= /usr/share/OVMF/OVMF_VARS_4M.fd
 CFLAGS := -m64 -DMAYOS_X86_64 -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-pie -fno-pic -fno-stack-protector -fno-builtin -fno-strict-aliasing -fno-asynchronous-unwind-tables -mno-red-zone -mgeneral-regs-only -Ibuild -Ikernel
+# Used by CI to boot two different versions of the installer prototype.
+ifneq ($(strip $(INSTALLER_TEST_VERSION)),)
+CFLAGS += -DMAYOS_VERSION=\"$(INSTALLER_TEST_VERSION)\"
+endif
 # Only used for the isolated CI fault-injection build; NEVER enable for releases.
 EXCEPTION_SELFTEST ?= 0
 ifeq ($(EXCEPTION_SELFTEST),1)

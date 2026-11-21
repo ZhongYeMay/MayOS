@@ -5,12 +5,13 @@ import shutil
 import tempfile
 
 from dual_boot_smoke import BootVM, BUILD
-from install_mayos import DATA_START, SECTOR, install
+from install_mayos import DATA_START, DATA_BLOCKS, SECTOR, install, upgrade
 from live_upgrade import digest
 
 
 def main():
-    iso = BUILD / "mayos.iso"
+    iso = BUILD / "installer-base.iso"
+    candidate = BUILD / "mayos.iso"
     code = Path("/usr/share/OVMF/OVMF_CODE_4M.fd")
     template = Path("/usr/share/OVMF/OVMF_VARS_4M.fd")
     with tempfile.TemporaryDirectory() as temp:
@@ -19,7 +20,7 @@ def main():
         with legacy.open("xb") as out:
             out.truncate(8 * 1024 * 1024)
 
-        def boot(disk, tag, *, media=None, installed=False, commands=()):
+        def boot(disk, tag, *, media=None, installed=False, commands=(), version=None):
             vars_path = root / f"{tag}.fd"
             shutil.copyfile(template, vars_path)
             vm = BootVM(iso=media, disk=disk, tag=tag, qemu="qemu-system-x86_64",
@@ -28,6 +29,8 @@ def main():
                 vm.wait("MayOS: desktop ready")
                 if installed:
                     vm.wait("MayOS: MayFS GPT partition selected")
+                if version:
+                    vm.wait(f"MayOS Workstation {version} / MayShell")
                 vm.key("f1")
                 for cmd, result in commands:
                     offset = len(vm.text)
@@ -54,6 +57,28 @@ def main():
         with installed.open("rb") as handle:
             assert handle.read(DATA_START * SECTOR) == prefix
         print("PASS: UEFI without ISO, legacy MayFS import and cold-boot writes within the GPT data partition")
+        before = digest(installed)
+        rejected = root / "rejected.img"
+        try:
+            upgrade(installed, candidate, digest(candidate), rejected, "0.5.1-pre99", code, template)
+        except ValueError as error:
+            assert "Installed-disk trial failed" in str(error), error
+        else:
+            raise AssertionError("Wrong trial version published an image")
+        assert not rejected.exists() and digest(installed) == before
+        print("PASS: booted candidate with wrong version, original installed disk preserved")
+
+        upgraded = root / "upgraded.img"
+        upgrade(installed, candidate, digest(candidate), upgraded, "0.5.1-pre2", code, template)
+        assert digest(installed) == before
+        with installed.open("rb") as old, upgraded.open("rb") as new:
+            for stream in (old, new):
+                stream.seek(DATA_START * SECTOR)
+            assert old.read(DATA_BLOCKS * SECTOR) == new.read(DATA_BLOCKS * SECTOR)
+        boot(upgraded, "installer-upgraded", installed=True, version="0.5.1-pre2", commands=[
+            ("cat keep.txt", "\noriginal\n"), ("cat fresh.txt", "\ninstalled\n"),
+        ])
+        print("PASS: verified ISO upgrade with byte-identical MayFS and no optical media")
 
 
 if __name__ == "__main__":
