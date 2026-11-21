@@ -133,7 +133,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cd artifacts
+          # upload-artifact retained paths rooted under build/ rather than flattening.
+          cd artifacts/build
           sha256sum --check SHA256SUMS.txt
           tag=v0.5.2-pre4-dual-installer-test1
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
