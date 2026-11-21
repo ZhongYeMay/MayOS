@@ -1,0 +1,66 @@
+name: Publish MayOS 0.5.1-pre1 installer
+
+on:
+  push:
+    branches: [release/mayos-0.5.1-pre1]
+    paths: [.github/workflows/publish-051-pre1.yml]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    if: github.repository == 'ZhongYeMay/MayOS'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TEST_RUN: "44895359541"
+      TARGET: "db5d0d3c3d309f97f8165120896ba779a2e6e655"
+      TAG: v0.5.1-pre1
+    steps:
+      - name: Confirm the source run passed for this commit
+        run: |
+          gh api "repos/$GH_REPO/actions/runs/$TEST_RUN" |
+            jq -e --arg target "$TARGET" '.head_sha == $target and .conclusion == "success"'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: mayos-0.5.1-installer-media
+          github-token: ${{ github.token }}
+          run-id: ${{ env.TEST_RUN }}
+          path: assets
+      - name: Publish the tested ISO
+        working-directory: assets
+        run: |
+          set -eu
+          sha256sum -c mayos-installer.iso.sha256
+          jq -e --arg digest "$(sha256sum mayos-installer.iso | cut -d ' ' -f 1)" \
+            '.iso_sha256 == $digest' mayos-installer.iso.boot.json
+          mv mayos-installer.iso MayOS-0.5.1-pre1-Installer-x86_64.iso
+          sha256sum MayOS-0.5.1-pre1-Installer-x86_64.iso > SHA256SUMS.txt
+          cat > release.md <<'EOF'
+          ## 0.5.1 开发预览
+
+          - 图形安装器支持选盘、确认、写入和读回校验。可将 MayKernel64 离线安装到空白 GPT 硬盘。
+          - 插入新版安装镜像后可试启动新内核，测试后确认升级或保留原版本。QEMU 测试验证了升级前后 MayFS 内容逐字节一致。
+          - 首次开机参考 MayDOS 的分步流程，包含简体中文、MIT 许可、MayShell 用户名、手动更新说明与深浅外观。用户名和外观会保存到 MayFS。
+
+          ISO 在 QEMU 的 BIOS 与 x86-64 UEFI 模式下启动通过，安装后的硬盘启动在 UEFI 下验证。测试时请关闭 Secure Boot，并使用专用空白磁盘。物理机兼容性待验证。
+
+          下载后可使用 `SHA256SUMS.txt` 校验 ISO。
+
+          [QEMU 回归测试与截图](https://github.com/ZhongYeMay/MayOS/actions/runs/44895359541)
+          EOF
+          if gh release view "$TAG" --json isDraft --jq .isDraft > release-state; then
+            [ "$(cat release-state)" = true ]
+            gh release upload "$TAG" MayOS-0.5.1-pre1-Installer-x86_64.iso \
+              SHA256SUMS.txt mayos-installer.iso.boot.json --clobber
+          else
+            gh release create "$TAG" MayOS-0.5.1-pre1-Installer-x86_64.iso \
+              SHA256SUMS.txt mayos-installer.iso.boot.json --target "$TARGET" \
+              --draft --prerelease --title 'MayOS 0.5.1-pre1 — 图形安装与首次开机' \
+              --notes-file release.md
+          fi
+          gh release edit "$TAG" --draft=false --prerelease
+          gh release view "$TAG" --json url,isDraft,isPrerelease,assets
