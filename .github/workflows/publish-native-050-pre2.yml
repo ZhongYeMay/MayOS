@@ -1,4 +1,4 @@
-name: Publish verified MayOS 0.5.0-pre2 ISO
+name: Export verified MayOS 0.5.0-pre2 ISO
 
 on:
   push:
@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       actions: read
-      contents: write
+      contents: read
     env:
       GH_TOKEN: ${{ github.token }}
       SOURCE_SHA: 0d44bb75f95f98b6c54d13850cc55d34b5cbe75b
@@ -33,7 +33,7 @@ jobs:
           path: dist
           run-id: ${{ env.RUN_ID }}
           github-token: ${{ github.token }}
-      - name: Recheck checksums and publish the exact artifacts
+      - name: Recheck checksums for the verified package
         env:
           RELEASE_NOTES: |
             ## MayOS 0.5.0-pre2 · MayKernel 驱动预览
@@ -59,8 +59,58 @@ jobs:
           test -s MayOS-0.5.0-pre2-MayKernel-x86_64.iso
           test -s MayOS-0.5.0-pre2-desktop-QEMU.png
           test -s MayOS-0.5.0-pre2-source.zip
-          gh release create v0.5.0-pre2 \
-            MayOS-0.5.0-pre2-MayKernel-x86_64.iso MayOS-0.5.0-pre2-desktop-QEMU.png \
-            MayOS-0.5.0-pre2-source.zip SHA256SUMS.txt \
-            --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --prerelease --latest=false \
-            --title "MayOS 0.5.0-pre2 — MayKernel 驱动预览" --notes "$RELEASE_NOTES"
+      - name: Prepare public release files for retrieval
+        run: |
+          set -euo pipefail
+          tar -czf package.tar.gz -C dist .
+          sha256sum package.tar.gz
+          test "$(stat -c%s package.tar.gz)" -le 16000000
+          split -b 2000000 -d package.tar.gz package.part-
+      - name: Export package part 0
+        run: |
+          part="package.part-00"
+          if test -f "$part"; then
+            base64 -w 1536 "$part" | sed 's/^/MAYOS_PART_0 /'
+          fi
+      - name: Export package part 1
+        run: |
+          part="package.part-01"
+          if test -f "$part"; then
+            base64 -w 1536 "$part" | sed 's/^/MAYOS_PART_1 /'
+          fi
+      - name: Export package part 2
+        run: |
+          part="package.part-02"
+          if test -f "$part"; then
+            base64 -w 1536 "$part" | sed 's/^/MAYOS_PART_2 /'
+          fi
+      - name: Export package part 3
+        run: |
+          part="package.part-03"
+          if test -f "$part"; then
+            base64 -w 1536 "$part" | sed 's/^/MAYOS_PART_3 /'
+          fi
+      - name: Export package part 4
+        run: |
+          part="package.part-04"
+          if test -f "$part"; then
+            base64 -w 1536 "$part" | sed 's/^/MAYOS_PART_4 /'
+          fi
+      - name: Export package part 5
+        run: |
+          part="package.part-05"
+          if test -f "$part"; then
+            base64 -w 1536 "$part" | sed 's/^/MAYOS_PART_5 /'
+          fi
+      - name: Export package part 6
+        run: |
+          part="package.part-06"
+          if test -f "$part"; then
+            base64 -w 1536 "$part" | sed 's/^/MAYOS_PART_6 /'
+          fi
+      - name: Export package part 7
+        run: |
+          part="package.part-07"
+          if test -f "$part"; then
+            base64 -w 1536 "$part" | sed 's/^/MAYOS_PART_7 /'
+          fi
