@@ -55,7 +55,11 @@ for page in ROOT.glob("*.html"):
     assert "javascript:" not in source.lower()
     docs[page.name] = (parsed, source)
 
-assert {"index.html", "demos.html", "download.html"} <= set(docs)
+assert {"index.html", "demos.html", "download.html", "requirements.html"} <= set(docs)
+for key in ("x86_64", "512 MiB", "80 MiB", "96 MiB", "Secure Boot", "0.5.1", "UEFI x64"):
+    assert key in docs["requirements.html"][1], ("hardware requirements missing", key)
+for page in ("index.html", "download.html"):
+    assert 'href="requirements.html"' in docs[page][1], ("missing hardware navigation", page)
 for name in ("index.html", "download.html"):
     assert CURRENT in docs[name][1], (name, "stale release")
     assert "0.3.0-pre2" not in docs[name][1], name
