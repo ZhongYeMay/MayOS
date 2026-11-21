@@ -26,8 +26,8 @@
 <article class="resource-card"><h3>离线安装器</h3><p>复用已发布的 <strong>0.5.2-pre2</strong> 安装 / 恢复环境。<strong>它安装的是 0.5.2-pre2，而不是预览中的 0.5.2-pre4。</strong></p></article>
 </div>
 <div class="info-strip"><p><strong>版本差异说明</strong><br>不要把「最新 MayKernel 启动预览」误认为「最新已验证的磁盘安装版本」。组合介质不会自动升级安装器的写盘镜像。任务管理器的 Mission Center 重开发也不包含在此已发布组件中。</p></div>
-<div class="actions"><a class="btn blue" href="https://github.com/ZhongYeMay/MayOS/actions/workflows/latest-dual-installer-iso.yml">获取构建与 QEMU 验证结果</a><a class="btn secondary" href="download.html#cjk-installer">现有安装器 0.5.2-pre2</a><a class="btn secondary" href="requirements.html">硬件要求</a></div>
-<p>只有当 GitHub Actions 显示完整构建和 QEMU 验收成功，且出现真实 ISO 附件或实验性 Release 时，才能下载组合镜像。<strong>构建失败、任务仍运行或仅有源码，不代表存在可安装镜像。</strong></p>
+<div class="actions"><a class="btn blue" href="https://github.com/ZhongYeMay/MayOS/releases/download/v0.5.2-pre4-dual-installer-test1/MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso">下载已验证双内核安装 ISO（62.6 MiB）</a><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/releases/download/v0.5.2-pre4-dual-installer-test1/SHA256SUMS.txt">校验文件</a><a class="btn secondary" href="requirements.html">硬件要求</a><a class="link" href="https://github.com/ZhongYeMay/MayOS/releases/tag/v0.5.2-pre4-dual-installer-test1">发布及 QEMU 实测</a></div>
+<p>这份实验性 ISO 已经在 GitHub Actions 中完成真实 QEMU 五项验证，包括安装器取消、空白盘安装与移除 ISO 后冷启动。镜像 SHA-256 与发布附件一致。<strong>该验证不覆盖所有实体电脑、USB 启动固件或外置硬盘安装场景。</strong></p>
 </article>
 <article class="download-panel" id="verify"><p class="eyebrow">STEP 01</p><h2>先验证下载文件</h2>
 <p>下载 ISO 与同一构建提供的 <code>SHA256SUMS.txt</code>。对比哈希必须一致，且文件名必须对应同一次构建。Windows 可以使用 PowerShell：</p>
