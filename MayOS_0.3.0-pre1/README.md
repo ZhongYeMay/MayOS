@@ -148,7 +148,16 @@ python3 scripts/linux.py build --version 7.3.1 --offline --rebuild --jobs 4
 - 文件列表双击或 Enter 打开；右键菜单提供复制、剪切、重命名、回收站与属性。Backspace 返回上级，Delete 移入回收站；回收站内 Delete 永久删除。
 - 编辑器支持文末输入、退格与 Ctrl+S 保存，关闭未保存文件时提示。
 - F1 打开 MayShell；↑ 调用上一条命令，↓ 清空；Esc 关闭菜单或弹层。
+- F2、应用菜单或 MayShell 的 `taskmgr` 打开 **MayOS Task Manager**。MayKernel 显示固件可用内存、分配器空闲页数、运行时间和可见窗口。Linux64 还显示 CPU 历史、内存及磁盘和网卡速率，并可按名称过滤进程。选择进程后按 Delete，Enter 确认发送 SIGTERM，Esc 取消。
 - “设置 → 关于系统”显示当前内核、处理器、内存和测试声明；“开源组件”展示第三方说明。
+
+构建双内核任务管理器预览需要 Rust 1.85 或更新版本。Linux64 图形构建会编译 Rust 应用；MayKernel 通过现有 Rust 构建选项启用。
+
+```sh
+rustup target add x86_64-unknown-none
+make dual MAYOS_RUST=1 LINUX_VERSION=7.3.1
+python3 scripts/task_manager_smoke.py --iso build/mayos-dual.iso
+```
 
 ```text
 fastfetch

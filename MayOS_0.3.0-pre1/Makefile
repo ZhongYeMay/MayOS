@@ -109,16 +109,17 @@ CFLAGS += -DMAYOS_STAGE_DISK_DIAGNOSTIC
 OBJECTS += build/update_stage_codec.o build/update_stage_disk.o
 endif
 RUST_LIB :=
+RUST_TASK_SOURCES := rust/task_manager/view.rs
 ifeq ($(MAYOS_RUST),1)
 CFLAGS += -DMAYOS_RUST_CORE
 OBJECTS += build/update_stream_integrity.o
 RUST_LIB := build/libmaykernel_rust.a
 ifeq ($(MAYOS_RELEASE_SIGNATURE),1)
-build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs rust/maykernel_policy/src/release_url.rs rust/maykernel_policy/src/http_framing.rs rust/maykernel_policy/src/http_body_budget.rs rust/maykernel_policy/Cargo.toml build/config-flags.txt | build
+build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/release_signature.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs rust/maykernel_policy/src/release_url.rs rust/maykernel_policy/src/http_framing.rs rust/maykernel_policy/src/http_body_budget.rs rust/maykernel_policy/Cargo.toml $(RUST_TASK_SOURCES) build/config-flags.txt | build
 	CARGO_TARGET_DIR=$(CURDIR)/build/cargo RUSTFLAGS='-C panic=abort -C no-redzone=yes -C relocation-model=static --cfg curve25519_dalek_backend="serial"' $(CARGO) build --locked --manifest-path rust/maykernel_policy/Cargo.toml --target $(RUST_TARGET) --release --no-default-features --features release-signature$(RUST_AB_FEATURE)
 	cp build/cargo/$(RUST_TARGET)/release/libmaykernel_policy.a $@
 else
-build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs rust/maykernel_policy/src/release_url.rs rust/maykernel_policy/src/http_framing.rs rust/maykernel_policy/src/http_body_budget.rs build/config-flags.txt | build
+build/libmaykernel_rust.a: rust/maykernel_policy/src/lib.rs rust/maykernel_policy/src/ab_policy.rs rust/maykernel_policy/src/ab_policy/disk.rs rust/maykernel_policy/src/release_url.rs rust/maykernel_policy/src/http_framing.rs rust/maykernel_policy/src/http_body_budget.rs $(RUST_TASK_SOURCES) build/config-flags.txt | build
 	$(RUSTC) --edition=2021 --crate-name maykernel_policy \
 	  --crate-type staticlib --target $(RUST_TARGET) -C panic=abort \
 	  -C opt-level=s -C codegen-units=1 -C relocation-model=static \
@@ -181,7 +182,8 @@ build/security_tls.o: kernel/security_tls.h kernel/security_tls_provider.h kerne
 build/security_tls_provider.o: kernel/security_tls_provider.h kernel/security_tls.h
 build/security_clock.o: kernel/security_clock.h kernel/io.h
 build/security_entropy.o: kernel/security_entropy.h
-build/core.o: kernel/framebuffer.h kernel/boot64.S
+build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/task_manager.h
+build/gui.o: kernel/task_manager.h
 build/acpi.o: kernel/acpi.h
 build/pci.o: kernel/pci.h kernel/io.h
 build/ahci.o: kernel/ahci.h kernel/pci.h

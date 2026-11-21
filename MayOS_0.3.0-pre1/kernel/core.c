@@ -1,6 +1,7 @@
 #include "core.h"
 #include "io.h"
 #include "framebuffer.h"
+#include "task_manager.h"
 #include "net.h"
 #include "security_tls.h"
 #include "pci.h"
@@ -507,6 +508,10 @@ int input_poll(int *mx, int *my, int *buttons, int *key) {
             }
             if (v == 59) {
                 *key = 0x105;
+                return 1;
+            }
+            if (v == 60) {
+                *key = MAYOS_KEY_TASK_MANAGER;
                 return 1;
             }
             if (v == 42 || v == 54) {

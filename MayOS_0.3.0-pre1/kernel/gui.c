@@ -2,6 +2,7 @@
 #include "boot_logo.h"
 #include "core.h"
 #include "font.h"
+#include "task_manager.h"
 #include "material_icons.h"
 #ifndef MAYOS_LINUX
 #include "galgame.h"
@@ -355,6 +356,18 @@ static int text(int x, int y, const char *s, u32 color) {
     return x;
 }
 
+#ifdef MAYOS_TASK_MANAGER
+void may_task_text(int x, int y, const char *label, u32 color) {
+    text(x, y, label, color);
+}
+void may_task_rect(int x, int y, int w, int h, u32 color) {
+    rect(x, y, w, h, color);
+}
+void may_task_card(int x, int y, int w, int h, int radius, u32 color) {
+    soft_roundrect(x, y, w, h, radius, color);
+}
+#endif
+
 enum { BOOT_LOG_ROWS = 8, BOOT_LOG_WIDTH = 106, BOOT_PHASES = 5 };
 static char boot_lines[BOOT_LOG_ROWS][BOOT_LOG_WIDTH + 1];
 static char boot_line[BOOT_LOG_WIDTH + 1];
@@ -680,7 +693,15 @@ typedef struct {
     int x, y, w, h, open, min, max, ox, oy, ow, oh;
     const char *title;
 } Window;
+#ifdef MAYOS_TASK_MANAGER
+#define TASK_WINDOW 5
+#define WINDOW_COUNT 6
+#define START_APP_COUNT 6
+#else
 #define WINDOW_COUNT 5
+#define START_APP_COUNT 5
+#endif
+#define START_FOOTER (350 + (START_APP_COUNT - 5) * 47)
 /* Nonblocking 180ms fades. Geometry and input targets never move. */
 static u32 animation_started[WINDOW_COUNT];
 static int animation_running[WINDOW_COUNT];
@@ -717,8 +738,16 @@ static Window windows[WINDOW_COUNT] = {{275, 105, 730, 510, 0, 0, 0, 0, 0, 0, 0,
                             {228, 128, 824, 436, 0, 0, 0, 0, 0, 0, 0, "Settings"},
                             {290, 136, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
                             {315, 112, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
-                            {240, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
-static int order[WINDOW_COUNT] = {0, 2, 3, 4, 1}, focus = 1, dirty = 1;
+                            {240, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"},
+#ifdef MAYOS_TASK_MANAGER
+                            {190, 91, 900, 515, 0, 0, 0, 0, 0, 0, 0, "MayOS Task Manager"},
+#endif
+};
+static int order[WINDOW_COUNT] = {0, 2, 3, 4,
+#ifdef MAYOS_TASK_MANAGER
+                                 TASK_WINDOW,
+#endif
+                                 1}, focus = 1, dirty = 1;
 static int mx = 640, my = 360, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
            cut = 0, settings_tab = 6;
@@ -765,6 +794,15 @@ static void raise_window(int id) {
     start_open = context_open = 0;
     dirty = 1;
 }
+#ifdef MAYOS_TASK_MANAGER
+static void task_manager_open(void) {
+#ifdef MAYOS_LINUX
+    if (!windows[TASK_WINDOW].open || windows[TASK_WINDOW].min) may_task_cancel();
+#endif
+    raise_window(TASK_WINDOW);
+    serial("MayOS: Task Manager opened\n");
+}
+#endif
 static void emit(const char *s) {
     serial(s);
     serial("\n");
@@ -902,7 +940,14 @@ static void shell(void) {
         emit("theme light|dark  net status|dhcp|resolve DOMAIN|qemu-probe|udp-probe|dns-probe|tcp-probe|tcp-loss-probe");
         emit("tls status|check <host> (native MayKernel HTTPS security check)");
         emit("lspci  reboot  shutdown");
+#ifdef MAYOS_TASK_MANAGER
+        emit("taskmgr  (F2 opens MayOS Task Manager)");
+#endif
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
+#ifdef MAYOS_TASK_MANAGER
+    } else if (!strcmp(c, "taskmgr")) {
+        task_manager_open();
+#endif
     } else if (!strcmp(c, "clear"))
         out_count = 0;
     else if (!strcmp(c, "pwd"))
@@ -2044,41 +2089,65 @@ static int contains(const char *a, const char *b) {
 }
 static int search_match(int id) {
     const char *names[] = {"files 文件 文档", "settings 设置 关于", "terminal 终端 shell",
-                           "trash 回收站", "game 游戏 夏日未寄 explorer 浏览器"};
-    return id >= 0 && id < 5 && contains(names[id], search);
+                           "trash 回收站", "game 游戏 夏日未寄 explorer 浏览器",
+                           "taskmgr task manager 任务管理器"};
+    return id >= 0 && id < START_APP_COUNT && contains(names[id], search);
+}
+static void launch_start_entry(int index) {
+    if (index == 3) {
+        folder = 3;
+        file_scroll = 0;
+        selected = -1;
+        raise_window(0);
+    } else if (index == 4) {
+#ifdef MAYOS_LINUX
+        raise_window(4);
+#else
+        start_open = 0;
+        maygame_open();
+#endif
+#ifdef MAYOS_TASK_MANAGER
+    } else if (index == TASK_WINDOW) {
+        task_manager_open();
+#endif
+    } else {
+        raise_window(index);
+    }
 }
 static void start_draw(void) {
-    int x = 210, y = H - 500;
-    roundrect(x + 3, y + 4, 326, 410, dark ? 0x141218 : 0xd8d1df);
-    roundrect(x, y, 326, 410, panel);
+    int x = 210, y = H - 150 - START_FOOTER;
+    roundrect(x + 3, y + 4, 326, START_FOOTER + 60, dark ? 0x141218 : 0xd8d1df);
+    roundrect(x, y, 326, START_FOOTER + 60, panel);
     text(x + 22, y + 19, "应用程序 / Applications", ink);
     roundrect(x + 18, y + 57, 290, 34, bg);
     text(x + 30, y + 64, search[0] ? search : "搜索 / files, settings, terminal",
          search[0] ? ink : muted);
     const char *names[] = {"文件管理器", "设置", "终端", "回收站",
 #ifdef MAYOS_LINUX
-                           "Explorer 浏览器"
+                           "Explorer 浏览器",
 #else
-                           "夏日未寄"
+                           "夏日未寄",
 #endif
+                           "MayOS Task Manager"
     };
     const char *desc[] = {"浏览文件与文件夹", "系统信息与外观", "命令与会话工具", "找回或删除文件",
 #ifdef MAYOS_LINUX
-                          "Linux 网络文本预览"
+                          "Linux 网络文本预览",
 #else
-                          "MayKernel 原生游戏"
+                          "MayKernel 原生游戏",
 #endif
+                          "性能与资源 · F2"
     };
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < START_APP_COUNT; i++)
         if (search_match(i)) {
-            icon(x + 24, y + 109 + i * 47, i, 31);
+            icon(x + 24, y + 109 + i * 47, i == 5 ? 2 : i, 31);
             text(x + 70, y + 105 + i * 47, names[i], ink);
             text(x + 70, y + 125 + i * 47, desc[i], muted);
         }
-    rect(x + 18, y + 350, 290, 1, line);
-    text(x + 25, y + 369, "may / 本地账户", muted);
-    text(x + 213, y + 369, "重启", ink);
-    text(x + 270, y + 369, "关机", ink);
+    rect(x + 18, y + START_FOOTER, 290, 1, line);
+    text(x + 25, y + START_FOOTER + 19, "may / 本地账户", muted);
+    text(x + 213, y + START_FOOTER + 19, "重启", ink);
+    text(x + 270, y + START_FOOTER + 19, "关机", ink);
 }
 static void context_draw(void) {
     roundrect(ctxx + 3, ctxy + 3, 184, 320, dark ? 0x141218 : 0xd8d1df);
@@ -2201,6 +2270,10 @@ static void render(void) {
             terminal_draw(w);
         else if (i == 3)
             editor_draw(w);
+#ifdef MAYOS_TASK_MANAGER
+        else if (i == TASK_WINDOW)
+            may_task_draw(w->x + 1, w->y + 43, w->w - 2, w->h - 44, dark);
+#endif
         else
             explorer_draw(w);
         if (fading) {
@@ -2461,28 +2534,14 @@ static void left_click(void) {
         return;
     }
     if (start_open) {
-        int x = 210, y = H - 500;
-        if (inside(mx, my, x, y, 326, 410)) {
-            for (int i = 0; i < 5; i++)
+        int x = 210, y = H - 150 - START_FOOTER;
+        if (inside(mx, my, x, y, 326, START_FOOTER + 60)) {
+            for (int i = 0; i < START_APP_COUNT; i++)
                 if (search_match(i) && inside(mx, my, x + 16, y + 100 + i * 47, 294, 46)) {
-                    if (i == 3) {
-                        folder = 3;
-                        file_scroll = 0;
-                        selected = -1;
-                        raise_window(0);
-                    } else if (i == 4) {
-#ifdef MAYOS_LINUX
-                        raise_window(4);
-#else
-                        start_open = 0;
-                        maygame_open();
-#endif
-                    } else {
-                        raise_window(i);
-                    }
+                    launch_start_entry(i);
                     return;
                 }
-            if (my >= y + 354) {
+            if (my >= y + START_FOOTER + 4) {
                 if (mx > x + 267) {
                     fs_sync();
                     poweroff();
@@ -2526,6 +2585,12 @@ static void left_click(void) {
             }
             return;
         }
+#ifdef MAYOS_LINUX_TASK_MANAGER
+        if (id == TASK_WINDOW) {
+            may_task_click(rx - 1, ry - 43, w->w - 2, w->h - 44);
+            return;
+        }
+#endif
         if (id == 4) {
 #ifdef MAYOS_LINUX
             if (inside(rx, ry, 18, 50, 90, 36)) {
@@ -2726,6 +2791,12 @@ static void key_event(int k) {
         raise_window(2);
         return;
     }
+#ifdef MAYOS_TASK_MANAGER
+    if (k == MAYOS_KEY_TASK_MANAGER) {
+        task_manager_open();
+        return;
+    }
+#endif
     if (k == 0x104) {
         start_open = !start_open;
         search[0] = 0;
@@ -2746,6 +2817,10 @@ static void key_event(int k) {
         return;
     }
     if (k == 27) {
+#ifdef MAYOS_LINUX_TASK_MANAGER
+        if (focus == TASK_WINDOW && windows[TASK_WINDOW].open && !windows[TASK_WINDOW].min)
+            may_task_key(k, windows[TASK_WINDOW].h - 44);
+#endif
         start_open = context_open = top_panel = 0;
         return;
     }
@@ -2757,25 +2832,20 @@ static void key_event(int k) {
             search[n] = k;
             search[n + 1] = 0;
         } else if (k == '\n') {
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < START_APP_COUNT; i++)
                 if (search_match(i)) {
-                    if (i == 3) {
-                        folder = 3;
-                        raise_window(0);
-                    } else if (i == 4) {
-#ifdef MAYOS_LINUX
-                        raise_window(4);
-#else
-                        start_open = 0;
-                        maygame_open();
-#endif
-                    } else
-                        raise_window(i);
+                    launch_start_entry(i);
                     break;
                 }
         }
         return;
     }
+#ifdef MAYOS_LINUX_TASK_MANAGER
+    if (focus == TASK_WINDOW && windows[TASK_WINDOW].open && !windows[TASK_WINDOW].min) {
+        may_task_key(k, windows[TASK_WINDOW].h - 44);
+        return;
+    }
+#endif
     if (focus == 4 && windows[4].open && !windows[4].min) {
 #ifdef MAYOS_LINUX
         if (k == 0x101 || k == 0x102) {
@@ -3154,6 +3224,14 @@ void kernel_main(u32 magic, u32 info) {
             last = ticks / 50;
             dirty = 1;
         }
+#ifdef MAYOS_TASK_MANAGER
+        if (windows[TASK_WINDOW].open && !windows[TASK_WINDOW].min) {
+            u32 visible = 0;
+            for (int i = 0; i < WINDOW_COUNT; i++)
+                visible += windows[i].open && !windows[i].min;
+            if (may_task_poll(ticks, memory_mb, free_pages, visible)) dirty = 1;
+        }
+#endif
 #ifndef MAYOS_LINUX
         may_net_poll(); /* bounded polling, no IRQ or user-space dependency */
 #endif

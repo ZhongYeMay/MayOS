@@ -49,6 +49,10 @@ INPUT_FILES = {
     "desktop_session_sha256": ROOT / "linux/desktop-session",
     "desktop_backend_sha256": ROOT / "linux/desktop.c",
     "desktop_gui_sha256": ROOT / "kernel/gui.c",
+    "task_manager_ui_sha256": ROOT / "rust/task_manager/view.rs",
+    "task_manager_linux_sha256": ROOT / "rust/task_manager/linux.rs",
+    "task_manager_crate_sha256": ROOT / "rust/task_manager/lib.rs",
+    "task_manager_header_sha256": ROOT / "kernel/task_manager.h",
     "boot_art_generator_sha256": ROOT / "scripts/boot_art.py",
     "boot_brand_sha256": ROOT / "assets/limine-mayos-brand.png",
     "explorer_history_sha256": ROOT / "kernel/explorer_history.h",
@@ -445,6 +449,9 @@ def build(args: argparse.Namespace) -> dict:
     desktop_compiler = shutil.which(desktop_compiler)
     if not desktop_compiler:
         raise RuntimeError("Install musl-tools or set MAYOS_LINUX_CC to a musl-gcc compiler")
+    rustc = shutil.which(os.environ.get("RUSTC", "rustc"))
+    if not rustc:
+        raise RuntimeError("Install the Rust compiler to build MayOS Task Manager")
     archive, source_info = source_archive(version, offline=args.offline)
     source = extract_source(archive, version, source_info["sha256"])
     output = OUT / "objects" / version
@@ -473,12 +480,17 @@ def build(args: argparse.Namespace) -> dict:
         run([sys.executable, str(ROOT / "scripts/font.py")])
         run([sys.executable, str(ROOT / "scripts/photo.py")])
         run([sys.executable, str(ROOT / "scripts/boot_art.py"), str(ROOT / "build/boot_logo.h")])
+        task_library = OUT / "libmayos_task_manager.a"
+        run([rustc, "--edition=2021", "--crate-name", "mayos_task_manager",
+             "--crate-type=staticlib", "--target", "x86_64-unknown-linux-gnu",
+             "-C", "panic=abort", "-C", "opt-level=s",
+             str(ROOT / "rust/task_manager/lib.rs"), "-o", str(task_library)])
         run([desktop_compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
-             "-DMAYOS_LINUX", "-fno-pie", "-no-pie", "-static",
+             "-DMAYOS_LINUX", "-DMAYOS_LINUX_TASK_MANAGER", "-fno-pie", "-no-pie", "-static",
              "-I" + str(ROOT / "kernel"), "-I" + str(ROOT / "build"),
              "-isystem", str(OUT / "headers/include"),
              str(ROOT / "linux/desktop.c"), str(ROOT / "kernel/fs.c"),
-             str(ROOT / "kernel/gui.c"), "-o", str(OUT / "mayos-desktop")])
+             str(ROOT / "kernel/gui.c"), str(task_library), "-o", str(OUT / "mayos-desktop")])
         validate_static_elf(OUT / "mayos-desktop")
     kernel = output / "arch/x86/boot/bzImage"
     release = (output / "include/config/kernel.release").read_text().strip()

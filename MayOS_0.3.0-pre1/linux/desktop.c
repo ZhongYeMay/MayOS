@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include "core.h"
 #include "framebuffer.h"
+#include "task_manager.h"
 #undef memset
 #undef memcpy
 #undef strlen
@@ -140,6 +141,64 @@ void copy(char *destination, const char *source, int capacity) {
 void number(char *buffer, u32 value) {
     snprintf(buffer, 12, "%u", value);
 }
+
+#ifdef MAYOS_LINUX_TASK_MANAGER
+u32 may_task_read(const char *path, u8 *buffer, u32 capacity) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return 0;
+    u32 used = 0;
+    while (used < capacity) {
+        ssize_t count = read(fd, buffer + used, capacity - used);
+        if (count < 0 && errno == EINTR) continue;
+        if (count < 0) used = 0;
+        if (count <= 0) break;
+        used += (u32)count;
+    }
+    close(fd);
+    return used;
+}
+
+u32 may_task_pids(u32 *pids, u32 capacity) {
+    DIR *directory = opendir("/proc");
+    if (!directory) return 0;
+    struct dirent *entry;
+    u32 count = 0;
+    while ((entry = readdir(directory))) {
+        if (entry->d_name[0] < '1' || entry->d_name[0] > '9') continue;
+        char *end;
+        unsigned long pid = strtoul(entry->d_name, &end, 10);
+        if (*end || pid > INT32_MAX) continue;
+        if (count < capacity) pids[count] = (u32)pid;
+        count++;
+    }
+    closedir(directory);
+    return count;
+}
+
+u32 may_task_page_size(void) {
+    long page_size = sysconf(_SC_PAGESIZE);
+    return page_size > 0 ? (u32)page_size : 0;
+}
+
+int may_task_hardware_disk(u32 major, u32 minor) {
+    char path[80];
+    snprintf(path, sizeof(path), "/sys/dev/block/%u:%u/partition", major, minor);
+    if (access(path, F_OK) == 0) return 0;
+    snprintf(path, sizeof(path), "/sys/dev/block/%u:%u/device", major, minor);
+    return access(path, F_OK) == 0;
+}
+
+int may_task_pidfd(u32 pid) {
+    if (pid <= 1 || pid == (u32)getpid() || pid > INT32_MAX) return -1;
+    return (int)syscall(SYS_pidfd_open, pid, 0);
+}
+
+int may_task_signal(int fd, int terminate) {
+    int result = terminate ? (int)syscall(SYS_pidfd_send_signal, fd, SIGTERM, NULL, 0) : -1;
+    close(fd);
+    return result;
+}
+#endif
 
 const char *platform_kernel(void) { return kernel_label; }
 
@@ -415,6 +474,7 @@ static int keycode(unsigned int code, int value) {
     if (code == KEY_CAPSLOCK) { if (value == 1) caps_lock = !caps_lock; return 0; }
     switch (code) {
         case KEY_F1: return 0x105;
+        case KEY_F2: return MAYOS_KEY_TASK_MANAGER;
         case KEY_UP: return 0x101;
         case KEY_DOWN: return 0x102;
         case KEY_DELETE: return 0x103;
