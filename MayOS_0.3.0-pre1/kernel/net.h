@@ -3,11 +3,10 @@
 #include "core.h"
 #include "net_dhcp.h"
 
-/* MayKernel-only PCI RTL8139 Ethernet bring-up, polled (no IRQ routing).
- * No general-purpose IP configuration or Internet connectivity yet. */
+/* MayKernel PCI Ethernet preview using polled RTL8139 or E1000/E1000e. */
 typedef struct {
     u8 mac[6];
-    u16 io_base;
+    u16 io_base; /* RTL8139 I/O BAR, zero for the E1000/E1000e backend. */
     u32 packets_rx;
     u32 packets_tx;
     u32 rx_errors;
@@ -41,7 +40,7 @@ int may_net_qemu_dns_fixture(void);
 /* Send an actual DNS A lookup to DHCP's DNS server. This transport offers
  * no authenticity (DNS is untrusted); results must never authorize updates. */
 int may_net_dns_lookup(const char *hostname);
-/* Start a DHCP lease exchange over the native RTL8139 driver. Initial
+/* Start a DHCP lease exchange over the active Ethernet driver. Initial
  * negotiation only: no renewal/rebinding, do not persist lease across boots. */
 int may_net_qemu_tcp_http_probe(void);
 /* Diagnostic only: deliberately drops initial guest SYN, then retransmits. */

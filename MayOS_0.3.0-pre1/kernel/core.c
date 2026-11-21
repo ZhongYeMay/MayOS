@@ -3,6 +3,11 @@
 #include "framebuffer.h"
 #include "net.h"
 #include "security_tls.h"
+#include "pci.h"
+#include "xhci.h"
+#include "e1000.h"
+#include "hda.h"
+#include "acpi.h"
 void *memset(void *p, int v, u32 n) {
     u8 *d = p;
     while (n--)
@@ -412,6 +417,10 @@ void hardware_init(u32 magic, u32 info) {
     cpu_name[48] = 0;
     ps2_init();
     timer_init();
+    acpi_init();
+    pci_init();
+    xhci_init();
+    hda_init();
     may_tls_security_init();
     may_net_init();
 #ifdef MAYOS_EXCEPTION_SELFTEST

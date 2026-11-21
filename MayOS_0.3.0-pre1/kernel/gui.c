@@ -4,6 +4,7 @@
 #include "material_icons.h"
 #ifndef MAYOS_LINUX
 #include "galgame.h"
+#include "pci.h"
 #endif
 #ifdef MAYOS_LINUX
 #include "explorer_history.h"
@@ -796,7 +797,7 @@ static void shell(void) {
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
         emit("theme light|dark  net status|dhcp|resolve DOMAIN|qemu-probe|udp-probe|dns-probe|tcp-probe|tcp-loss-probe");
         emit("tls status|check <host> (native MayKernel HTTPS security check)");
-        emit("reboot  shutdown");
+        emit("lspci  reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
         out_count = 0;
@@ -1082,6 +1083,17 @@ static void shell(void) {
         emit("X.509 chain + hostname validation: not implemented");
         emit("No HTTPS, no GitHub download, no system installation");
 #endif
+    } else if (!strcmp(c, "lspci")) {
+#ifdef MAYOS_LINUX
+        emit("lspci: use the Linux pciutils package when included in the image");
+#else
+        emitnum("PCI devices: ", (u32)pci_device_count(), "");
+        for (int i = 0; i < pci_device_count(); i++) {
+            char description[96];
+            pci_describe(pci_device_at(i), description, sizeof(description));
+            emit(description);
+        }
+#endif
     } else if (!strcmp(c, "net") || !strcmp(c, "network")) {
 #ifdef MAYOS_LINUX
         char report[384];
@@ -1098,7 +1110,7 @@ static void shell(void) {
                 emit("DNS: query sent to DHCP-provided resolver");
         } else if (argc > 1 && !strcmp(argv[1], "dhcp")) {
             if (!may_net_dhcp_start())
-                emit("DHCP: RTL8139 unavailable or transmit busy");
+                emit("DHCP: adapter unavailable or transmit busy");
             else
                 emit("DHCP: DISCOVER sent; awaiting validated OFFER/ACK");
         } else if (argc > 1 && !strcmp(argv[1], "qemu-probe")) {
@@ -1106,7 +1118,7 @@ static void shell(void) {
                 emit("QEMU ARP probe: NIC unavailable or transmit busy");
         } else if (argc > 1 && !strcmp(argv[1], "udp-probe")) {
             if (!may_net_qemu_udp_probe())
-                emit("UDP probe: send ARP probe first; RTL8139 may be busy");
+                emit("UDP probe: send ARP probe first; adapter may be busy");
         } else if (argc > 1 && !strcmp(argv[1], "tcp-loss-probe")) {
             if (!may_net_qemu_tcp_loss_probe())
                 emit("TCP loss test: existing session busy or no ARP");
@@ -1115,13 +1127,14 @@ static void shell(void) {
                 emit("TCP QEMU test: send ARP probe first; NIC may be busy");
         } else if (argc > 1 && !strcmp(argv[1], "dns-probe")) {
             if (!may_net_qemu_dns_fixture())
-                emit("DNS fixture: send ARP probe first; RTL8139 may be busy");
+                emit("DNS fixture: send ARP probe first; adapter may be busy");
         } else if (argc > 1 && strcmp(argv[1], "status"))
             emit("Usage: net status|dhcp|resolve DOMAIN|qemu-probe|udp-probe|dns-probe|tcp-probe|tcp-loss-probe");
         may_net_poll();
         const MayNetInfo *nic = may_net_info();
         if (nic->present) {
-            emit("Network: RTL8139 PCI Ethernet ready (polled, L2 only).");
+            emit(nic->io_base ? "Network: RTL8139 PCI Ethernet ready (polled, L2 only)."
+                              : "Network: E1000/E1000e PCI Ethernet ready.");
             emit("IPv4/UDP: QEMU-only driver, DHCP and untrusted DNS A support.");
             emitnum("RX frames: ", nic->packets_rx, "");
             emitnum("TX frames: ", nic->packets_tx, "");
@@ -1172,7 +1185,7 @@ static void shell(void) {
             else if (lease->state==MAY_DHCP_NAK)
                 emit("DHCP: rejected by server");
         } else
-            emit("Network: no supported RTL8139 PCI adapter.");
+            emit("Network: no supported PCI Ethernet adapter.");
         emit("MayKernel: TCP localhost fixture only; no TLS/HTTPS/updates.");
         emit("QEMU fixture UDP/DNS probes are separate from real DNS.");
 #endif

@@ -1,5 +1,7 @@
 #include "net.h"
 #include "io.h"
+#include "pci.h"
+#include "e1000.h"
 #include "net_ipv4.h"
 #include "net_dhcp.h"
 #include "net_tcp.h"
@@ -49,20 +51,6 @@ static u8 tcp_capture[256];
 static const u8 qemu_local_ip[4] = {10, 0, 2, 15};
 static const u8 qemu_gateway_ip[4] = {10, 0, 2, 2};
 
-static u32 pci_read(u8 bus, u8 slot, u8 func, u8 offset) {
-    u32 address = 0x80000000u |
-        ((u32)bus << 16) | ((u32)slot << 11) |
-        ((u32)func << 8) | ((u32)offset & 0xfcu);
-    outl(0xcf8, address);
-    return inl(0xcfc);
-}
-static void pci_write(u8 bus, u8 slot, u8 func, u8 offset, u32 value) {
-    u32 address = 0x80000000u |
-        ((u32)bus << 16) | ((u32)slot << 11) |
-        ((u32)func << 8) | ((u32)offset & 0xfcu);
-    outl(0xcf8, address);
-    outl(0xcfc, value);
-}
 static u8 ring_byte(u32 address) {
     return rx_ring[address & (RTL_RING_BYTES - 1u)];
 }
@@ -70,8 +58,9 @@ static int address_32bit(const void *pointer) {
     uptr value = (uptr)pointer;
     return value != 0 && value <= 0xffffffffu;
 }
-static int rtl_setup(u8 bus, u8 slot, u8 func) {
-    u32 bar = pci_read(bus, slot, func, 0x10);
+static int rtl_setup(const PciDevice *dev) {
+    u8 bus = dev->bus, slot = dev->slot, func = dev->function;
+    u32 bar = dev->bar[0];
     if (!(bar & 1u)) {
         serial("MayOS: RTL8139 PCI BAR0 is not I/O; refusing init\n");
         return 0;
@@ -85,9 +74,9 @@ static int rtl_setup(u8 bus, u8 slot, u8 func) {
         serial("MayOS: RTL8139 invalid I/O BAR or DMA memory\n");
         return 0;
     }
-    u32 old = pci_read(bus, slot, func, 0x04);
-    pci_write(bus, slot, func, 0x04, old | 0x5u); /* PCI I/O + bus master */
-    if ((pci_read(bus, slot, func, 0x04) & 0x5u) != 0x5u) {
+    u16 old = pci_config_read16(bus, slot, func, 0x04);
+    pci_config_write16(bus, slot, func, 0x04, old | 0x5u); /* PCI I/O + bus master */
+    if ((pci_config_read16(bus, slot, func, 0x04) & 0x5u) != 0x5u) {
         serial("MayOS: RTL8139 PCI bus mastering unavailable\n");
         return 0;
     }
@@ -140,21 +129,17 @@ static int rtl_setup(u8 bus, u8 slot, u8 func) {
 }
 void may_net_init(void) {
     memset(&nic, 0, sizeof(nic));
-    for (u32 bus = 0; bus < 256u; bus++)
-        for (u32 slot = 0; slot < 32u; slot++) {
-            u32 id0 = pci_read((u8)bus, (u8)slot, 0, 0);
-            if ((id0 & 0xffffu) == 0xffffu) continue;
-            u32 functions = (pci_read((u8)bus, (u8)slot, 0, 0x0c) &
-                             0x00800000u) ? 8u : 1u;
-            for (u32 function = 0; function < functions; function++) {
-                u32 id = function ? pci_read((u8)bus, (u8)slot,
-                                              (u8)function, 0) : id0;
-                if ((id & 0xffffu) != RTL_VENDOR ||
-                    (id >> 16) != RTL_DEVICE) continue;
-                if (rtl_setup((u8)bus, (u8)slot, (u8)function)) return;
-            }
-        }
-    serial("MayOS: no supported RTL8139 PCI Ethernet adapter\n");
+    for (int i = 0; i < pci_device_count(); i++) {
+        const PciDevice *dev = pci_device_at(i);
+        if (dev->vendor_id == RTL_VENDOR && dev->device_id == RTL_DEVICE &&
+            rtl_setup(dev)) return;
+    }
+    if (e1000_init()) {
+        memcpy(nic.mac, e1000_mac_address(), sizeof(nic.mac));
+        nic.present = 1;
+        return;
+    }
+    serial("MayOS: no supported PCI Ethernet adapter\n");
 }
 const MayNetInfo *may_net_info(void) { return &nic; }
 const MayDhcpClient *may_net_dhcp_info(void) { return &dhcp; }
@@ -174,12 +159,28 @@ const char *may_net_format_ipv4(const u8 ip[4]) {
 }
 /* Single outstanding segment, bounded retries, and explicit close.
  * Only for a QEMU localhost fixture; not congestion-controlled TCP. */
+static int tx_available(void) {
+    return !nic.io_base ||
+           (inl(nic.io_base + RTL_TSD0 + next_tx * 4u) & (1u << 13));
+}
+
+static int send_frame(u32 length) {
+    if (nic.io_base) {
+        __asm__ volatile("mfence" ::: "memory");
+        outl(nic.io_base + RTL_TSD0 + next_tx * 4u, length);
+        next_tx = (next_tx + 1u) & 3u;
+    } else if (!e1000_send(tx_frames[next_tx], length)) {
+        return 0;
+    }
+    nic.packets_tx++;
+    return 1;
+}
+
 static int tcp_transmit(u8 flags,const u8 *data,u16 length) {
     if(!nic.present||!qemu_gateway_mac_valid||
        length>sizeof(tcp_retry_payload))return 0;
     u32 index=next_tx;
-    u16 io=nic.io_base;
-    if(!(inl(io+RTL_TSD0+index*4u)&(1u<<13)))return 0;
+    if (!tx_available()) return 0;
     int count=may_tcp_build(tx_frames[index],sizeof(tx_frames[index]),
         nic.mac,qemu_gateway_mac,qemu_local_ip,qemu_gateway_ip,
         tcp_local_port,10080u,tcp_next_seq,tcp_remote_seq,
@@ -194,10 +195,11 @@ static int tcp_transmit(u8 flags,const u8 *data,u16 length) {
         tcp_drop_next_syn=0;
         serial("MayOS: TCP diagnostic intentionally dropped first SYN\n");
     } else {
-        __asm__ volatile("" ::: "memory");
-        outl(io+RTL_TSD0+index*4u,(u32)count);
-        next_tx=(index+1u)&3u;
-        nic.packets_tx++;
+        if (!send_frame((u32)count)) {
+            if (flags & (MAY_TCP_SYN | MAY_TCP_PSH | MAY_TCP_FIN))
+                may_tcp_retry_cancel(&tcp_retry);
+            return 0;
+        }
     }
     tcp_next_seq+=(u32)length+
                   ((flags&MAY_TCP_SYN)?1u:0u)+((flags&MAY_TCP_FIN)?1u:0u);
@@ -215,18 +217,14 @@ static void tcp_retransmit_poll(void) {
     }
     if(!may_tcp_retry_due(&tcp_retry,ticks))return;
     u32 index=next_tx;
-    u16 io=nic.io_base;
-    if(!(inl(io+RTL_TSD0+index*4u)&(1u<<13)))return;
+    if (!tx_available()) return;
     int count=may_tcp_build(tx_frames[index],sizeof(tx_frames[index]),
         nic.mac,qemu_gateway_mac,qemu_local_ip,qemu_gateway_ip,
         tcp_local_port,10080u,tcp_retry.first_seq,tcp_remote_seq,
         tcp_retry.flags,4096u,tcp_retry_payload,tcp_retry.payload_length,
         (u16)(tcp_retry.first_seq&0xffffu));
     if(!count)return;
-    __asm__ volatile("" ::: "memory");
-    outl(io+RTL_TSD0+index*4u,(u32)count);
-    next_tx=(index+1u)&3u;
-    nic.packets_tx++;
+    if (!send_frame((u32)count)) return;
     may_tcp_retry_resent(&tcp_retry,ticks);
     nic.tcp_fixture_retries++;
     serial("MayOS: TCP diagnostic segment retransmitted\n");
@@ -298,8 +296,7 @@ static void tcp_received(const MayTcpSegment *t) {
 static int dhcp_transmit(int request) {
     if (!nic.present) return 0;
     u32 index=next_tx;
-    u16 io=nic.io_base;
-    if (!(inl(io+RTL_TSD0+index*4u) & (1u<<13))) return 0;
+    if (!tx_available()) return 0;
     u8 packet[300];
     int payload_bytes=request
         ? may_dhcp_request(&dhcp,packet,sizeof(packet))
@@ -313,10 +310,7 @@ static int dhcp_transmit(int request) {
                 68u,67u,packet,(u16)payload_bytes,
                 (u16)(0x4d00u+(request?3u:1u)));
     if (!frame_bytes) return 0;
-    __asm__ volatile("" ::: "memory");
-    outl(io+RTL_TSD0+index*4u,(u32)frame_bytes);
-    next_tx=(index+1u)&3u;
-    nic.packets_tx++;
+    if (!send_frame((u32)frame_bytes)) return 0;
     serial(request ? "MayOS: DHCP REQUEST broadcast sent\n"
                    : "MayOS: DHCP DISCOVER broadcast sent\n");
     return 1;
@@ -335,21 +329,16 @@ int may_net_dhcp_start(void) {
 
 /* Only accept an ARP response corresponding to the built-in QEMU gateway
  * diagnostic. Don't treat arbitrary LAN packets as successful probes. */
-static void receive_frame(u32 offset, u32 frame_len) {
-    /* Full frame is copied from the circular RTL8139 DMA ring so the pure
-     * parser cannot accidentally read wrapped or stale receive data. */
-    if (frame_len >= 42u && frame_len <= sizeof(ipv4_receive) &&
-        ring_byte(offset + 12u) == 8u && ring_byte(offset + 13u) == 0u) {
-        for (u32 i = 0; i < frame_len; i++)
-            ipv4_receive[i] = ring_byte(offset + i);
+static void receive_frame(const u8 *frame, u32 frame_len) {
+    if (frame_len >= 42u && frame[12] == 8u && frame[13] == 0u) {
         MayTcpSegment segment;
-        if (may_tcp_parse(ipv4_receive,frame_len,nic.mac,
+        if (may_tcp_parse(frame,frame_len,nic.mac,
                           qemu_local_ip,&segment)) {
             tcp_received(&segment);
             return;
         }
         MayUdpDatagram message;
-        if (may_ipv4_udp_parse_dhcp(ipv4_receive,frame_len,nic.mac,
+        if (may_ipv4_udp_parse_dhcp(frame,frame_len,nic.mac,
                                      qemu_local_ip,&message)) {
             int event=may_dhcp_receive(&dhcp,message.payload,
                                       message.payload_length,
@@ -366,7 +355,7 @@ static void receive_frame(u32 offset, u32 frame_len) {
             }
             return;
         }
-        if (may_ipv4_udp_parse(ipv4_receive, frame_len, nic.mac,
+        if (may_ipv4_udp_parse(frame, frame_len, nic.mac,
                                qemu_local_ip, &message)) {
             if(dns_native_pending && message.source_port==53u &&
                message.destination_port==40002u &&
@@ -401,7 +390,7 @@ static void receive_frame(u32 offset, u32 frame_len) {
                     if (i == sizeof(ack) - 1u) {
                         nic.ipv4_udp_reply = 1;
                         udp_probe_active = 0;
-                        serial("MayOS: RTL8139 IPv4 UDP echo validated from QEMU host\n");
+                        serial("MayOS: Ethernet IPv4 UDP echo validated from QEMU host\n");
                     }
                 }
             } else if (gateway && message.source_port == 10053u &&
@@ -412,69 +401,83 @@ static void receive_frame(u32 offset, u32 frame_len) {
                     memcpy(nic.dns_fixture_address, address, 4u);
                     nic.dns_fixture_reply = 1;
                     dns_probe_active = 0;
-                    serial("MayOS: RTL8139 DNS fixture response validated over IPv4 UDP\n");
+                    serial("MayOS: Ethernet DNS fixture response validated over IPv4 UDP\n");
                 }
             }
         }
         return;
     }
     if (frame_len < 42u) return;
-    if (ring_byte(offset + 12u) != 0x08 ||
-        ring_byte(offset + 13u) != 0x06) return;
-    if (ring_byte(offset + 14u) != 0x00 ||
-        ring_byte(offset + 15u) != 0x01 ||
-        ring_byte(offset + 16u) != 0x08 ||
-        ring_byte(offset + 17u) != 0x00 ||
-        ring_byte(offset + 18u) != 6 ||
-        ring_byte(offset + 19u) != 4 ||
-        ring_byte(offset + 20u) != 0 ||
-        ring_byte(offset + 21u) != 2) return;
+    if (frame[12u] != 0x08 ||
+        frame[13u] != 0x06) return;
+    if (frame[14u] != 0x00 ||
+        frame[15u] != 0x01 ||
+        frame[16u] != 0x08 ||
+        frame[17u] != 0x00 ||
+        frame[18u] != 6 ||
+        frame[19u] != 4 ||
+        frame[20u] != 0 ||
+        frame[21u] != 2) return;
     const u8 gateway[4] = {10, 0, 2, 2};
     const u8 client[4] = {10, 0, 2, 15};
     for (int i = 0; i < 6; i++) {
-        if (ring_byte(offset + (u32)i) != nic.mac[i] ||
-            ring_byte(offset + 32u + (u32)i) != nic.mac[i]) return;
+        if (frame[(u32)i] != nic.mac[i] ||
+            frame[32u + (u32)i] != nic.mac[i]) return;
     }
     for (int i = 0; i < 4; i++) {
-        if (ring_byte(offset + 28u + (u32)i) != gateway[i] ||
-            ring_byte(offset + 38u + (u32)i) != client[i]) return;
+        if (frame[28u + (u32)i] != gateway[i] ||
+            frame[38u + (u32)i] != client[i]) return;
     }
     int mac_matches = 1;
     for (int i = 0; i < 6; i++)
-        if (ring_byte(offset + 6u + (u32)i) !=
-            ring_byte(offset + 22u + (u32)i)) mac_matches = 0;
-    if (!mac_matches || (ring_byte(offset + 22u) & 1u)) return;
+        if (frame[6u + (u32)i] !=
+            frame[22u + (u32)i]) mac_matches = 0;
+    if (!mac_matches || (frame[22u] & 1u)) return;
     for (int i = 0; i < 6; i++)
-        qemu_gateway_mac[i] = ring_byte(offset + 22u + (u32)i);
+        qemu_gateway_mac[i] = frame[22u + (u32)i];
     qemu_gateway_mac_valid = 1;
     if (!nic.gateway_arp_reply) {
         nic.gateway_arp_reply = 1;
-        serial("MayOS: RTL8139 ARP reply received from QEMU gateway 10.0.2.2\n");
+        serial("MayOS: Ethernet ARP reply received from QEMU gateway 10.0.2.2\n");
     }
 }
 void may_net_poll(void) {
     if (!nic.present) return;
-    const u16 io = nic.io_base;
-    /* ACK masked hardware events in polling mode; no IRQ handler required. */
-    u16 events = inw(io + RTL_ISR);
-    if (events && events != 0xffffu) outw(io + RTL_ISR, events);
-    for (u32 i = 0; i < 16u && !(inb(io + RTL_CMD) & 1u); i++) {
-        u16 status = (u16)ring_byte(rx_cursor) |
-                     ((u16)ring_byte(rx_cursor + 1u) << 8);
-        u32 length = (u32)ring_byte(rx_cursor + 2u) |
-                     ((u32)ring_byte(rx_cursor + 3u) << 8);
-        if (!(status & 1u) || length < 8u || length > 2048u) {
-            nic.rx_errors++;
-            serial("MayOS: RTL8139 RX malformed descriptor; stopping poll\n");
-            /* Do not advance CAPR using an untrusted DMA length. */
-            break;
+    if (!nic.io_base) {
+        for (int i = 0; i < 16; i++) {
+            int length = e1000_receive(ipv4_receive, sizeof(ipv4_receive));
+            if (length <= 0) break;
+            receive_frame(ipv4_receive, (u32)length);
+            nic.packets_rx++;
         }
-        receive_frame(rx_cursor + 4u, length - 4u /* hardware CRC */);
-        nic.packets_rx++;
-        rx_cursor = (rx_cursor + 4u + length + 3u) &
-                    ~(u32)3u;
-        rx_cursor &= (RTL_RING_BYTES - 1u);
-        outw(io + RTL_CAPR, (u16)(rx_cursor - 16u));
+    } else {
+        const u16 io = nic.io_base;
+        /* ACK masked hardware events in polling mode; no IRQ handler required. */
+        u16 events = inw(io + RTL_ISR);
+        if (events && events != 0xffffu) outw(io + RTL_ISR, events);
+        for (u32 i = 0; i < 16u && !(inb(io + RTL_CMD) & 1u); i++) {
+            u16 status = (u16)ring_byte(rx_cursor) |
+                         ((u16)ring_byte(rx_cursor + 1u) << 8);
+            u32 length = (u32)ring_byte(rx_cursor + 2u) |
+                         ((u32)ring_byte(rx_cursor + 3u) << 8);
+            if (!(status & 1u) || length < 8u || length > 2048u) {
+                nic.rx_errors++;
+                serial("MayOS: RTL8139 RX malformed descriptor; stopping poll\n");
+                /* Do not advance CAPR using an untrusted DMA length. */
+                break;
+            }
+            u32 frame_length = length - 4u; /* Exclude the hardware CRC. */
+            if (frame_length <= sizeof(ipv4_receive)) {
+                for (u32 byte = 0; byte < frame_length; byte++)
+                    ipv4_receive[byte] = ring_byte(rx_cursor + 4u + byte);
+                receive_frame(ipv4_receive, frame_length);
+            }
+            nic.packets_rx++;
+            rx_cursor = (rx_cursor + 4u + length + 3u) &
+                        ~(u32)3u;
+            rx_cursor &= (RTL_RING_BYTES - 1u);
+            outw(io + RTL_CAPR, (u16)(rx_cursor - 16u));
+        }
     }
     if (dhcp_request_pending && dhcp_transmit(1))
         dhcp_request_pending=0;
@@ -513,10 +516,8 @@ void may_net_poll(void) {
 int may_net_qemu_arp_probe(void) {
     if (!nic.present) return 0;
     may_net_poll();
-    const u16 io = nic.io_base;
     u32 index = next_tx;
-    /* The OWN flag must be 1: DMA from the previous frame is finished. */
-    if (!(inl(io + RTL_TSD0 + index * 4u) & (1u << 13))) return 0;
+    if (!tx_available()) return 0;
     u8 *packet = tx_frames[index];
     memset(packet, 0, 60u);
     for (int i = 0; i < 6; i++) {
@@ -533,12 +534,8 @@ int may_net_qemu_arp_probe(void) {
     packet[38] = 10; packet[39] = 0; packet[40] = 2; packet[41] = 2;
     nic.gateway_arp_reply = 0;
     qemu_gateway_mac_valid = 0;
-    /* A serial fence ensures the DMA-visible buffer is populated first. */
-    __asm__ volatile("" ::: "memory");
-    outl(io + RTL_TSD0 + index * 4u, 60u);
-    next_tx = (index + 1u) & 3u;
-    nic.packets_tx++;
-    serial("MayOS: RTL8139 QEMU ARP probe sent to 10.0.2.2\n");
+    if (!send_frame(60u)) return 0;
+    serial("MayOS: Ethernet QEMU ARP probe sent to 10.0.2.2\n");
     return 1;
 }
 
@@ -549,8 +546,7 @@ static int send_ipv4_probe(int dns) {
     if (!nic.present || !qemu_gateway_mac_valid) return 0;
     may_net_poll();
     u32 index = next_tx;
-    const u16 io = nic.io_base;
-    if (!(inl(io + RTL_TSD0 + index * 4u) & (1u << 13))) return 0;
+    if (!tx_available()) return 0;
     static const u8 echo_request[] = "MAYOS-UDP-PROBE";
     u8 dns_request[280];
     const u8 *data = echo_request;
@@ -567,7 +563,7 @@ static int send_ipv4_probe(int dns) {
         nic.mac, qemu_gateway_mac, qemu_local_ip, qemu_gateway_ip,
         dns ? 40001u : 40000u, 10053u,
         data, data_size, dns ? 0x4d41u : 0x4d40u);
-    if (!frame_size) return 0;
+    if (!frame_size || !send_frame((u32)frame_size)) return 0;
     if (dns) {
         nic.dns_fixture_reply = 0;
         dns_probe_active = 1;
@@ -575,12 +571,8 @@ static int send_ipv4_probe(int dns) {
         nic.ipv4_udp_reply = 0;
         udp_probe_active = 1;
     }
-    __asm__ volatile("" ::: "memory");
-    outl(io + RTL_TSD0 + index * 4u, (u32)frame_size);
-    next_tx = (index + 1u) & 3u;
-    nic.packets_tx++;
-    serial(dns ? "MayOS: RTL8139 DNS fixture request sent over IPv4 UDP\n"
-               : "MayOS: RTL8139 IPv4 UDP echo probe sent to QEMU host\n");
+    serial(dns ? "MayOS: Ethernet DNS fixture request sent over IPv4 UDP\n"
+               : "MayOS: Ethernet IPv4 UDP echo probe sent to QEMU host\n");
     return 1;
 }
 int may_net_qemu_udp_probe(void) {
@@ -632,14 +624,13 @@ int may_net_dns_lookup(const char *hostname) {
     int data_bytes=may_dns_query_a(query,sizeof(query),hostname,id);
     if(data_bytes<=12 || data_bytes-12>(int)sizeof(dns_expected_question))
         return 0;
-    u16 io=nic.io_base;
     u32 index=next_tx;
-    if(!(inl(io+RTL_TSD0+index*4u)&(1u<<13)))return 0;
+    if (!tx_available()) return 0;
     int frame_bytes=may_ipv4_udp_build(
         tx_frames[index],sizeof(tx_frames[index]),
         nic.mac,qemu_gateway_mac,dhcp.address,dhcp.dns,
         40002u,53u,query,(u16)data_bytes,id);
-    if(!frame_bytes)return 0;
+    if (!frame_bytes || !send_frame((u32)frame_bytes)) return 0;
     memcpy(dns_expected_question,query+12u,(u32)data_bytes-12u);
     dns_expected_question_len=(u16)(data_bytes-12);
     dns_native_txid=id;
@@ -647,10 +638,6 @@ int may_net_dns_lookup(const char *hostname) {
     nic.dns_native_timeout=0;
     dns_native_sent_tick=ticks;
     dns_native_pending=1;
-    __asm__ volatile("" ::: "memory");
-    outl(io+RTL_TSD0+index*4u,(u32)frame_bytes);
-    next_tx=(index+1u)&3u;
-    nic.packets_tx++;
     serial("MayOS: DHCP DNS A query sent to leased DNS server\n");
     return 1;
 }
