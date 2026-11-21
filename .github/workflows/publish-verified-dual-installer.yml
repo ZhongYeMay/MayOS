@@ -1,0 +1,72 @@
+name: Publish already verified MayOS three-way ISO (immutable QEMU evidence)
+on:
+  push:
+    branches: [feat/mayos-052-pre4-dual-installer-media-20261122]
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish-only-after-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Retrieve exact successful QEMU installer run, not any untested build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 44936666465 --repo "$GITHUB_REPOSITORY" \
+            --name MayOS-0.5.2-pre4-DualKernel-Installer-verified \
+            --dir verified
+      - name: Require exact ISO hash, complete QEMU PASS results and original source SHA
+        run: |
+          set -euo pipefail
+          cd verified/build
+          echo '413b97002e94befc96203dfdaf50979f0d7bef99ff0edf61ca27352ce2585129  MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso' | sha256sum -c
+          sha256sum -c SHA256SUMS.txt
+          python3 - <<'PY'
+          import json
+          m=json.load(open('MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.manifest.json'))
+          t=json.load(open('qemu-triple-test.json'))
+          assert m['source_commit']=='ddfdc1b4ec133e800278b3ba83efe1db8f2493d9'
+          assert m['components']['live_maykernel']['release']=='0.5.2-pre4'
+          assert m['components']['offline_installer']['installed_system_version']=='0.5.2-pre2'
+          assert t['verified_iso_sha256']==m['sha256']
+          assert all(t[x]=='PASS' for x in ('bios_maykernel','bios_linux','uefi_installer_cancel','uefi_installer_install','installed_disk_uefi_cold_boot'))
+          print('PASS: immutable source commit and real QEMU proof')
+          PY
+      - name: Publish experimental ISO to public GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd verified/build
+          tag=v0.5.2-pre4-dual-installer-test1
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Already published; no silent replacement"
+            exit 0
+          fi
+          cat > RELEASE_NOTES.txt <<'EOF'
+          Experimental MayOS combined BIOS/UEFI ISO, QEMU verified.
+          MayKernel64 live kernel: v0.5.2-pre4.
+          Linux64 desktop and rescue kernel: 7.3.1.
+          Offline MayOS installer/recovery: v0.5.2-pre2.
+          IMPORTANT: The installer installs 0.5.2-pre2, not 0.5.2-pre4.
+          QEMU BIOS dual-boot, UEFI cancellation without data loss, installation
+          onto isolated blank 96 MiB QEMU disk, GPT integrity and cold boot
+          without the original ISO have all PASSED.
+          Not tested for safe installation on physical computers; Secure Boot off.
+          Treat removable USB media as boot media, NOT a supported installer target.
+          EOF
+          gh release create "$tag" \
+            MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso \
+            MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.manifest.json \
+            SHA256SUMS.txt qemu-triple-test.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --target ddfdc1b4ec133e800278b3ba83efe1db8f2493d9 \
+            --title "MayOS 0.5.2-pre4 DualKernel + 0.5.2-pre2 installer TEST1" \
+            --notes-file RELEASE_NOTES.txt --prerelease

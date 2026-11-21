@@ -1,0 +1,156 @@
+name: Verify and package latest MayOS dual-kernel + installer ISO
+on:
+  push:
+    branches: [feat/mayos-052-pre4-dual-installer-media-20261122]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  package-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate builder syntax and install CI dependencies
+        run: |
+          python3 -m py_compile scripts/package_latest_dual_installer_iso.py scripts/test_latest_dual_installer_iso.py
+          bash scripts/configure-ci-apt-mirror.sh
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
+            build-essential gcc-multilib musl-tools linux-libc-dev \
+            grub-common grub-pc-bin grub-efi-amd64-bin xorriso mtools \
+            qemu-system-x86 ovmf ffmpeg python3-pil python3-h2 \
+            fonts-noto-cjk fonts-dejavu-core flex bison bc fdisk util-linux \
+            libelf-dev libssl-dev xz-utils busybox-static rsync \
+            libcurl4-openssl-dev pkg-config ca-certificates zstd
+      - name: Download SHA-256 pinned existing MayKernel and installer ISO
+        run: |
+          set -euo pipefail
+          mkdir -p build/release-components
+          curl --fail --location --retry 5 --silent --show-error \
+            https://raw.githubusercontent.com/ZhongYeMay/MayOS/d249fca81125b17e90d789a8ff8d7b99567f6d85/MayOS-0.5.2-pre4-MayKernel-x86_64.iso \
+            -o build/release-components/MayOS-0.5.2-pre4-MayKernel-x86_64.iso
+          curl --fail --location --retry 5 --silent --show-error \
+            https://raw.githubusercontent.com/ZhongYeMay/MayOS/6b28838524fc843469600c605013a37aa1d21851/MayOS-0.5.2-pre2-Installer-x86_64.iso \
+            -o build/release-components/MayOS-0.5.2-pre2-Installer-x86_64.iso
+          echo 'c51b45c92ea4cd6645b690e433af3f562507fc69ab62d5d39891c10284ac5bb7  build/release-components/MayOS-0.5.2-pre4-MayKernel-x86_64.iso' > build/components-sha256.txt
+          echo 'c46ee45ded237f0c5823f94e498dad89700f7c54c0d80ba4137e5be3bf572a1a  build/release-components/MayOS-0.5.2-pre2-Installer-x86_64.iso' >> build/components-sha256.txt
+          sha256sum --check build/components-sha256.txt
+      - name: Generate required compiled desktop fonts, icons and image headers
+        run: make -C versions/0.5.0-pre2-dev build/font.h build/cat_image.h build/material_icons.h
+      - name: Reuse independently QEMU-tested Linux 7.3.1 payload when available; rebuild on missing cache
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/cached-dual
+          if gh run download 44892292191 --repo "$GITHUB_REPOSITORY"             --name MayOS-all-features-QEMU-2bbfc3a00e38d59ebf28680102ddbafc7653b454             --dir build/cached-dual; then
+            echo 'ec94a8012f86d77c8a6f6d0aea9d3575fa71770cc8146d7b4d8c51d28ae7daee  build/cached-dual/mayos-dual.iso' | sha256sum --check
+            mkdir -p versions/0.5.0-pre2-dev/build/linux
+            for name in bzImage initramfs.cpio.gz manifest.json kernel.config; do
+              xorriso -osirrox on -indev build/cached-dual/mayos-dual.iso                 -extract "/boot/linux/$name" "versions/0.5.0-pre2-dev/build/linux/$name"
+            done
+            xorriso -osirrox on -indev build/cached-dual/mayos-dual.iso               -extract /licenses versions/0.5.0-pre2-dev/build/linux/licenses || true
+          fi
+          if test -s build/cached-dual/mayos-dual.iso; then
+            python3 - <<'PY'
+          import json, pathlib, sys
+          source=pathlib.Path('versions/0.5.0-pre2-dev').resolve()
+          sys.path.insert(0, str(source/'scripts'))
+          from linux import inputs
+          from dual_iso import checked_payloads
+          manifest=checked_payloads()
+          assert manifest['version']=='7.3.1'
+          assert manifest['inputs']==inputs(), 'Cached Linux payload does not match present source tree'
+          print('PASS: SHA-verified cached Linux kernel/initramfs exactly matches current sources')
+          PY
+          else
+            make -C versions/0.5.0-pre2-dev linux LINUX_VERSION=7.3.1 LINUX_JOBS=4
+            python3 versions/0.5.0-pre2-dev/scripts/linux.py status
+          fi
+      - name: Package bootable BIOS/UEFI ISO and assert El Torito catalog
+        run: |
+          set -euo pipefail
+          python3 scripts/package_latest_dual_installer_iso.py \
+            --maykernel-iso build/release-components/MayOS-0.5.2-pre4-MayKernel-x86_64.iso \
+            --installer-iso build/release-components/MayOS-0.5.2-pre2-Installer-x86_64.iso \
+            --source-commit "$GITHUB_SHA" \
+            --output build/MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso
+          cd build
+          sha256sum -c SHA256SUMS.txt
+          xorriso -indev MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso \
+            -report_el_torito plain > triple-iso-boot-catalog.txt
+          grep -Eq 'El Torito boot img[[:space:]]*:[[:space:]]*[0-9]+[[:space:]]+BIOS' triple-iso-boot-catalog.txt
+          grep -Eq 'El Torito boot img[[:space:]]*:[[:space:]]*[0-9]+[[:space:]]+UEFI' triple-iso-boot-catalog.txt
+      - name: Real QEMU BIOS MayKernel and Linux, UEFI installer and cold disk boot
+        run: |
+          python3 scripts/test_latest_dual_installer_iso.py \
+            --iso build/MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso
+      - name: Verify version provenance and test manifest
+        run: |
+          python3 - <<'PY'
+          import json,pathlib
+          root=pathlib.Path('build')
+          r=json.loads((root/'MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.manifest.json').read_text())
+          t=json.loads((root/'qemu-triple-test.json').read_text())
+          assert r['components']['live_maykernel']['release']=='0.5.2-pre4'
+          assert r['components']['offline_installer']['installed_system_version']=='0.5.2-pre2'
+          assert all(t[x]=='PASS' for x in ('bios_linux','bios_maykernel','uefi_installer_cancel','uefi_installer_install','installed_disk_uefi_cold_boot'))
+          print('PASS: actual dual-kernel installer ISO and provenance')
+          PY
+      - name: Upload actual bootable ISO and QEMU evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-0.5.2-pre4-DualKernel-Installer-verified
+          if-no-files-found: warn
+          retention-days: 90
+          path: |
+            build/MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso
+            build/MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.manifest.json
+            build/SHA256SUMS.txt
+            build/triple-iso-boot-catalog.txt
+            build/qemu-triple-test.json
+            build/installed-disk-cold-boot.log
+            build/screenshots/*.png
+            versions/0.5.0-pre2-dev/build/triple-*.log
+  publish-prerelease:
+    needs: package-and-test
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/mayos-052-pre4-dual-installer-media-20261122'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: MayOS-0.5.2-pre4-DualKernel-Installer-verified
+          path: artifacts
+      - name: Publish one immutable experimental release after tests pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # upload-artifact retained paths rooted under build/ rather than flattening.
+          cd artifacts/build
+          sha256sum --check SHA256SUMS.txt
+          tag=v0.5.2-pre4-dual-installer-test1
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Pre-release already exists; will not overwrite'
+            exit 0
+          fi
+          printf '%s\n' \
+            'TEST PREVIEW - x86_64 BIOS/UEFI dual-kernel plus offline installer.' \
+            'Live MayKernel: 0.5.2-pre4; Linux desktop: 7.3.1; offline installer: 0.5.2-pre2.' \
+            'Installer writes version 0.5.2-pre2, NOT the 0.5.2-pre4 live preview.' \
+            'Only empty isolated virtual disks were tested; physical installations are unverified.' \
+            'Secure Boot must be disabled. Keep important data on other drives.' > notes.txt
+          gh release create "$tag" \
+            MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso \
+            MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.manifest.json \
+            SHA256SUMS.txt qemu-triple-test.json \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title 'MayOS 0.5.2-pre4 DualKernel + 0.5.2-pre2 installer TEST1' \
+            --notes-file notes.txt --prerelease
