@@ -1,0 +1,4 @@
+a8d422a8e33917554c9c552fb0dd8be79aad5dbfa77229faca02922df43dac45  MayOS-0.5.2-pre1-MayKernel-x86_64.iso
+a5b84d19c0a4351f38be433d4b81531f584413bf85f0b30b2b84efcb82c9df60  MayOS-0.5.2-pre1-OOBE-Japanese.png
+af67b49cc547d97eafdf2cfde51982d7d1e45fa45af25433b157997c0a1865d2  MayOS-0.5.2-pre1-Settings-French.png
+966f1d4a9d210fba242fa195f52370af3e4305618a0e11d242b0f8188ba77615  MayOS-0.5.2-pre1-source.zip
