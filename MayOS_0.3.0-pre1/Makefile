@@ -155,8 +155,12 @@ build:
 build/config-flags.txt: FORCE | build
 	@printf '%s\n' '$(CFLAGS)' 'RUST=$(MAYOS_RUST)' 'SIGNATURE=$(MAYOS_RELEASE_SIGNATURE)' 'KEY=$(MAYOS_RELEASE_PUBKEY_HEX)' 'TESTKEY=$(MAYOS_ALLOW_TEST_RELEASE_KEY)' 'ABDIAG=$(MAYOS_AB_DISK_DIAGNOSTIC)' 'STAGEDIAG=$(MAYOS_STAGE_DISK_DIAGNOSTIC)' 'SIGNSTREAMDIAG=$(MAYOS_SIGNED_STREAM_DIAGNOSTIC)' 'SIGNEDATADIAG=$(MAYOS_SIGNED_ATA_STREAM_DIAGNOSTIC)' 'X509DIAG=$(MAYOS_TLS_X509_DIAGNOSTIC)' > $@.tmp
 	@if ! cmp -s $@.tmp $@; then mv $@.tmp $@; else rm -f $@.tmp; fi
-build/font.h: scripts/font.py $(wildcard kernel/*.c) kernel/locale.h kernel/locale_strings.h | build
+build/font.h: scripts/font.py $(wildcard kernel/*.c) kernel/ime.h kernel/locale.h kernel/locale_strings.h linux/installer-ui.c | build
 	$(PYTHON) scripts/font.py
+build/ime_data.h: scripts/ime_assets.py assets/ime/mandarin.tsv assets/ime/phrases.tsv | build
+	$(PYTHON) scripts/ime_assets.py
+build/gui.o: build/ime_data.h kernel/ime.h kernel/utf8.h
+build/fs.o: kernel/utf8.h
 build/boot_logo.h: scripts/boot_art.py assets/limine-mayos-brand.png | build
 	$(PYTHON) scripts/boot_art.py $@
 build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
@@ -202,7 +206,7 @@ build/%.o: kernel/%.c kernel/core.h kernel/io.h kernel/version.h build/font.h bu
 build/mayos.elf: $(OBJECTS) $(RUST_LIB) $(BEARSSL_LIB) kernel/linker64.ld
 	$(LD) -m elf_x86_64 -T kernel/linker64.ld -o $@ $(OBJECTS) $(RUST_LIB) $(BEARSSL_LIB)
 	$(GRUB_FILE) --is-x86-multiboot $@
-build/mayos.iso: build/mayos.elf boot/grub/grub.cfg boot/grub/menu.cfg boot/grub/themes/mayos/theme.txt scripts/dual_iso.py scripts/boot_art.py
+build/mayos.iso: build/mayos.elf boot/grub/grub.cfg boot/grub/menu.cfg boot/grub/themes/mayos/theme.txt scripts/dual_iso.py scripts/boot_art.py docs/third-party/Unicode-IME.txt docs/third-party/Noto-CJK-copyright.txt
 	$(PYTHON) scripts/dual_iso.py --custom-only --firmware "$(BOOT_FIRMWARE)" --grub-mkrescue '$(GRUB_MKRESCUE)'
 build/mayos-disk.img: | build
 	truncate -s 8M $@
@@ -342,4 +346,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/*.a build/rust_manifest_tests build/update_stage_codec_test build/config-flags.txt build/release_pubkey.h build/tls_x509_fixture.h build/font.h build/cat_image.h build/boot_logo.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/*.a build/rust_manifest_tests build/update_stage_codec_test build/config-flags.txt build/release_pubkey.h build/tls_x509_fixture.h build/font.h build/ime_data.h build/cat_image.h build/boot_logo.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h

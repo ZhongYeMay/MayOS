@@ -11,6 +11,7 @@ typedef unsigned long uptr;
 #define H 720
 #define MAYOS_KEY_LEFT 0x108
 #define MAYOS_KEY_RIGHT 0x109
+#define MAYOS_KEY_IME 0x10a
 #define FS_MAX 48
 #define FILE_CAP 4096
 #ifdef MAYOS_LINUX

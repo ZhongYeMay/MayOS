@@ -47,7 +47,7 @@ def module_bytes(path):
 def initramfs(output, payload, busybox, version, writer, gui, upgrade_assets):
     applets, _ = validate_busybox(busybox)
     required = {"sh", "cat", "mount", "umount", "sha256sum", "insmod", "sleep",
-                "poweroff", "grep", "cp", "mv", "sync"}
+                "poweroff", "grep", "cp", "mv", "sync", "tr"}
     if not required <= set(applets):
         raise ValueError(f"BusyBox lacks required installer applets: {required - set(applets)}")
     with output.open("wb") as compressed, tempfile.TemporaryFile() as archive:

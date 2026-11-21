@@ -3,6 +3,9 @@
 #include "core.h"
 #include "font.h"
 #include "locale.h"
+#define MAY_IME_RENDER
+#include "ime.h"
+#undef MAY_IME_RENDER
 #include "procfs.h"
 #include "task_manager.h"
 #include "material_icons.h"
@@ -336,26 +339,6 @@ static void circle(int cx, int cy, int r, u32 c) {
             if (x * x + y * y <= r * r)
                 rect(cx + x, cy + y, 1, 1, c);
 }
-static int utf(const char **s) {
-    const u8 *p = (const u8 *)*s;
-    int c = *p++;
-    if (c >= 0xe0 && c <= 0xef && (p[0] & 0xc0) == 0x80 && (p[1] & 0xc0) == 0x80) {
-        c = ((c & 15) << 12) | ((p[0] & 63) << 6) | (p[1] & 63);
-        p += 2;
-        if (c < 0x800 || (c >= 0xd800 && c <= 0xdfff)) c = 0xfffd;
-    } else if (c >= 0xc2 && c <= 0xdf && (p[0] & 0xc0) == 0x80) {
-        c = ((c & 31) << 6) | (p[0] & 63);
-        p++;
-    } else if (c >= 0xf0 && c <= 0xf4 && (p[0] & 0xc0) == 0x80 &&
-               (p[1] & 0xc0) == 0x80 && (p[2] & 0xc0) == 0x80) {
-        p += 3;
-        c = 0xfffd; /* Current bitmap atlas contains BMP glyphs. */
-    } else if (c >= 128) {
-        c = 0xfffd;
-    }
-    *s = (const char *)p;
-    return c;
-}
 static int glyph(int c) {
     int lo = 0, hi = FONT_COUNT - 1;
     while (lo <= hi) {
@@ -367,23 +350,43 @@ static int glyph(int c) {
         else
             hi = m - 1;
     }
-    return 31;
+    return -1;
 }
 static int glyph_width(int c) {
     return c < 0x250 || c == 0x2019 ? 8 : 16;
 }
-static const u8 *glyph_pixels(int glyph_id, enum MayLocale locale) {
+typedef struct {
+    const u8 *pixels;
+    int packed;
+} MayGlyph;
+static MayGlyph glyph_pixels(int cp, enum MayLocale locale) {
+    int glyph_id = glyph(cp);
+    if (glyph_id < 0) {
+        int lo = 0, hi = (int)(sizeof(ime_glyph_codes) / sizeof(ime_glyph_codes[0])) - 1;
+        while (lo <= hi) {
+            int mid = lo + (hi - lo) / 2;
+            if (ime_glyph_codes[mid] == cp) return (MayGlyph){ime_glyphs[mid], 1};
+            if (ime_glyph_codes[mid] < cp) lo = mid + 1;
+            else hi = mid - 1;
+        }
+        /* The font atlas is bounded. Keep the actual UTF-8 intact on disk. */
+        return (MayGlyph){font_bits[31], 0};
+    }
     if (locale == MAY_JA && font_ja_index[glyph_id])
-        return font_ja_bits[font_ja_index[glyph_id]];
+        return (MayGlyph){font_ja_bits[font_ja_index[glyph_id]], 0};
     if (locale == MAY_KO && font_ko_index[glyph_id])
-        return font_ko_bits[font_ko_index[glyph_id]];
+        return (MayGlyph){font_ko_bits[font_ko_index[glyph_id]], 0};
     if (locale == MAY_ZH_HANT && font_tw_index[glyph_id])
-        return font_tw_bits[font_tw_index[glyph_id]];
-    return font_bits[glyph_id];
+        return (MayGlyph){font_tw_bits[font_tw_index[glyph_id]], 0};
+    return (MayGlyph){font_bits[glyph_id], 0};
+}
+static u8 glyph_alpha(MayGlyph glyph, int index) {
+    if (!glyph.packed) return glyph.pixels[index];
+    return ((glyph.pixels[index / 4] >> (6 - 2 * (index % 4))) & 3) * 85;
 }
 static int text_width(const char *s) {
     int width = 0;
-    while (*s) width += glyph_width(utf(&s));
+    while (*s) width += glyph_width(may_utf8_next(&s));
     return width;
 }
 static u32 blend(u32 b, u32 f, u32 a) {
@@ -454,13 +457,13 @@ static void maygame_blit(int x,int y,int width,int height,
 static int text_face(int x, int y, const char *s, u32 color, enum MayLocale locale) {
     int start = x;
     while (*s) {
-        int c = utf(&s);
+        int c = may_utf8_next(&s);
         if (c == '\n') {
             y += 22;
             x = start;
             continue;
         }
-        const u8 *bits = glyph_pixels(glyph(c), locale);
+        MayGlyph bits = glyph_pixels(c, locale);
         int width = glyph_width(c);
         for (int j = 0; j < 20; j++)
             for (int i = 0; i < width; i++) {
@@ -468,7 +471,7 @@ static int text_face(int x, int y, const char *s, u32 color, enum MayLocale loca
                 if (px >= 0 && px < W && py >= 0 && py < H &&
                     (!draw_clip_active || (px >= draw_clip_left && px < draw_clip_right &&
                                            py >= draw_clip_top && py < draw_clip_bottom))) {
-                    u8 a = bits[j * 16 + i];
+                    u8 a = glyph_alpha(bits, j * 16 + i);
                     if (a)
                         pixels[py * W + px] = blend(pixels[py * W + px], color, a);
                 }
@@ -574,11 +577,11 @@ void boot_splash_finish(const char *message) {
 
 static int large_text(int x, int y, const char *s, u32 color) {
     while (*s) {
-        int c = utf(&s), width = glyph_width(c);
-        const u8 *bits = glyph_pixels(glyph(c), display_language);
+        int c = may_utf8_next(&s), width = glyph_width(c);
+        MayGlyph bits = glyph_pixels(c, display_language);
         for (int j = 0; j < 20; j++)
             for (int i = 0; i < width; i++) {
-                u8 a = bits[j * 16 + i];
+                u8 a = glyph_alpha(bits, j * 16 + i);
                 if (a)
                     for (int yy = 0; yy < 2; yy++)
                         for (int xx = 0; xx < 2; xx++) {
@@ -597,8 +600,8 @@ static int large_text(int x, int y, const char *s, u32 color) {
  * Bilinear alpha interpolation, drawn into the native framebuffer. */
 static int heading_text(int x, int y, const char *s, u32 color) {
     while (*s) {
-        int cp = utf(&s);
-        const u8 *bits = glyph_pixels(glyph(cp), display_language);
+        int cp = may_utf8_next(&s);
+        MayGlyph bits = glyph_pixels(cp, display_language);
         int src_width = glyph_width(cp);
         int out_width = src_width * 3 / 2;
         for (int py = 0; py < 30; py++) {
@@ -607,10 +610,10 @@ static int heading_text(int x, int y, const char *s, u32 color) {
             for (int px = 0; px < out_width; px++) {
                 int sx = px * 2 / 3, fx = (px * 2) % 3;
                 int sx1 = sx + 1 < src_width ? sx + 1 : sx;
-            int a00 = bits[sy * 16 + sx];
-            int a10 = bits[sy * 16 + sx1];
-            int a01 = bits[sy1 * 16 + sx];
-            int a11 = bits[sy1 * 16 + sx1];
+            int a00 = glyph_alpha(bits, sy * 16 + sx);
+            int a10 = glyph_alpha(bits, sy * 16 + sx1);
+            int a01 = glyph_alpha(bits, sy1 * 16 + sx);
+            int a11 = glyph_alpha(bits, sy1 * 16 + sx1);
                 u32 a = (u32)(a00 * (3 - fx) * (3 - fy) +
                               a10 * fx * (3 - fy) +
                               a01 * (3 - fx) * fy +
@@ -642,7 +645,7 @@ static int reference_font_glyph(int codepoint) {
 static int reference_font_width(const char *s, int title) {
     int total = 0;
     while (*s) {
-        int codepoint = utf(&s), g = reference_font_glyph(codepoint);
+        int codepoint = may_utf8_next(&s), g = reference_font_glyph(codepoint);
         total += g >= 0 ? (title ? premium_title_advance[g] :
                                      premium_body_advance[g]) : 12;
     }
@@ -651,7 +654,7 @@ static int reference_font_width(const char *s, int title) {
 static void reference_text(int x, int y, const char *s, u32 color, int title) {
     int stride = title ? 36 : 28, height = title ? 40 : 30;
     while (*s) {
-        int codepoint = utf(&s), g = reference_font_glyph(codepoint);
+        int codepoint = may_utf8_next(&s), g = reference_font_glyph(codepoint);
         if (g < 0) { x += 12; continue; }
         const u8 *bitmap = title ? premium_title_bitmap[g] : premium_body_bitmap[g];
         int advance = title ? premium_title_advance[g] : premium_body_advance[g];
@@ -937,6 +940,7 @@ static u32 notice_until = 0, last_click_tick;
 static int last_clicked = -1;
 static int editor_file = -1, editor_changed = 0;
 static char editor_buf[FILE_CAP];
+static MayIme editor_ime, modal_ime;
 static char output[180][100], command[160], history[160];
 static int out_count, cmdlen, cwd = 0, scroll = 0;
 static void notify(const char *s) {
@@ -1094,7 +1098,7 @@ static void shell(void) {
 #ifdef MAYOS_TASK_MANAGER
         emit("taskmgr  (F2 opens MayOS Task Manager)");
 #endif
-        emit("F1 opens Terminal. File names and input use ASCII keyboard.");
+        emit("F1 opens Terminal. F3 cycles input methods in the editor and name dialogs.");
 #ifdef MAYOS_TASK_MANAGER
     } else if (!strcmp(c, "taskmgr")) {
         task_manager_open();
@@ -1538,8 +1542,20 @@ static void open_file(int i) {
         notify("请先保存编辑器中的修改");
         return;
     }
+    if (!info.read_only && info.size >= FILE_CAP) {
+        notify("文件超出文本编辑器容量");
+        return;
+    }
+    if (!info.read_only) {
+        for (u32 at = 0; at < info.size; at++) {
+            if (files[i].data[at] != 0) continue;
+            notify("文件包含零字节，无法按文本编辑");
+            return;
+        }
+    }
     if (!read_text_file(i, editor_buf)) return;
     editor_file = i;
+    ime_clear(&editor_ime);
     editor_changed = 0;
     raise_window(3);
 }
@@ -1568,6 +1584,7 @@ static void begin_modal(int kind, int target) {
     modal = kind;
     modal_target = target;
     modal_text[0] = 0;
+    ime_clear(&modal_ime);
     if (kind == 3 && target >= 0)
         copy(modal_text, files[target].name, 64);
     if (kind == 4)
@@ -1589,11 +1606,6 @@ static void accept_modal(void) {
         notify("请输入名称");
         return;
     }
-    for (char *s = modal_text; *s; s++)
-        if (*s == '/' || *s < ' ') {
-            notify("名称不能包含 / 或控制字符");
-            return;
-        }
     if (!strcmp(modal_text, ".") || !strcmp(modal_text, "..")) {
         notify("名称不能为 . 或 ..");
         return;
@@ -2084,6 +2096,203 @@ static void terminal_draw(Window *w) {
     text(x + 18, w->y + w->h - 24, "MayShell / " PLATFORM_SHORT, muted);
     text(x + w->w - 220, w->y + w->h - 24, "↑ 历史   ↓ 清空   F1 终端", muted);
 }
+enum { EDIT_IME_WIDTH = 120, EDIT_IME_HEIGHT = 95 };
+
+static int editor_writable(void) {
+    MayVfsNode node;
+    return may_vfs_info(editor_file, &node) && !node.read_only;
+}
+
+static int ime_insert(char *buffer, u32 cap, const char *value) {
+    u32 end = strlen(buffer), size = strlen(value);
+    if (!size) return 1;
+    if (size >= cap - end) {
+        notify(cap == FILE_CAP ? "UTF-8 · 4095 B" : "UTF-8 · 47 B");
+        return 0;
+    }
+    memcpy(buffer + end, value, size + 1);
+    return 1;
+}
+
+static int ime_commit_to(MayIme *ime, char *buffer, u32 cap, unsigned selected) {
+    MayImeChoices choices;
+    ime_convert(ime, display_language == MAY_ZH_HANT, &choices);
+    char word[IME_TEXT];
+    if (!ime_word(&choices, selected, word) || !ime_insert(buffer, cap, word)) return 0;
+    ime_clear(ime);
+    return 1;
+}
+
+static void ime_key(MayIme *ime, char *buffer, u32 cap, int key) {
+    if (key == MAYOS_KEY_IME) {
+        if (!ime->size || ime_commit_to(ime, buffer, cap, ime->selected))
+            ime->mode = (ime->mode + 1) % IME_MODES;
+        return;
+    }
+    if (key == 27) {
+        ime_clear(ime);
+        return;
+    }
+    if (key == '\b') {
+        if (ime->size) {
+            ime->raw[--ime->size] = 0;
+            ime->selected = 0;
+        } else if (buffer[0]) may_utf8_backspace(buffer);
+        return;
+    }
+    if (ime->size) {
+        MayImeChoices choices;
+        ime_convert(ime, display_language == MAY_ZH_HANT, &choices);
+        if (key == MAYOS_KEY_LEFT || key == 0x101 || key == MAYOS_KEY_RIGHT || key == 0x102) {
+            if (choices.count) {
+                unsigned delta = key == MAYOS_KEY_LEFT || key == 0x101 ? choices.count - 1 : 1;
+                ime->selected = (ime->selected + delta) % choices.count;
+            }
+            return;
+        }
+        if (key == '\n' || key == ' ') {
+            if (key == ' ' && ime->mode == IME_HIRAGANA && choices.count > 1)
+                ime->selected = (ime->selected + 1) % choices.count;
+            else if (ime_commit_to(ime, buffer, cap, ime->selected) && key == ' ' && ime->mode == IME_HANGUL)
+                ime_insert(buffer, cap, " ");
+            return;
+        }
+        if (ime->mode != IME_ZHUYIN && ime->mode != IME_UNICODE &&
+            key >= '1' && key <= '0' + IME_PAGE && choices.count > 1) {
+            ime_commit_to(ime, buffer, cap, ime->selected / IME_PAGE * IME_PAGE + key - '1');
+            return;
+        }
+    }
+    int lower = key >= 'A' && key <= 'Z' ? key + ('a' - 'A') : key;
+    int letter = lower >= 'a' && lower <= 'z';
+    int compose = 0;
+    switch (ime->mode) {
+        case IME_PINYIN: compose = letter; key = lower; break;
+        case IME_ZHUYIN: compose = key > 0 && key < 128 && ime_index(ime_zhuyin_keys, lower); key = lower; break;
+        case IME_HIRAGANA:
+        case IME_KATAKANA: compose = letter || key == '\'' || key == '-'; key = lower; break;
+        case IME_HANGUL: compose = letter; break;
+        case IME_UNICODE: compose = ime_hex_digit(key) < 16; break;
+        default: break;
+    }
+    if (compose) {
+        unsigned limit = ime->mode == IME_UNICODE ? 6 : IME_KEYS - 1;
+        if (ime->size < limit) {
+            ime->raw[ime->size++] = (char)key;
+            ime->raw[ime->size] = 0;
+            ime->selected = 0;
+        }
+        return;
+    }
+    if (key != '\n' && key != '\t' && !(key >= 32 && key < 127)) return;
+    if (ime->size && !ime_commit_to(ime, buffer, cap, ime->selected)) return;
+    char ascii[] = {(char)key, 0};
+    ime_insert(buffer, cap, ascii);
+}
+
+
+static void editor_key(int key) {
+    u32 before = strlen(editor_buf);
+    if (key == 0x106) {
+        if (!editor_ime.size || ime_commit_to(&editor_ime, editor_buf, FILE_CAP, editor_ime.selected))
+            save_editor();
+        return;
+    }
+    ime_key(&editor_ime, editor_buf, FILE_CAP, key);
+    if (strlen(editor_buf) != before) editor_changed = 1;
+}
+
+static int editor_ime_left(const Window *w) { return w->x + w->w - 254; }
+static int editor_ime_top(const Window *w) { return w->y + w->h - EDIT_IME_HEIGHT - 42; }
+static int editor_ime_cell(const Window *w) { return (w->w - 68) / IME_PAGE; }
+
+static void ime_draw(const MayIme *ime, int x, int y, int width) {
+    ui_card(x, y, width, EDIT_IME_HEIGHT, 15, dark ? 0x111114 : 0xffffff);
+    const char *raw = ime->raw;
+    char phonetic[IME_TEXT];
+    if (ime->mode == IME_ZHUYIN) {
+        unsigned offset = 0;
+        for (const char *p = ime->raw; *p; ++p) {
+            unsigned index = ime_index(ime_zhuyin_keys, *p);
+            if (index) offset = ime_write(phonetic, offset, ime_zhuyin_code[index - 1]);
+        }
+        phonetic[offset] = 0;
+        raw = phonetic;
+    }
+    if (ime->mode == IME_UNICODE) text(x + 15, y + 12, "U+", muted);
+    const char *visible = raw;
+    while (*visible && text_width(visible) > width - 175) may_utf8_next(&visible);
+    text(x + (ime->mode == IME_UNICODE ? 36 : 15), y + 12, visible, ink);
+    text(x + width - 143, y + 12, "← →   Enter", muted);
+    rect(x + 12, y + 40, width - 24, 1, line);
+    MayImeChoices choices;
+    ime_convert(ime, display_language == MAY_ZH_HANT, &choices);
+    if (!choices.count) {
+        text(x + 15, y + 56, ime->mode == IME_UNICODE ? "Invalid code point" : "No candidates", muted);
+        return;
+    }
+    unsigned base = ime->selected / IME_PAGE * IME_PAGE;
+    int cell = (width - 28) / IME_PAGE;
+    for (unsigned i = 0; i < IME_PAGE && base + i < choices.count; ++i) {
+        int left = x + 13 + cell * (int)i;
+        int single = choices.count == 1;
+        int span = single ? width - 26 : cell - 5;
+        ui_card(left, y + 47, span, 35, 9, base + i == ime->selected ? selected_fill : surface_high);
+        char label[] = {(char)('1' + i), 0};
+        int numbered = !single && ime->mode != IME_ZHUYIN && ime->mode != IME_UNICODE;
+        if (numbered) text(left + 8, y + 54, label, muted);
+        char candidate[IME_TEXT];
+        if (ime_word(&choices, base + i, candidate)) {
+            char *end = candidate;
+            const char *scan = candidate;
+            int remaining = span - (numbered ? 31 : 15);
+            while (*scan) {
+                int used = glyph_width(may_utf8_next(&scan));
+                if (remaining < used) break;
+                remaining -= used;
+                end = (char *)scan;
+            }
+            *end = 0;
+            text(left + (numbered ? 23 : 8), y + 54, candidate, ink);
+        }
+    }
+}
+
+static int editor_body(Window *w, int bottom, int skip, int draw) {
+    int rows = 0, col = 0;
+    int columns = (w->w - 48) / 8, x = w->x + 22, top = w->y + 116;
+    const char *p = editor_buf;
+    while (*p) {
+        const char *start = p;
+        unsigned cp = may_utf8_next(&p);
+        if (cp == 0xfeff && start == editor_buf) continue;
+        if (cp == '\r' || cp == '\n') {
+            if (cp == '\r' && *p == '\n') p++;
+            rows++;
+            col = 0;
+            continue;
+        }
+        int columns_used = cp == '\t' ? 4 - col % 4 : glyph_width(cp) / 8;
+        if (col + columns_used > columns) {
+            rows++;
+            col = 0;
+            if (cp == '\t') columns_used = 4;
+        }
+        int y = top + (rows - skip) * 22;
+        if (draw && rows >= skip && y + 20 <= bottom && cp != '\t') {
+            char scalar[5];
+            unsigned size = may_utf8_put(scalar, cp);
+            scalar[size] = 0;
+            text(x + col * 8, y, scalar, ink);
+        }
+        col += columns_used;
+    }
+    int y = top + (rows - skip) * 22;
+    if (draw && y + 20 <= bottom && ticks % 100 < 55 && focus == 3 && editor_writable())
+        rect(x + col * 8, y + 2, 1, 18, accent);
+    return rows + 1;
+}
+
 static void editor_draw(Window *w) {
     int x = w->x, y = w->y;
     MayVfsNode node;
@@ -2092,34 +2301,35 @@ static void editor_draw(Window *w) {
         text(x + 29, y + 61, L(READ_ONLY), muted);
     else
         button(x + 17, y + 55, 90, L(SAVE), 1);
-    text(x + 126, y + 61, open ? node.name : "没有打开文件", ink);
+    const char *name = open ? node.name : "没有打开文件";
+    const char *at = name, *end = name;
+    int name_width = w->w - 392;
+    while (*at) {
+        name_width -= glyph_width(may_utf8_next(&at));
+        if (name_width < 0) break;
+        end = at;
+    }
+    char label[64];
+    u32 name_size = (u32)(end - name);
+    memcpy(label, name, name_size);
+    label[name_size] = 0;
+    int right = text(x + 126, y + 61, label, ink);
+    if (*end) text(right, y + 61, "…", muted);
     if (editor_changed)
         text(x + w->w - 110, y + 61, "● 未保存", accent);
-    rect(x + 17, y + 99, w->w - 34, 1, line);
-    int xx = x + 22, yy = y + 116, col = 0;
-    const char *s = editor_buf;
-    while (*s && yy < y + w->h - 48) {
-        const char *start = s;
-        int c = utf(&s);
-        if (c == '\n') {
-            yy += 22;
-            col = 0;
-            continue;
-        }
-        int cw = glyph_width(c) / 8;
-        if (col + cw > (w->w - 48) / 8) {
-            yy += 22;
-            col = 0;
-        }
-        char b[5];
-        int len = s - start;
-        memcpy(b, start, len);
-        b[len] = 0;
-        text(xx + col * 8, yy, b, ink);
-        col += cw;
+    int writable = open && !node.read_only;
+    if (writable) {
+        int left = editor_ime_left(w);
+        button(left, y + 55, EDIT_IME_WIDTH, ime_names[editor_ime.mode], 0);
+        text(left + 91, y + 60, "F3", muted);
     }
-    if (yy < y + w->h - 48 && ticks % 100 < 55)
-        rect(xx + col * 8, yy + 2, 1, 18, accent);
+    rect(x + 17, y + 99, w->w - 34, 1, line);
+    int composing = writable && editor_ime.size;
+    int bottom = composing ? editor_ime_top(w) - 10 : y + w->h - 42;
+    int lines = editor_body(w, bottom, 0, 0);
+    int visible = (bottom - (y + 116) - 20) / 22 + 1;
+    editor_body(w, bottom, lines > visible ? lines - visible : 0, 1);
+    if (composing) ime_draw(&editor_ime, x + 20, editor_ime_top(w), w->w - 40);
     rect(x + 17, y + w->h - 36, w->w - 34, 1, line);
     text(x + 20, y + w->h - 29, "纯文本 · UTF-8 · 在文末输入", muted);
     numtext(x + w->w - 140, y + w->h - 29, strlen(editor_buf), muted);
@@ -2364,10 +2574,15 @@ static void modal_draw(void) {
             text(x + 83, y + 114, "字节 · MayFS", muted);
         }
     } else {
-        text(x + 23, y + 52, "名称（ASCII，最多 47 字节）", muted);
+        text(x + 23, y + 52, "名称（UTF-8，最多 47 字节）", muted);
+        button(x + 266, y + 46, 120, ime_names[modal_ime.mode], 0);
+        text(x + 356, y + 50, "F3", muted);
         roundrect(x + 22, y + 83, 364, 36, bg);
-        text(x + 33, y + 91, modal_text, ink);
-        rect(x + 34 + strlen(modal_text) * 8, y + 91, 1, 20, accent);
+        const char *visible = modal_text;
+        while (*visible && text_width(visible) > 335) may_utf8_next(&visible);
+        int end = text(x + 33, y + 91, visible, ink);
+        rect(end + 1, y + 91, 1, 20, accent);
+        if (modal_ime.size) ime_draw(&modal_ime, x, y + 212, 408);
     }
     button(x + 204, y + 151, 80, "取消", 0);
     button(x + 296, y + 151, 90, "确定", 1);
@@ -2588,6 +2803,7 @@ static void trash_selected(void) {
                 }
                 editor_file = -1;
                 editor_buf[0] = 0;
+                ime_clear(&editor_ime);
                 windows[3].open = 0;
             }
         }
@@ -2649,10 +2865,22 @@ static void left_click(void) {
           inside(mx, my, about->x + 282, about->y + 265, 30, 30)))
         egg_clicks = 0;
     if (modal) {
-        if (inside(mx, my, 604, 413, 90, 30))
-            accept_modal();
-        else if (inside(mx, my, 512, 413, 80, 30))
+        if (modal < 5 && inside(mx, my, 574, 308, 120, 30))
+            ime_key(&modal_ime, modal_text, 48, MAYOS_KEY_IME);
+        else if (modal < 5 && modal_ime.size && inside(mx, my, 321, 521, 381, 35)) {
+            unsigned slot = (unsigned)(mx - 321) / 95;
+            MayImeChoices choices;
+            ime_convert(&modal_ime, display_language == MAY_ZH_HANT, &choices);
+            if (choices.count == 1) slot = 0;
+            if (slot < IME_PAGE) ime_commit_to(&modal_ime, modal_text, 48, modal_ime.selected / IME_PAGE * IME_PAGE + slot);
+        } else if (inside(mx, my, 604, 413, 90, 30)) {
+            if (!modal_ime.size) accept_modal();
+            else ime_commit_to(&modal_ime, modal_text, 48, modal_ime.selected);
+        }
+        else if (inside(mx, my, 512, 413, 80, 30)) {
+            ime_clear(&modal_ime);
             modal = 0;
+        }
         return;
     }
     if (context_open) {
@@ -2936,8 +3164,18 @@ static void left_click(void) {
                 } else
                     selected = -1;
             }
-        } else if (id == 3 && inside(rx, ry, 17, 55, 90, 30)) {
-            save_editor();
+        } else if (id == 3 && editor_writable()) {
+            if (inside(rx, ry, 17, 55, 90, 30)) editor_key(0x106);
+            else if (inside(mx, my, editor_ime_left(w), w->y + 55, EDIT_IME_WIDTH, 30)) editor_key(MAYOS_KEY_IME);
+            else if (editor_ime.size && inside(mx, my, w->x + 33, editor_ime_top(w) + 47,
+                                               w->w - 66, 35)) {
+                MayImeChoices choices;
+                ime_convert(&editor_ime, display_language == MAY_ZH_HANT, &choices);
+                int slot = choices.count == 1 ? 0 : (mx - w->x - 33) / editor_ime_cell(w);
+                if (slot < IME_PAGE && ime_commit_to(&editor_ime, editor_buf, FILE_CAP,
+                                                       editor_ime.selected / IME_PAGE * IME_PAGE + slot))
+                    editor_changed = 1;
+            }
         }
         return;
     }
@@ -3012,17 +3250,9 @@ static void key_event(int k) {
         return;
     }
     if (modal) {
-        int n = strlen(modal_text);
-        if (k == 27)
-            modal = 0;
-        else if (k == '\n')
-            accept_modal();
-        else if (k == '\b' && n)
-            modal_text[n - 1] = 0;
-        else if (k >= 32 && k < 127 && n < 47) {
-            modal_text[n] = k;
-            modal_text[n + 1] = 0;
-        }
+        if (k == 27 && !modal_ime.size) modal = 0;
+        else if (k == '\n' && !modal_ime.size) accept_modal();
+        else if (modal < 5 && k != '\t') ime_key(&modal_ime, modal_text, 48, k);
         return;
     }
     if (!start_open && !top_panel && focus == 1 && windows[1].open &&
@@ -3037,6 +3267,10 @@ static void key_event(int k) {
             language_save_failed = 0;
             return;
         }
+    }
+    if (k == 27 && focus == 3 && editor_ime.size && editor_writable()) {
+        ime_clear(&editor_ime);
+        return;
     }
     if (k == 27) {
 #ifdef MAYOS_LINUX_TASK_MANAGER
@@ -3114,24 +3348,8 @@ static void key_event(int k) {
             command[cmdlen++] = k;
             command[cmdlen] = 0;
         }
-    } else if (focus == 3 && windows[3].open && !windows[3].min && editor_file >= 0) {
-        if (may_vfs_read_only(editor_file)) return;
-        int n = strlen(editor_buf);
-        if (k == 0x106) {
-            save_editor();
-            return;
-        }
-        if (k == '\b' && n) {
-            int i = n - 1;
-            while (i > 0 && ((u8)editor_buf[i] & 0xc0) == 0x80)
-                i--;
-            editor_buf[i] = 0;
-            editor_changed = 1;
-        } else if ((k == '\n' || k == '\t' || (k >= 32 && k < 127)) && n < FILE_CAP - 1) {
-            editor_buf[n] = k;
-            editor_buf[n + 1] = 0;
-            editor_changed = 1;
-        }
+    } else if (focus == 3 && windows[3].open && !windows[3].min && editor_writable()) {
+        editor_key(k);
     } else if (focus == 0 && windows[0].open && !windows[0].min) {
         if (k == '\n')
             open_file(selected);

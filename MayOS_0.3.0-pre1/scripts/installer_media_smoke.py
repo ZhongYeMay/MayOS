@@ -155,6 +155,7 @@ def main():
             vm.wait("MayOS installer graphical frontend ready")
             vm.wait("@SELECT")
             vm.wait("MayOS installer pointer ready", timeout=15)
+            vm.key("f4")
             vm.shot("installer-media-gui-welcome")
             click_continue(vm)
             vm.shot("installer-media-gui-disk")
@@ -163,6 +164,8 @@ def main():
             vm.key("ret")
             vm.shot("installer-media-gui-review")
             vm.key("ret")
+            for phase in ("scan", "write", "verify"):
+                vm.wait(f"@PROGRESS {phase} 100")
             vm.wait("MayOS installation complete.")
             vm.wait("@DONE")
             vm.shot("installer-media-gui-complete")

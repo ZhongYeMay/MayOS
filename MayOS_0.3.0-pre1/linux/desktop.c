@@ -484,6 +484,7 @@ static int keycode(unsigned int code, int value) {
     switch (code) {
         case KEY_F1: return 0x105;
         case KEY_F2: return MAYOS_KEY_TASK_MANAGER;
+        case KEY_F3: return MAYOS_KEY_IME;
         case KEY_UP: return 0x101;
         case KEY_DOWN: return 0x102;
         case KEY_LEFT: return MAYOS_KEY_LEFT;

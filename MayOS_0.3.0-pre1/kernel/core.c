@@ -555,6 +555,10 @@ int input_poll(int *mx, int *my, int *buttons, int *key) {
                 *key = MAYOS_KEY_TASK_MANAGER;
                 return 1;
             }
+            if (v == 61) {
+                *key = MAYOS_KEY_IME;
+                return 1;
+            }
             if (v == 42 || v == 54) {
                 shift = 1;
                 continue;

@@ -61,7 +61,13 @@ INPUT_FILES = {
     "desktop_core_header_sha256": ROOT / "kernel/core.h",
     "framebuffer_adapter_sha256": ROOT / "kernel/framebuffer.h",
     "font_core_source_sha256": ROOT / "kernel/core.c",
+    "font_installer_source_sha256": ROOT / "linux/installer-ui.c",
     "font_generator_sha256": ROOT / "scripts/font.py",
+    "ime_header_sha256": ROOT / "kernel/ime.h",
+    "utf8_header_sha256": ROOT / "kernel/utf8.h",
+    "ime_generator_sha256": ROOT / "scripts/ime_assets.py",
+    "ime_mandarin_sha256": ROOT / "assets/ime/mandarin.tsv",
+    "ime_phrases_sha256": ROOT / "assets/ime/phrases.tsv",
     "locale_catalog_sha256": ROOT / "kernel/locale.h",
     "locale_strings_sha256": ROOT / "kernel/locale_strings.h",
     "photo_generator_sha256": ROOT / "scripts/photo.py",
@@ -481,6 +487,7 @@ def build(args: argparse.Namespace) -> dict:
         run(make + [f"-j{args.jobs}", "bzImage"])
         run(make + [f"INSTALL_HDR_PATH={OUT / 'headers'}", "headers_install"])
         run([sys.executable, str(ROOT / "scripts/font.py")])
+        run([sys.executable, str(ROOT / "scripts/ime_assets.py")])
         run([sys.executable, str(ROOT / "scripts/photo.py")])
         run([sys.executable, str(ROOT / "scripts/boot_art.py"), str(ROOT / "build/boot_logo.h")])
         task_library = OUT / "libmayos_task_manager.a"

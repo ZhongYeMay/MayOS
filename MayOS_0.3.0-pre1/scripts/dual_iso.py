@@ -36,6 +36,8 @@ def stage_menu(grub):
     subprocess.run(["grub-mkfont", "-s", "14", "-r", "32-126", "-o",
                     str(fonts / "mayos-console.pf2"), console_font], check=True)
     shutil.copy2(ROOT / "docs/third-party/DejaVu-copyright.txt", fonts)
+    shutil.copy2(ROOT / "docs/third-party/Noto-CJK-copyright.txt", fonts)
+    shutil.copy2(ROOT / "docs/third-party/Unicode-IME.txt", fonts)
 
 
 def sha256(path):

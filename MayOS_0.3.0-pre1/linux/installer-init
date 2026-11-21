@@ -125,7 +125,10 @@ for sys in /sys/class/block/*; do
     if eligible "$disk"; then
         model="$(cat "$sys/device/model" 2>/dev/null)"
         printf '%s  %s MiB  %s\n' "$disk" "$((blocks / 2048))" "$model"
-        if [ "$gui_backend" = 1 ]; then printf '@DISK %s %sMiB\n' "$disk" "$((blocks / 2048))"; fi
+        if [ "$gui_backend" = 1 ]; then
+            model=$(printf '%s' "$model" | tr -cd ' -~')
+            printf '@DISK %s %sMiB %s\n' "$disk" "$((blocks / 2048))" "$model"
+        fi
     fi
 done
 while :; do
@@ -158,7 +161,7 @@ if [ "$installed" = 1 ]; then
 else
     [ "$answer" = "INSTALL $target" ] || abort "Confirmation cancelled."
     sha256sum -c /installer/payload.sha256 || abort "Installation payload failed verification."
-    /installer/write-disk "$target" "$device_id" || abort "Installation did not complete."
+    MAYOS_INSTALLER_PROGRESS=$gui_backend /installer/write-disk "$target" "$device_id" || abort "Installation did not complete."
     echo "MayOS installation complete. Remove the ISO and boot from the hard disk."
 fi
 if [ "$gui_backend" = 1 ]; then echo '@DONE'; fi

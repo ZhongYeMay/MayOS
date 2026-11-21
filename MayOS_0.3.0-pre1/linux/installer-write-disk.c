@@ -39,6 +39,17 @@ static void transfer(int fd, void *buffer, size_t size, uint64_t offset, int wri
     }
 }
 
+static int report_progress;
+
+static void progress(const char *phase, uint64_t done, uint64_t total, int *last) {
+    if (!report_progress) return;
+    int percent = (int)(done * 100 / total);
+    if (percent != 100 && *last >= 0 && percent < *last + 5) return;
+    if (percent == *last) return;
+    *last = percent;
+    printf("@PROGRESS %s %d\n", phase, percent);
+}
+
 static uint32_t crc32(const unsigned char *bytes, size_t size) {
     uint32_t crc = UINT32_MAX;
     while (size--) {
@@ -68,7 +79,8 @@ static void header_crc(unsigned char *header) {
 }
 
 static void compare(int fd, const unsigned char *expected, unsigned char *buffer,
-                    size_t size, uint64_t offset) {
+                    size_t size, uint64_t offset, uint64_t total, int *last) {
+    uint64_t compared = 0;
     while (size) {
         size_t count = size > CHUNK ? CHUNK : size;
         transfer(fd, buffer, count, offset, 0);
@@ -77,6 +89,9 @@ static void compare(int fd, const unsigned char *expected, unsigned char *buffer
         expected += count;
         offset += count;
         size -= count;
+        compared += count;
+        /* The final 100% is emitted separately after both GPT regions match. */
+        if (last) progress("verify", compared, total, last);
     }
 }
 
@@ -168,7 +183,11 @@ int main(int argc, char **argv) {
     memset(image + TEMPLATE_SIZE - GPT_TAIL_SIZE, 0, GPT_TAIL_SIZE);
 
     setvbuf(stdout, NULL, _IOLBF, 0);
+    const char *progress_mode = getenv("MAYOS_INSTALLER_PROGRESS");
+    report_progress = progress_mode && !strcmp(progress_mode, "1");
     puts("Checking the entire target for existing data...");
+    int last = -1;
+    progress("scan", 0, size, &last);
     for (uint64_t offset = 0; offset < size; offset += CHUNK) {
         if (offset && offset % (1024ull * CHUNK) == 0)
             printf("Checked %llu MiB\n", (unsigned long long)(offset / CHUNK));
@@ -176,16 +195,29 @@ int main(int argc, char **argv) {
         transfer(disk, buffer, count, offset, 0);
         if (memcmp(buffer, zero, count))
             fail("Target contains data. No sectors were written.");
+        progress("scan", offset + count, size, &last);
     }
 
     puts("Writing and verifying the installed MayOS disk...");
     size_t body_end = size == TEMPLATE_SIZE ? TEMPLATE_SIZE - GPT_TAIL_SIZE : TEMPLATE_SIZE;
-    transfer(disk, image + GPT_HEAD_SIZE, body_end - GPT_HEAD_SIZE, GPT_HEAD_SIZE, 1);
+    uint64_t total = body_end + sizeof(backup);
+    last = -1;
+    progress("write", 0, total, &last);
+    for (size_t offset = GPT_HEAD_SIZE; offset < body_end;) {
+        size_t count = body_end - offset > CHUNK ? CHUNK : body_end - offset;
+        transfer(disk, image + offset, count, offset, 1);
+        offset += count;
+        progress("write", offset - GPT_HEAD_SIZE, total, &last);
+    }
     transfer(disk, backup, sizeof(backup), size - GPT_TAIL_SIZE, 1);
     if (fsync(disk)) fail("Could not flush the disk and backup GPT.");
     transfer(disk, image, GPT_HEAD_SIZE, 0, 1);
     if (fsync(disk)) fail("Could not flush the installed partition table.");
-    compare(disk, image, buffer, body_end, 0);
-    compare(disk, backup, buffer, sizeof(backup), size - GPT_TAIL_SIZE);
+    progress("write", total, total, &last);
+    last = -1;
+    progress("verify", 0, total, &last);
+    compare(disk, image, buffer, body_end, 0, total, &last);
+    compare(disk, backup, buffer, sizeof(backup), size - GPT_TAIL_SIZE, total, 0);
+    progress("verify", total, total, &last);
     return close(disk) ? EXIT_FAILURE : EXIT_SUCCESS;
 }

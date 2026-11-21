@@ -1,5 +1,6 @@
 #include "core.h"
 #include "procfs.h"
+#include "utf8.h"
 #include "version.h"
 #ifndef MAYOS_LINUX
 #include "io.h"
@@ -475,8 +476,12 @@ static int valid_name(int directory, const char *name) {
 #else
     (void)directory;
 #endif
-    for (const char *s = name; *s; s++)
-        if (*s == '/' || *s < ' ') return 0;
+    for (const char *s = name; *s;) {
+        const char *start = s;
+        unsigned cp = may_utf8_next(&s);
+        if (cp == '/' || cp < 0x20 || (cp >= 0x7f && cp <= 0x9f) ||
+            (cp == 0xfffd && s - start == 1)) return 0;
+    }
     return 1;
 }
 

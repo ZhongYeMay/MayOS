@@ -6,7 +6,8 @@ from PIL import Image, ImageFont, ImageDraw
 root=Path(__file__).resolve().parents[1]
 chars=set(range(32,127))
 sources = sorted((root/'kernel').glob('*.c')) + [
-    root/'kernel/locale.h', root/'kernel/locale_strings.h']
+    root/'kernel/locale.h', root/'kernel/locale_strings.h', root/'kernel/ime.h',
+    root/'linux/installer-ui.c']
 for source in sources:
     chars.update(map(ord,source.read_text()))
 # Native story literals are generated before font.h when SUMMER_SITE is set.
@@ -55,8 +56,7 @@ with out.open('w') as f:
     # The reference About card is large, proportional and sans-serif rather
     # than the 13px monospace system bitmap. Rasterize only our UI Latin glyphs
     # to a separate source-specific alpha atlas. The final OS uses no font files.
-    premium_chars = ''.join(sorted(set(
-        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .-_/')))
+    premium_chars = ''.join(map(chr, range(32, 127)))
     premium_font = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
     title_font = ImageFont.truetype(premium_font, 26)
     info_font = ImageFont.truetype(premium_font, 19)
