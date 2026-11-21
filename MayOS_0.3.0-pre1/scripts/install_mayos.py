@@ -186,20 +186,29 @@ def trial_boot(root, disk, version, ovmf, vars_template):
     shutil.copyfile(regular(vars_template), vars_path)
     drive = lambda path: str(path).replace(",", ",,")
     args = ["qemu-system-x86_64", "-machine", "pc", "-accel", "tcg",
-            "-cpu", "max", "-m", "256", "-display", "none", "-monitor", "none",
+            "-cpu", "max", "-m", "256", "-display", "none", "-monitor", "stdio",
             "-nic", "none", "-vga", "std", "-serial", f"file:{log}", "-no-reboot",
             "-drive", f"if=pflash,format=raw,readonly=on,file={drive(regular(ovmf))}",
             "-drive", f"if=pflash,format=raw,file={drive(vars_path)}",
             "-drive", f"format=raw,if=ide,index=0,snapshot=on,file={drive(disk)}",
             "-boot", "c"]
-    with subprocess.Popen(args) as vm:
+    with subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL) as vm:
         try:
             deadline = time.monotonic() + 40
             required = {"MayOS: desktop ready", "MayOS: MayFS mounted",
                         f"MayOS Workstation {version} / MayShell"}
+            setup = iter(("MayOS: first boot setup ready", "MayOS: first boot appearance ready",
+                          "MayOS: first boot review ready"))
+            pending = next(setup)
             while time.monotonic() < deadline and vm.poll() is None:
-                if log.is_file() and required <= set(log.read_text(errors="replace").splitlines()):
+                lines = set(log.read_text(errors="replace").splitlines()) if log.is_file() else set()
+                if required <= lines:
                     return
+                if pending in lines:
+                    # These keystrokes and the resulting settings affect only the QEMU snapshot.
+                    vm.stdin.write(b"sendkey ret 25\n")
+                    vm.stdin.flush()
+                    pending = next(setup, None)
                 time.sleep(.1)
             tail = log.read_text(errors="replace")[-3000:] if log.is_file() else ""
             raise ValueError(f"Installed-disk trial failed\n{tail}")

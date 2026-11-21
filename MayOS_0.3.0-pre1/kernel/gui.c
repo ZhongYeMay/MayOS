@@ -2832,11 +2832,12 @@ static void setup_screen(int step, int theme, int error) {
 
 static void installed_first_boot(void) {
     int step = 0, theme = 0, error = 0, previous = 0;
-    serial("MayOS: first boot setup ready\n");
     setup_screen(step, theme, error);
+    serial("MayOS: first boot setup ready\n");
     for (;;) {
         int key = 0;
         if (input_poll(&mx, &my, &buttons, &key)) {
+            int old_step = step;
             int click = (buttons & 1) && !(previous & 1);
             previous = buttons;
             if (step == 1) {
@@ -2861,6 +2862,8 @@ static void installed_first_boot(void) {
                 }
             }
             setup_screen(step, theme, error);
+            if (step != old_step && step == 1) serial("MayOS: first boot appearance ready\n");
+            if (step != old_step && step == 2) serial("MayOS: first boot review ready\n");
         }
         platform_idle();
     }

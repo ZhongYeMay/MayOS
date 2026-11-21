@@ -27,8 +27,8 @@ def main():
                         memory=256, timeout=60, ovmf_code=code, ovmf_vars=vars_path)
             try:
                 if setup:
-                    vm.wait("MayOS: first boot setup ready")
-                    for _ in range(3):
+                    for prompt in ("setup", "appearance", "review"):
+                        vm.wait(f"MayOS: first boot {prompt} ready")
                         vm.key("ret")
                     vm.wait("MayOS: first boot setup completed")
                 vm.wait("MayOS: desktop ready")
@@ -50,6 +50,11 @@ def main():
         installed = root / "installed.img"
         install(iso, digest(iso), installed, legacy)
         assert digest(legacy) == before
+        unconfigured = digest(installed)
+        upgrade(installed, candidate, digest(candidate), root / "unconfigured-upgrade.img",
+                "0.5.1-pre2", code, template)
+        assert digest(installed) == unconfigured
+        print("PASS: trial accepts a system awaiting first boot without changing its source disk")
         with installed.open("rb") as handle:
             prefix = handle.read(DATA_START * SECTOR)
         boot(installed, "installer-installed", installed=True, setup=True, commands=[
