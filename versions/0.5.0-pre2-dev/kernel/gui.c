@@ -615,6 +615,7 @@ static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = 
 static int file_scroll = 0;
 static int desktop_note_selected = 0;
 static int top_panel = 0;  /* 1=clock, 2=network, 3=display, 4=alerts, 5=power */
+static MayPerfSnapshot performance;
 #define TOP_STATUS_LEFT 964
 #define TOP_STATUS_STEP 34
 #define STATUS_PANEL_X (W - 336)
@@ -684,6 +685,22 @@ static void emitnum(const char *label, u32 value, const char *tail) {
     emit(b);
 }
 #endif
+/* Machine-readable shell evidence complements the real framebuffer video.
+ * Never turn unavailable counters into a displayed zero or a fake percent. */
+static void perf_emit_value(const char *label, u32 value,
+                            const char *unit, int valid) {
+    char result[100], digits[12];
+    copy(result, label, sizeof(result));
+    copy(result + strlen(result), " ", sizeof(result) - strlen(result));
+    if (valid) {
+        number(digits, value);
+        copy(result + strlen(result), digits, sizeof(result) - strlen(result));
+        copy(result + strlen(result), unit, sizeof(result) - strlen(result));
+    } else
+        copy(result + strlen(result), "N/A", sizeof(result) - strlen(result));
+    emit(result);
+}
+
 static void terminal_init(void) {
     emit("MayOS Workstation " MAYOS_RELEASE " / MayShell");
     emit(platform_kernel());
@@ -787,7 +804,7 @@ static void shell(void) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
-        emit("theme light|dark  net status  lspci  taskmgr  reboot  shutdown");
+        emit("theme light|dark  net status  lspci  taskmgr  perf  reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
         out_count = 0;
@@ -876,6 +893,30 @@ static void shell(void) {
     } else if (!strcmp(c, "taskmgr") || !strcmp(c, "monitor")) {
         raise_window(TASK_MANAGER_WINDOW);
         emit("MayOS: Task Manager opened / CPU GPU DISK RAM NET");
+    } else if (!strcmp(c, "perf")) {
+        emit("MayOS: performance snapshot");
+        perf_emit_value("CPU:", performance.cpu_percent,
+#ifdef MAYOS_LINUX
+                        " % (/proc/stat)", performance.cpu_valid);
+#else
+                        " % (non-HLT estimate)", performance.cpu_valid);
+#endif
+        perf_emit_value("GPU:", performance.gpu_percent, " % hardware",
+                        performance.gpu_valid);
+        perf_emit_value("Framebuffer:", performance.framebuffer_submits_s,
+                        " submits/s", performance.framebuffer_valid);
+        perf_emit_value("DISK:", performance.disk_read_kib_s,
+                        " KiB/s read", performance.disk_valid && performance.sample_ready);
+        perf_emit_value("DISK WRITE:", performance.disk_write_kib_s,
+                        " KiB/s write", performance.disk_valid && performance.sample_ready);
+        perf_emit_value("RAM:", performance.ram_used_mib,
+                        " MiB used", performance.ram_valid);
+        perf_emit_value("RAM TOTAL:", performance.ram_total_mib,
+                        " MiB", performance.ram_valid);
+        perf_emit_value("NET:", performance.net_rx_kib_s,
+                        " KiB/s RX", performance.net_valid && performance.sample_ready);
+        perf_emit_value("NET TX:", performance.net_tx_kib_s,
+                        " KiB/s TX", performance.net_valid && performance.sample_ready);
     } else if (!strcmp(c, "fastfetch") || !strcmp(c, "neofetch")) {
 #ifdef MAYOS_LINUX
         char result[1536];
@@ -1570,7 +1611,6 @@ static void explorer_draw(Window *w) {
 /* The same five activity cards render for MayKernel and Linux. All data comes
  * from procfs.c, not from a fake activity graph or forced percentages. */
 #define PERFORMANCE_POINTS 40
-static MayPerfSnapshot performance;
 static u8 performance_graph[5][PERFORMANCE_POINTS];
 static u8 performance_known[5][PERFORMANCE_POINTS];
 static u32 performance_count, performance_last_tick;
