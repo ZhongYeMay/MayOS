@@ -63,9 +63,8 @@ def publish(disk, output):
         os.close(fd)
 
 
-def boot_config(volume, slots):
-    text = (f"search --no-floppy --fs-uuid --set=root {volume}\n"
-            "set default=0\nset timeout=2\n"
+def boot_config(slots):
+    text = ("set default=0\nset timeout=2\n"
             "set gfxmode=1280x720x32,1024x768x32,auto\n"
             "insmod all_video\n"
             "loadfont (memdisk)/boot/grub/fonts/unicode.pf2\n"
@@ -81,7 +80,7 @@ def boot_config(volume, slots):
 
 def set_boot_files(root, fat, volume, slots):
     config, state = root / "mayos-grub.cfg", root / "mayos-slot.json"
-    config.write_text(boot_config(volume, slots))
+    config.write_text(boot_config(slots))
     state.write_text(json.dumps({"volume": volume, "active": slots[0]}))
     command("mcopy", "-o", "-i", str(fat), str(config), str(state), "::/")
 
@@ -129,8 +128,12 @@ def install(iso, expected, output, imported=None):
         loader = root / "BOOTX64.EFI"
         config = root / "grub.cfg"
         config.write_text(
-            f"search --no-floppy --fs-uuid --set=root {volume_id}\n"
-            "configfile /mayos-grub.cfg\n")
+            "insmod part_gpt\ninsmod fat\ninsmod regexp\n"
+            "if regexp --set=1:root '^\\(([^)]+)\\)' \"$cmdpath\"; then\n"
+            "  configfile ($root)/mayos-grub.cfg\n"
+            "fi\n"
+            "search --no-floppy --file --set=root /mayos-grub.cfg\n"
+            "configfile ($root)/mayos-grub.cfg\n")
         command("grub-mkstandalone", "-O", "x86_64-efi", "--fonts=unicode",
                 "--locales=", "--themes=", "--compress=xz", "-o", str(loader),
                 f"boot/grub/grub.cfg={config}")
