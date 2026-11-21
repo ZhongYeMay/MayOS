@@ -239,10 +239,11 @@ void mayperf_sample(MayPerfSnapshot *out, u32 now) {
     }
     previous_tsc = cycles; previous_idle = idle;
     u32 pages = mayperf_managed_pages();
-    if (pages && free_pages <= pages) {
+    u32 used = mayperf_used_pages();
+    if (pages && used <= pages) {
         out->ram_valid = 1;
         out->ram_total_mib = (pages + 255u) / 256u;
-        out->ram_used_mib = (pages - free_pages) / 256u;
+        out->ram_used_mib = used / 256u;
     }
     out->disk_valid = disk_ready ? 1u : 0u;
     if (elapsed && out->disk_valid) {
