@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   package-and-test:
     runs-on: ubuntu-24.04
@@ -38,8 +39,24 @@ jobs:
           echo 'c51b45c92ea4cd6645b690e433af3f562507fc69ab62d5d39891c10284ac5bb7  build/release-components/MayOS-0.5.2-pre4-MayKernel-x86_64.iso' > build/components-sha256.txt
           echo 'c46ee45ded237f0c5823f94e498dad89700f7c54c0d80ba4137e5be3bf572a1a  build/release-components/MayOS-0.5.2-pre2-Installer-x86_64.iso' >> build/components-sha256.txt
           sha256sum --check build/components-sha256.txt
-      - name: Build independent Linux64 7.3.1 desktop
-        run: make -C versions/0.5.0-pre2-dev linux LINUX_VERSION=7.3.1 LINUX_JOBS=4
+      - name: Reuse independently QEMU-tested Linux 7.3.1 payload when available; rebuild on missing cache
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/cached-dual
+          if gh run download 44892292191 --repo "$GITHUB_REPOSITORY"             --name MayOS-all-features-QEMU-2bbfc3a00e38d59ebf28680102ddbafc7653b454             --dir build/cached-dual; then
+            echo 'ec94a8012f86d77c8a6f6d0aea9d3575fa71770cc8146d7b4d8c51d28ae7daee  build/cached-dual/mayos-dual.iso' | sha256sum --check
+            mkdir -p versions/0.5.0-pre2-dev/build/linux
+            for name in bzImage initramfs.cpio.gz manifest.json kernel.config; do
+              xorriso -osirrox on -indev build/cached-dual/mayos-dual.iso                 -extract "/boot/linux/$name" "versions/0.5.0-pre2-dev/build/linux/$name"
+            done
+            xorriso -osirrox on -indev build/cached-dual/mayos-dual.iso               -extract /licenses versions/0.5.0-pre2-dev/build/linux/licenses || true
+          fi
+          if ! python3 versions/0.5.0-pre2-dev/scripts/linux.py status; then
+            make -C versions/0.5.0-pre2-dev linux LINUX_VERSION=7.3.1 LINUX_JOBS=4
+          fi
+          python3 versions/0.5.0-pre2-dev/scripts/linux.py status
       - name: Package bootable BIOS/UEFI ISO and assert El Torito catalog
         run: |
           set -euo pipefail
