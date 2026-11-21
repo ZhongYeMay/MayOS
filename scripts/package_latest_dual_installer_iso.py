@@ -92,6 +92,19 @@ menuentry "Install/Recover 0.5.2-pre2 (serial console)" --id mayos-installer-ser
 }
 """
     menu = menu.replace(hook, "\n" + installer_entries + hook)
+    # Initialize GRUB COM1 BEFORE mirroring the menu to serial. The upstream
+    # desktop template invokes terminal_output before serial setup, which
+    # leaves QEMU automation blind and silently boots the default item.
+    if "terminal_output gfxterm serial" not in menu:
+        raise ValueError("Missing expected GRUB terminal output")
+    menu = menu.replace(
+        "terminal_output gfxterm serial",
+        "insmod serial\nserial --unit=0 --speed=115200\n"
+        "terminal_input console serial\nterminal_output gfxterm serial", 1)
+    late = "\nserial --unit=0 --speed=115200\nterminal_input console serial\n\nif cpuid"
+    if late not in menu:
+        raise ValueError("Missing late GRUB COM1 setup in source template")
+    menu = menu.replace(late, "\nif cpuid", 1)
     menu = menu.replace("set timeout=5", "set timeout=12")
     for required in ("Start MayKernel64", "Start Linux64",
                      "Install MayOS 0.5.2-pre2", "mayos-installer-serial"):
