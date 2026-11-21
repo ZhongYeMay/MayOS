@@ -30,6 +30,35 @@ including files saved after upgrading.
 Settings-based updates and installed-PC boot slots require a separate
 bootloader contract. See the MayKernel policy and diagnostics below.
 
+## MayOS 0.5.1 installed-disk development preview
+
+`scripts/install_mayos.py` builds a GPT/UEFI virtual hard disk containing
+GRUB, two kernel slots and a MayFS partition. Use Linux with `sfdisk`,
+`xorriso`, GRUB EFI utilities and mtools. Upgrade trials additionally use
+QEMU and OVMF. Shut down the VM before using any of its disk images.
+
+```sh
+# Fresh installation. Optionally add --import-mayfs /path/to/mayos-disk.img
+# to migrate the two snapshots from an existing legacy MayFS image.
+python3 scripts/install_mayos.py --iso base.iso --sha256 "$BASE_SHA256" \
+  --output installed.img
+
+# Build a separate upgraded image. Trial boot uses a temporary overlay.
+python3 scripts/install_mayos.py --upgrade-from installed.img --iso newer.iso \
+  --sha256 "$NEW_SHA256" --version 0.5.1-pre2 --output upgraded.img
+
+# Bring the preceding kernel slot back while keeping current MayFS files.
+python3 scripts/install_mayos.py --rollback-from upgraded.img --output rolled-back.img
+```
+
+Specify a new output filename for each operation. Use a MayKernel ISO built
+with the new GPT partition support. Boot the resulting disk as an x86_64
+UEFI hard drive. An upgraded disk offers both slots in GRUB. A failed
+trial leaves no output image and the input image stays byte-for-byte intact.
+This phase runs on the host and writes virtual disk images. Bootable
+installer media, physical targets and BIOS hard-disk installation are
+subsequent phases.
+
 ## Actual implementation
 
 A real Rust no_std state machine (`rust/maykernel_policy/src/ab_policy.rs`) defines a bounded, C ABI-compatible 48-byte boot-journal record. It models A/B active and trial slots, a trusted minimum security epoch, a monotonically incremented journal generation, a three-boot trial limit, and success/rollback transitions. It never allocates memory or calls a kernel service.

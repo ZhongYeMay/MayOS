@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shutil
 import struct
@@ -188,32 +189,47 @@ def trial_boot(root, disk, version, ovmf, vars_template):
                     vm.wait()
 
 
-def upgrade(source, iso, expected, output, version, ovmf, vars_template):
-    version_order(version)
-    new_destination(output)
+def clone_installed(source, root):
     source = regular(source)
     if source.stat().st_size != DISK_BYTES:
         raise ValueError("Choose an image created by this installer")
+    disk = root / "upgraded.img"
+    shutil.copyfile(source, disk)
+    command("sfdisk", "--verify", str(disk))
+    raw = command("sfdisk", "--json", str(disk), capture_output=True, text=True)
+    layout = json.loads(raw.stdout)["partitiontable"]
+    actual = [(p["start"], p["size"], p["type"].upper()) for p in layout["partitions"]]
+    if (layout["label"], layout["sectorsize"], actual) != (
+            "gpt", SECTOR, [(ESP_START, ESP_BLOCKS, ESP), (DATA_START, DATA_BLOCKS, MAYFS)]):
+        raise ValueError("Unexpected partition layout")
+    fat = f"{disk}@@{ESP_START * SECTOR}"
+    state = root / "read-slot.json"
+    command("mcopy", "-i", fat, "::/mayos-slot.json", str(state))
+    metadata = json.loads(state.read_text())
+    volume, active = metadata["volume"], metadata["active"]
+    if active not in ("A", "B") or not isinstance(volume, str) or not re.fullmatch(
+            r"[0-9A-F]{4}-[0-9A-F]{4}", volume):
+        raise ValueError("Invalid MayOS boot metadata")
+    return disk, fat, volume, active
+
+
+def slot_version(fat, slot, root):
+    elf = root / f"old-{slot}.elf"
+    command("mcopy", "-i", fat, f"::/slots/{slot}.elf", str(elf))
+    match = re.search(rb"MayOS Workstation ([0-9.]+(?:-pre[0-9]+)?) / MayShell", elf.read_bytes())
+    if not match:
+        raise ValueError("Installed slot has no recognized MayOS version")
+    return match[1].decode("ascii")
+
+
+def upgrade(source, iso, expected, output, version, ovmf, vars_template):
+    new_destination(output)
     with tempfile.TemporaryDirectory(prefix=".mayos-upgrade-", dir=output.parent) as directory:
         root = Path(directory)
         kernel = kernel_from_iso(iso, expected, root)
-        disk = root / "upgraded.img"
-        shutil.copyfile(source, disk)
-        command("sfdisk", "--verify", str(disk))
-        raw = command("sfdisk", "--json", str(disk), capture_output=True, text=True)
-        layout = json.loads(raw.stdout)["partitiontable"]
-        actual = [(p["start"], p["size"], p["type"].upper()) for p in layout["partitions"]]
-        if (layout["label"], layout["sectorsize"], actual) != (
-                "gpt", SECTOR, [(ESP_START, ESP_BLOCKS, ESP), (DATA_START, DATA_BLOCKS, MAYFS)]):
-            raise ValueError("Unexpected partition layout")
-        fat = f"{disk}@@{ESP_START * SECTOR}"
-        state = root / "read-slot.json"
-        command("mcopy", "-i", fat, "::/mayos-slot.json", str(state))
-        metadata = json.loads(state.read_text())
-        old, volume = metadata["active"], metadata["volume"]
-        if old not in ("A", "B") or not isinstance(volume, str) or len(volume) != 9 or any(
-                ch not in "0123456789ABCDEF-" for ch in volume):
-            raise ValueError("Invalid MayOS boot metadata")
+        disk, fat, volume, old = clone_installed(source, root)
+        if version_order(version) <= version_order(slot_version(fat, old, root)):
+            raise ValueError("Upgrade requires a newer MayOS version")
         new = "B" if old == "A" else "A"
         command("mcopy", "-o", "-i", fat, str(kernel), f"::/slots/{new}.elf")
         set_boot_files(root, fat, volume, [new, old])
@@ -222,24 +238,47 @@ def upgrade(source, iso, expected, output, version, ovmf, vars_template):
     print(f"Created trial-verified MayOS {version} image: {output}")
 
 
+def rollback(source, output, ovmf, vars_template):
+    new_destination(output)
+    with tempfile.TemporaryDirectory(prefix=".mayos-rollback-", dir=output.parent) as directory:
+        root = Path(directory)
+        disk, fat, volume, active = clone_installed(source, root)
+        previous = "B" if active == "A" else "A"
+        version = slot_version(fat, previous, root)
+        set_boot_files(root, fat, volume, [previous, active])
+        trial_boot(root, disk, version, ovmf, vars_template)
+        publish(disk, output)
+    print(f"Created MayOS rollback image with {version}: {output}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--iso", required=True, type=Path)
-    parser.add_argument("--sha256", required=True)
+    parser.add_argument("--iso", type=Path)
+    parser.add_argument("--sha256")
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--import-mayfs", type=Path)
-    parser.add_argument("--upgrade-from", type=Path)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--upgrade-from", type=Path)
+    mode.add_argument("--rollback-from", type=Path)
     parser.add_argument("--version")
     parser.add_argument("--ovmf", type=Path, default=Path("/usr/share/OVMF/OVMF_CODE_4M.fd"))
     parser.add_argument("--ovmf-vars", type=Path, default=Path("/usr/share/OVMF/OVMF_VARS_4M.fd"))
     args = parser.parse_args()
     try:
-        if args.upgrade_from:
+        if args.rollback_from:
+            if any((args.iso, args.sha256, args.import_mayfs, args.version)):
+                parser.error("Rollback uses the previous slot on the installed disk")
+            rollback(args.rollback_from, args.output.absolute(), args.ovmf, args.ovmf_vars)
+        elif not args.iso or not args.sha256:
+            parser.error("Installation and upgrade require --iso and --sha256")
+        elif args.upgrade_from:
             if not args.version or args.import_mayfs:
                 parser.error("Upgrade requires --version and uses the existing MayFS partition")
             upgrade(args.upgrade_from, args.iso, args.sha256, args.output.absolute(),
                     args.version, args.ovmf, args.ovmf_vars)
         else:
+            if args.version:
+                parser.error("--version is required only when upgrading")
             install(args.iso, args.sha256, args.output.absolute(), args.import_mayfs)
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"Install failed: {error}\n")

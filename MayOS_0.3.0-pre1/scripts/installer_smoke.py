@@ -5,7 +5,7 @@ import shutil
 import tempfile
 
 from dual_boot_smoke import BootVM, BUILD
-from install_mayos import DATA_START, DATA_BLOCKS, SECTOR, install, upgrade
+from install_mayos import DATA_START, DATA_BLOCKS, SECTOR, install, rollback, upgrade
 from live_upgrade import digest
 
 
@@ -77,8 +77,15 @@ def main():
             assert old.read(DATA_BLOCKS * SECTOR) == new.read(DATA_BLOCKS * SECTOR)
         boot(upgraded, "installer-upgraded", installed=True, version="0.5.1-pre2", commands=[
             ("cat keep.txt", "\noriginal\n"), ("cat fresh.txt", "\ninstalled\n"),
+            ("write after.txt after-upgrade", "\nOK\n"),
         ])
         print("PASS: verified ISO upgrade with byte-identical MayFS and no optical media")
+        rolled_back = root / "rolled-back.img"
+        rollback(upgraded, rolled_back, code, template)
+        boot(rolled_back, "installer-rollback", installed=True, version="0.5.1-pre1", commands=[
+            ("cat keep.txt", "\noriginal\n"), ("cat after.txt", "\nafter-upgrade\n"),
+        ])
+        print("PASS: booted previous installed slot and read data written after the upgrade")
 
 
 if __name__ == "__main__":
