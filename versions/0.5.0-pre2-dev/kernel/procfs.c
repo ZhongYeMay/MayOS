@@ -12,6 +12,11 @@
 #include <sys/sysinfo.h>
 #endif
 #include "procfs.h"
+#ifdef MAYOS_LINUX
+/* The Linux desktop core.h redirects these helpers for freestanding GUI C;
+ * this standalone collector intentionally calls the actual libc strcmp. */
+#undef strcmp
+#endif
 #ifndef MAYOS_LINUX
 #include "e1000.h"
 #endif
