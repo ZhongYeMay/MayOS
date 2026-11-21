@@ -6,6 +6,15 @@
   "description": "Published GitHub Releases, including prereleases and source-only previews. Unreleased branches are not releases.",
   "releases": [
     {
+      "tag": "v0.5.2-pre2",
+      "name": "MayOS 0.5.2-pre2 — 中日韩输入与新版安装器",
+      "published_at": "2026-11-21T17:21:37Z",
+      "prerelease": true,
+      "body": "## MayOS 0.5.2-pre2 · 中日韩输入与新版安装器\n\n- 在文本编辑器、新建文件或重命名对话框按 F3 切换输入。首批输入法包含全拼、注音、日语罗马字转平假名或片假名、韩语两套式及 Unicode 码点输入。\n- 编辑器和 MayFS 文件名使用 UTF‑8。预览支持四字节字符、常见组合字符的整组退格、BOM 显示和 CRLF 换行。\n- 安装器沿用 MayOS 深色界面。按 F4 切换中英文。安装前核对目标磁盘、容量和操作，安装中显示实际扫描、写入与回读进度。\n\nQEMU 验证了双内核输入、MayKernel64 冷启动读回、完整的 UEFI 安装和非空盘拒绝写入。发布包包含 MayKernel64 启动 ISO 与离线安装 ISO。测试建议使用独立虚拟磁盘并关闭 Secure Boot。\n\n拼音和注音使用离线词表，注音按无调音节匹配。日语汉字转换覆盖常用词，字库之外的字符使用替代符显示。\n\n### 下载\n\n- [离线安装 ISO · 38.68 MiB](https://raw.githubusercontent.com/ZhongYeMay/MayOS/6b28838524fc843469600c605013a37aa1d21851/MayOS-0.5.2-pre2-Installer-x86_64.iso)\n- [MayKernel64 启动 ISO · 23.85 MiB](https://raw.githubusercontent.com/ZhongYeMay/MayOS/6b28838524fc843469600c605013a37aa1d21851/MayOS-0.5.2-pre2-MayKernel-x86_64.iso)\n- [SHA-256 校验清单](https://raw.githubusercontent.com/ZhongYeMay/MayOS/6b28838524fc843469600c605013a37aa1d21851/SHA256SUMS.txt)\n- [源码 ZIP](https://raw.githubusercontent.com/ZhongYeMay/MayOS/6b28838524fc843469600c605013a37aa1d21851/MayOS-0.5.2-pre2-source.zip)\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.5.2-pre2",
+      "assets_count": 0
+    },
+    {
       "tag": "v0.5.2-pre1",
       "name": "MayOS 0.5.2-pre1 — 八种界面语言",
       "published_at": "2026-11-21T17:01:10Z",
