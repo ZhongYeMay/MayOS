@@ -24,7 +24,8 @@ from smoke import BUILD, entries
 class BootVM:
     def __init__(self, *, iso: Path | None, disk: Path, tag: str, qemu: str,
                  memory: int, timeout: float, ovmf_code: Path | None = None,
-                 ovmf_vars: Path | None = None, cpu: str = 'max'):
+                 ovmf_vars: Path | None = None, cpu: str = 'max',
+                 extra_disks: tuple[Path, ...] = ()):
         self.timeout = timeout
         self.serial_path = BUILD / f'{tag}-serial.sock'
         self.qmp_path = BUILD / f'{tag}-qmp.sock'
@@ -45,6 +46,10 @@ class BootVM:
                 '-serial', f'unix:{self.serial_path},server=on,wait=off',
                 '-qmp', f'unix:{self.qmp_path},server=on,wait=off',
                 '-nic', 'user,model=e1000', '-no-reboot', '-S']
+        for index, extra in enumerate(extra_disks, start=1):
+            # Explicit IDE positions: /dev/sda is the protected source disk,
+            # and /dev/sdb is the selected installation target in safety tests.
+            args += ['-drive', f'file={extra},format=raw,if=ide,index={index}']
         if iso is not None:
             args += ['-cdrom', str(iso)]
         if (ovmf_code is None) != (ovmf_vars is None):
