@@ -78,8 +78,20 @@ installed disk in UEFI mode. Use a dedicated empty virtual disk at least
 80 MiB in size with 512-byte logical sectors. Keep the original MayFS
 disk separate when using the host migration procedure.
 
-The installer medium currently handles fresh installs. Existing-disk
-upgrades and rollback use the host commands above. Physical targets and
+### Upgrade an installed disk from newer media
+
+Boot a newer installer ISO, select an existing MayOS installation with the
+current EFI layout, and enter the displayed `UPGRADE` confirmation. This
+queues its checked kernel for a single trial on the inactive slot. Remove the
+ISO and boot the hard disk, then check that the new desktop and files work.
+GRUB consumes the trial flag before launching the kernel. Any subsequent
+hard boot uses the previously confirmed slot until you commit the upgrade.
+
+Boot the same installer ISO again and enter the displayed `CONFIRM`
+confirmation to make the tested slot the default. Use `DISCARD` to leave
+the old slot selected. These actions operate on the EFI system partition
+while sharing the existing MayFS data partition. Do not confirm an
+unsuccessful trial. Hardware targets, sudden-power-loss durability and
 BIOS hard-disk installation still need validation.
 
 ## Actual implementation
