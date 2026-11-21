@@ -1,5 +1,6 @@
 #include "cat_image.h"
 #include "core.h"
+#include "procfs.h"
 #include "font.h"
 #include "material_icons.h"
 #ifndef MAYOS_LINUX
@@ -567,7 +568,8 @@ typedef struct {
     int x, y, w, h, open, min, max, ox, oy, ow, oh;
     const char *title;
 } Window;
-#define WINDOW_COUNT 5
+#define TASK_MANAGER_WINDOW 5
+#define WINDOW_COUNT 6
 /* Nonblocking 180ms fades. Geometry and input targets never move. */
 static u32 animation_started[WINDOW_COUNT];
 static int animation_running[WINDOW_COUNT];
@@ -604,8 +606,9 @@ static Window windows[WINDOW_COUNT] = {{275, 105, 730, 510, 0, 0, 0, 0, 0, 0, 0,
                             {228, 128, 824, 436, 0, 0, 0, 0, 0, 0, 0, "Settings"},
                             {290, 136, 700, 448, 0, 0, 0, 0, 0, 0, 0, "终端 / Terminal"},
                             {315, 112, 650, 490, 0, 0, 0, 0, 0, 0, 0, "文本编辑器 / Editor"},
-                            {240, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"}};
-static int order[WINDOW_COUNT] = {0, 2, 3, 4, 1}, focus = 1, dirty = 1;
+                            {240, 100, 800, 520, 0, 0, 0, 0, 0, 0, 0, "MayOS Explorer (Preview)"},
+                            {190, 76, 900, 560, 0, 0, 0, 0, 0, 0, 0, "Task Manager / Activity"}};
+static int order[WINDOW_COUNT] = {0, 2, 3, 4, 1, 5}, focus = 1, dirty = 1;
 static int mx = 640, my = 360, buttons, oldbuttons, drag = -1, dragx, dragy;
 static int start_open = 0, context_open = 0, ctxx, ctxy, folder = 1, selected = -1, clip = -1,
            cut = 0, settings_tab = 6;
@@ -784,7 +787,7 @@ static void shell(void) {
         emit("help  fastfetch  clear  pwd  ls [path]  cd <path>");
         emit("cat <file>  mkdir <path>  touch <path>  write <file> <text>");
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
-        emit("theme light|dark  net status  lspci  reboot  shutdown");
+        emit("theme light|dark  net status  lspci  taskmgr  reboot  shutdown");
         emit("F1 opens Terminal. File names and input use ASCII keyboard.");
     } else if (!strcmp(c, "clear"))
         out_count = 0;
@@ -870,6 +873,9 @@ static void shell(void) {
 #else
         emit(fs_sync() ? "MayFS: synchronized to ATA disk" : "MayFS: disk unavailable");
 #endif
+    } else if (!strcmp(c, "taskmgr") || !strcmp(c, "monitor")) {
+        raise_window(TASK_MANAGER_WINDOW);
+        emit("MayOS: Task Manager opened / CPU GPU DISK RAM NET");
     } else if (!strcmp(c, "fastfetch") || !strcmp(c, "neofetch")) {
 #ifdef MAYOS_LINUX
         char result[1536];
@@ -1560,6 +1566,141 @@ static void explorer_draw(Window *w) {
 }
 /* Centered macOS-like dock from the user's reference screenshot.
    Icons launch the same native MayOS windows and services. */
+
+/* The same five activity cards render for MayKernel and Linux. All data comes
+ * from procfs.c, not from a fake activity graph or forced percentages. */
+#define PERFORMANCE_POINTS 40
+static MayPerfSnapshot performance;
+static u8 performance_graph[5][PERFORMANCE_POINTS];
+static u8 performance_known[5][PERFORMANCE_POINTS];
+static u32 performance_count, performance_last_tick;
+
+static u32 perf_percent(u32 value, u32 maximum) {
+    return value >= maximum ? 100 : value * 100 / maximum;
+}
+static void perf_update(void) {
+    if (ticks - performance_last_tick < 100) return; /* one sample per second */
+    performance_last_tick = ticks;
+    mayperf_sample(&performance, ticks);
+    u32 value[5] = {0};
+    int known[5] = {0};
+    known[0] = performance.cpu_valid;
+    value[0] = performance.cpu_percent;
+    known[1] = performance.gpu_valid || performance.framebuffer_valid;
+    value[1] = performance.gpu_valid ? performance.gpu_percent :
+               perf_percent(performance.framebuffer_submits_s, 60);
+    known[2] = performance.disk_valid && performance.sample_ready;
+    u32 disk_kib = performance.disk_read_kib_s / 2 +
+                   performance.disk_write_kib_s / 2;
+    value[2] = perf_percent(disk_kib, 2048); /* 0-4 MiB/s chart scale */
+    known[3] = performance.ram_valid && performance.ram_total_mib;
+    value[3] = known[3] ? performance.ram_used_mib * 100 /
+                            performance.ram_total_mib : 0;
+    known[4] = performance.net_valid && performance.sample_ready;
+    u32 net_kib = performance.net_rx_kib_s / 2 +
+                  performance.net_tx_kib_s / 2;
+    value[4] = perf_percent(net_kib, 1024); /* 0-2 MiB/s chart scale */
+    u32 slot = performance_count % PERFORMANCE_POINTS;
+    for (int i = 0; i < 5; i++) {
+        performance_graph[i][slot] = (u8)(value[i] > 100 ? 100 : value[i]);
+        performance_known[i][slot] = (u8)known[i];
+    }
+    performance_count++;
+    if (windows[TASK_MANAGER_WINDOW].open &&
+        !windows[TASK_MANAGER_WINDOW].min) dirty = 1;
+}
+static void perf_history(int x, int y, int width, int index) {
+    const int columns = PERFORMANCE_POINTS;
+    int step = (width - 12) / columns;
+    if (step < 2) step = 2;
+    rect(x, y + 31, columns * step, 1, line);
+    for (int i = 0; i < columns; i++) {
+        if (i >= (int)performance_count) continue;
+        u32 position = (performance_count + i) % PERFORMANCE_POINTS;
+        if (performance_count < PERFORMANCE_POINTS) position = (u32)i;
+        if (!performance_known[index][position]) continue;
+        int height = (int)performance_graph[index][position] * 29 / 100;
+        if (height < 2) height = 2;
+        rect(x + i * step, y + 31 - height, step - 1, height,
+             performance_graph[index][position] >= 70 ? ink : muted);
+    }
+}
+static void perf_numeric(int x, int y, const char *label, u32 value,
+                         const char *unit, int valid) {
+    text(x, y, label, muted);
+    if (!valid) {
+        text(x + 139, y, "N/A", muted);
+        return;
+    }
+    numtext(x + 139, y, value, ink);
+    text(x + 203, y, unit, muted);
+}
+static void perf_card(int x, int y, int width, int height, const char *name) {
+    ui_card(x, y, width, height, 16, surface_high);
+    text(x + 16, y + 11, name, ink);
+    rect(x + 16, y + 40, width - 32, 1, line);
+}
+static void perf_draw(Window *w) {
+    int left = w->x + 20, top = w->y + 58;
+    int half = (w->w - 54) / 2;
+    int right = left + half + 14;
+    int tall = 144;
+    perf_card(left, top, half, tall, "CPU");
+    perf_numeric(left + 16, top + 46, "Activity", performance.cpu_percent,
+                 "%", performance.cpu_valid);
+#ifdef MAYOS_LINUX
+    text(left + 16, top + 74, "Source: /proc/stat (aggregate)", muted);
+#else
+    text(left + 16, top + 74, "Source: non-HLT TSC estimate", muted);
+#endif
+    perf_history(left + 17, top + 98, half - 34, 0);
+
+    perf_card(right, top, half, tall, "GPU");
+    perf_numeric(right + 16, top + 46, "Hardware GPU",
+                 performance.gpu_percent, "%", performance.gpu_valid);
+    perf_numeric(right + 16, top + 74, "Framebuffer",
+                 performance.framebuffer_submits_s, "submits/s",
+                 performance.framebuffer_valid);
+    /* The graph shows real submissions, NEVER fabricated GPU utilization. */
+    perf_history(right + 17, top + 98, half - 34, 1);
+
+    int mid = top + 155;
+    perf_card(left, mid, half, tall, "DISK");
+    if (performance.disk_valid) {
+        perf_numeric(left + 16, mid + 46, "Read", performance.disk_read_kib_s,
+                     "KiB/s", performance.sample_ready);
+        perf_numeric(left + 16, mid + 72, "Write", performance.disk_write_kib_s,
+                     "KiB/s", performance.sample_ready);
+    } else {
+        text(left + 16, mid + 51, "Disk unavailable / RAM session", muted);
+    }
+    perf_history(left + 17, mid + 98, half - 34, 2);
+
+    perf_card(right, mid, half, tall, "RAM");
+    perf_numeric(right + 16, mid + 46, "Used", performance.ram_used_mib,
+                 "MiB", performance.ram_valid);
+    perf_numeric(right + 16, mid + 72, "Total", performance.ram_total_mib,
+                 "MiB", performance.ram_valid);
+    perf_history(right + 17, mid + 98, half - 34, 3);
+
+    int bottom = top + 310;
+    perf_card(left, bottom, w->w - 40, tall, "NET");
+    if (performance.net_valid) {
+        perf_numeric(left + 16, bottom + 46, "Receive",
+                     performance.net_rx_kib_s, "KiB/s", performance.sample_ready);
+        perf_numeric(left + 16, bottom + 72, "Transmit",
+                     performance.net_tx_kib_s, "KiB/s", performance.sample_ready);
+        text(left + 340, bottom + 46, performance.net_link ?
+             "Ethernet link: UP" : "Ethernet link: DOWN", muted);
+    } else {
+        text(left + 16, bottom + 55, "Network controller unavailable", muted);
+    }
+    perf_history(left + 17, bottom + 98, w->w - 74, 4);
+    text(left + 15, bottom + tall + 6,
+         "GPU N/A means no hardware counter; graphs show real sampled activity.",
+         muted);
+}
+
 static void taskbar(void) {
     /* The reference Dock intentionally has only Files, Settings, Terminal and Trash. */
     int left = DOCK_LEFT, top = H - 80;
@@ -1798,6 +1939,8 @@ static void render(void) {
             terminal_draw(w);
         else if (i == 3)
             editor_draw(w);
+        else if (i == TASK_MANAGER_WINDOW)
+            perf_draw(w);
         else
             explorer_draw(w);
         if (fading) {
@@ -1845,6 +1988,7 @@ static void render(void) {
         maygame_draw(rect, text, maygame_blit);
 #endif
     cursor();
+    mayperf_note_frame();
     present(pixels);
     dirty = 0;
 }
@@ -2307,6 +2451,11 @@ static void key_event(int k) {
         return;
     }
     egg_clicks = 0;
+    if (k == 0x107) {
+        raise_window(TASK_MANAGER_WINDOW);
+        serial("MayOS: Task Manager opened / CPU GPU DISK RAM NET\n");
+        return;
+    }
     if (k == 0x105) {
         raise_window(2);
         return;
@@ -2494,6 +2643,7 @@ void kernel_main(u32 magic, u32 info) {
             dirty = 1;
         }
 #endif
+        perf_update();
         if (ticks / 50 != last) {
             last = ticks / 50;
             dirty = 1;
