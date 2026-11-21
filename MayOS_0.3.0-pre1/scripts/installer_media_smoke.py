@@ -21,11 +21,14 @@ def main():
         with disk.open("xb") as handle:
             handle.truncate(target_size)
 
-        def start(tag, media):
-            vars_path = root / f"{tag}.fd"
-            shutil.copyfile(variables, vars_path)
+        def start(tag, media, *, uefi=True):
+            firmware = {}
+            if uefi:
+                vars_path = root / f"{tag}.fd"
+                shutil.copyfile(variables, vars_path)
+                firmware = {"ovmf_code": code, "ovmf_vars": vars_path}
             return BootVM(iso=media, disk=disk, tag=tag, qemu="qemu-system-x86_64",
-                          memory=512, timeout=90, ovmf_code=code, ovmf_vars=vars_path)
+                          memory=512, timeout=90, **firmware)
 
         def console(vm):
             vm.wait("Install MayOS (serial console)")
@@ -35,7 +38,7 @@ def main():
             vm.wait("To continue, type INSTALL /dev/sda")
 
         before = digest(disk)
-        vm = start("installer-media-cancel", iso)
+        vm = start("installer-media-cancel-bios", iso, uefi=False)
         try:
             console(vm)
             vm.send_serial("cancel\n")
@@ -56,7 +59,7 @@ def main():
         finally:
             vm.stop()
         assert digest(disk) == before
-        print("PASS: cancellation and data-bearing disk leave every byte intact")
+        print("PASS: BIOS cancellation and UEFI nonblank detection leave every byte intact")
 
         with disk.open("wb") as handle:
             handle.truncate(target_size)

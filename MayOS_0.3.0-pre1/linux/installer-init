@@ -21,7 +21,7 @@ eligible() {
     [ "$(cat "$sys/ro")" = "0" ] && [ "$(cat "$sys/removable")" = "0" ] || return 1
     [ "$(cat "$sys/queue/logical_block_size")" = "512" ] || return 1
     case "$name" in
-        sd[a-z]|vd[a-z]|nvme[0-9]n[0-9]) ;;
+        sd[a-z]|nvme[0-9]n[0-9]) ;;
         *) return 1 ;;
     esac
 }

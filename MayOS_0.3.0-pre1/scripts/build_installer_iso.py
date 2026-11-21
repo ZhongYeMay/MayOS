@@ -16,7 +16,7 @@ from live_upgrade import digest
 
 def modules(version):
     included = set()
-    for driver in ("ata_piix", "ahci", "sd_mod", "nvme", "virtio_pci", "virtio_blk"):
+    for driver in ("ata_piix", "ahci", "sd_mod", "nvme"):
         result = subprocess.run(
             ["modprobe", "--set-version", version, "--show-depends", driver],
             capture_output=True, text=True, check=True)
