@@ -518,6 +518,10 @@ int input_poll(int *mx, int *my, int *buttons, int *key) {
                 *key = 0x105;
                 return 1;
             }
+            if (v == 60) { /* F2: Task Manager */
+                *key = 0x107;
+                return 1;
+            }
             if (v == 42 || v == 54) {
                 shift = 1;
                 continue;
