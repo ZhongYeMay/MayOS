@@ -64,13 +64,32 @@ def main():
             finally:
                 vm.stop()
 
+        def setup_intro(vm, *, capture=False):
+            vm.wait("MayOS: first boot setup ready")
+            if capture:
+                vm.shot("installer-media-oobe-welcome")
+            vm.key("ret")
+            vm.wait("MayOS: first boot language ready")
+            if capture:
+                vm.shot("installer-media-oobe-language")
+            vm.key("ret")
+            vm.wait("MayOS: first boot license ready")
+
         def boot_version(tag, version, *, seed=False):
             vm = start(tag, None)
             try:
                 vm.wait("MayOS: MayFS GPT partition selected")
                 if seed:
-                    vm.wait("MayOS: first boot setup ready")
-                    vm.shot("installer-media-oobe-welcome")
+                    setup_intro(vm, capture=True)
+                    vm.shot("installer-media-oobe-license")
+                    vm.key("y")
+                    vm.wait("MayOS: first boot profile ready")
+                    for key in "studio":
+                        vm.key(key)
+                    vm.shot("installer-media-oobe-profile")
+                    vm.key("ret")
+                    vm.wait("MayOS: first boot updates ready")
+                    vm.shot("installer-media-oobe-updates")
                     vm.key("ret")
                     vm.wait("MayOS: first boot appearance ready")
                     vm.key("2")
@@ -88,9 +107,11 @@ def main():
                 vm.key("f1")
                 if seed:
                     vm.keyboard_command("write keep.txt installer-preserved")
+                    vm.wait("studio@mayos:~ $ write keep.txt installer-preserved")
                     vm.wait("\nOK\n")
                 else:
                     vm.keyboard_command("cat keep.txt")
+                    vm.wait("studio@mayos:~ $ cat keep.txt")
                     vm.wait("\ninstaller-preserved\n")
             finally:
                 vm.stop()
@@ -148,6 +169,18 @@ def main():
         finally:
             vm.stop()
         subprocess.run(["sfdisk", "--verify", str(disk)], check=True)
+        vm = start("installer-media-license-declined", None)
+        try:
+            setup_intro(vm)
+            vm.key("n")
+            vm.wait("MayOS: first boot license declined")
+            vm.wait("MayOS: power off")
+            assert "MayOS: desktop ready" not in vm.text
+        finally:
+            vm.stop()
+        with disk.open("rb") as handle:
+            handle.seek((DATA_START + 500) * SECTOR)
+            assert handle.read(8) != b"MAYPREF1"
         boot_version("installer-media-hard-disk", "0.5.1-pre1", seed=True)
         with disk.open("rb") as handle:
             handle.seek((DATA_START + 500) * SECTOR)

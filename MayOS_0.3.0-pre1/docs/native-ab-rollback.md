@@ -74,8 +74,10 @@ Boot `build/mayos-installer.iso` and select **Install MayOS**. Choose an
 empty disk, review the target and select **Install**. The installer takes
 the target exclusively and checks that every byte is zero before writing.
 Once installation and readback finish, shut down, remove the ISO and start
-the installed disk in UEFI mode. On first boot, choose the desktop
-appearance and select **开始使用** to save it to MayFS.
+the installed disk in UEFI mode. On first boot, confirm the setup language
+and MIT license, optionally enter a local MayShell name, review the manual
+update procedure, and choose the desktop appearance. Select **开始使用**
+to save the profile and appearance to MayFS.
 
 Use a dedicated empty virtual disk of at least 80 MiB with 512-byte logical
 sectors. Keep the original MayFS disk separate when using the host migration

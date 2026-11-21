@@ -5,7 +5,7 @@ import shutil
 import tempfile
 
 from dual_boot_smoke import BootVM, BUILD
-from install_mayos import DATA_START, DATA_BLOCKS, SECTOR, install, rollback, upgrade
+from install_mayos import DATA_START, DATA_BLOCKS, SECTOR, SETUP_PROMPTS, install, rollback, upgrade
 from live_upgrade import digest
 
 
@@ -27,8 +27,8 @@ def main():
                         memory=256, timeout=60, ovmf_code=code, ovmf_vars=vars_path)
             try:
                 if setup:
-                    for prompt in ("setup", "appearance", "review"):
-                        vm.wait(f"MayOS: first boot {prompt} ready")
+                    for prompt in SETUP_PROMPTS:
+                        vm.wait(prompt)
                         vm.key("ret")
                     vm.wait("MayOS: first boot setup completed")
                 vm.wait("MayOS: desktop ready")

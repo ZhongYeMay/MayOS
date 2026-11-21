@@ -38,6 +38,32 @@ static u32 bg = 0x050506, panel = 0x080809, ink = 0xf5f5f6, muted = 0xa1a1a5, li
            accent = 0xececef, surface_high = 0x18181b, on_accent = 0x111113, selected_fill = 0x29292d;
 static int dark = 1, accent_choice = 0;
 static int desktop_style = 0, pointer_size = 0, show_brand = 1, high_contrast = 0;
+static char profile_name[21] = "may";
+#ifndef MAYOS_LINUX
+static const char profile_file[] = "MayOS-Profile.txt";
+static const char profile_header[] = "MAYPROFILE1\n";
+static int profile_character(int key) {
+    return (key >= 'a' && key <= 'z') || (key >= 'A' && key <= 'Z') ||
+           (key >= '0' && key <= '9') || key == '-' || key == '_';
+}
+static int profile_valid(const File *file) {
+    u32 start = sizeof(profile_header) - 1;
+    if (file->dir || file->size <= start || file->size >= start + sizeof(profile_name)) return 0;
+    for (u32 i = 0; i < start; i++)
+        if (file->data[i] != (u8)profile_header[i]) return 0;
+    for (u32 i = start; i < file->size; i++)
+        if (!profile_character(file->data[i])) return 0;
+    return 1;
+}
+static void profile_load(void) {
+    int index = fs_find(0, profile_file);
+    if (index < 0 || !profile_valid(&files[index])) return;
+    u32 start = sizeof(profile_header) - 1;
+    u32 length = files[index].size - start;
+    memcpy(profile_name, files[index].data + start, length);
+    profile_name[length] = 0;
+}
+#endif
 static int draw_clip_active, draw_clip_left, draw_clip_top, draw_clip_right, draw_clip_bottom;
 /* 0 = black square, 1 = white square, 2 = custom Documents/Cursor.ppm. */
 static int cursor_style = 0;
@@ -765,8 +791,10 @@ static int sync_notice(void) {
     return ok;
 }
 static void shell(void) {
-    char full[200] = "may@mayos:~ $ ";
-    copy(full + 14, command, 186);
+    char full[200];
+    copy(full, profile_name, sizeof(full));
+    copy(full + strlen(full), "@mayos:~ $ ", sizeof(full) - strlen(full));
+    copy(full + strlen(full), command, sizeof(full) - strlen(full));
     emit(full);
     copy(history, command, 160);
     char buf[160];
@@ -1747,8 +1775,9 @@ static void terminal_draw(Window *w) {
     for (int i = start; i < end; i++)
         text(x + 18, y + 12 + (i - start) * 21, output[i], ink);
     int py = w->y + w->h - 48;
-    text(x + 18, py, "may@mayos", accent);
-    int xx = text(x + 98, py, ":~ $ ", muted);
+    int xx = text(x + 18, py, profile_name, accent);
+    xx = text(xx, py, "@mayos", accent);
+    xx = text(xx, py, ":~ $ ", muted);
     text(xx, py, command, ink);
     if (ticks % 100 < 55)
         rect(xx + cmdlen * 8, py + 3, 7, 16, accent);
@@ -2782,7 +2811,46 @@ static void setup_card(int x, int y, u32 base, u32 edge, int chosen,
     }
 }
 
-static void setup_screen(int step, int theme, int error) {
+enum SetupStep { SETUP_WELCOME, SETUP_LANGUAGE, SETUP_LICENSE, SETUP_PROFILE,
+                 SETUP_UPDATES, SETUP_APPEARANCE, SETUP_REVIEW, SETUP_COUNT };
+static const char *const setup_prompts[SETUP_COUNT] = {
+    "MayOS: first boot setup ready\n", "MayOS: first boot language ready\n",
+    "MayOS: first boot license ready\n", "MayOS: first boot profile ready\n",
+    "MayOS: first boot updates ready\n", "MayOS: first boot appearance ready\n",
+    "MayOS: first boot review ready\n"
+};
+
+static void setup_license(void) {
+    static const char *const lines[] = {
+        "MIT License",
+        "Copyright (c) 2024 MayOS Project",
+        "Permission is hereby granted, free of charge, to any person",
+        "obtaining a copy of this software and associated documentation",
+        "files (the \"Software\"), to deal in the Software without",
+        "restriction, including without limitation the rights to use, copy,",
+        "modify, merge, publish, distribute, sublicense, and/or sell copies",
+        "of the Software, and to permit persons to whom the Software is",
+        "furnished to do so, subject to the following conditions:",
+        "The above copyright notice and this permission notice shall be",
+        "included in all copies or substantial portions of the Software.",
+        "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,",
+        "EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF",
+        "MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND",
+        "NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT",
+        "HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,",
+        "WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,",
+        "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER",
+        "DEALINGS IN THE SOFTWARE."
+    };
+    soft_roundrect(482, 212, 573, 288, 15, 0x17171b);
+    int y = 220;
+    for (u32 i = 0; i < sizeof(lines) / sizeof(lines[0]); i++, y += 14) {
+        if (i == 2 || i == 9 || i == 11) y += 2;
+        text(500, y, lines[i], i < 2 ? 0xf5f5f6 : 0xc3c3cc);
+    }
+}
+
+static void setup_screen(enum SetupStep step, const char *name, int theme, int error) {
     desktop_wallpaper();
     soft_roundrect(175, 91, 930, 538, 31, 0x050506);
     soft_roundrect(181, 87, 918, 530, 27, 0x3b3b41);
@@ -2791,79 +2859,166 @@ static void setup_screen(int step, int theme, int error) {
     reference_monitor_icon(214, 124, 0xf3f3f6, 0x101013);
     reference_text(252, 112, "MayOS", 0xf3f3f6, 1);
     text(214, 172, "首次开机设置", 0xa8a8af);
-    const char *steps[] = {"欢迎", "桌面外观", "准备就绪"};
-    for (int i = 0; i < 3; i++) {
-        int y = 230 + i * 58;
-        if (step == i) soft_roundrect(207, y, 204, 46, 12, 0x29292e);
-        soft_roundrect(217, y + 13, 20, 20, 10, i <= step ? 0xd5d5db : 0x45454d);
-        if (i > step) soft_roundrect(218, y + 14, 18, 18, 9, 0x101013);
-        text(251, y + 11, steps[i], i <= step ? 0xf5f5f6 : 0xa5a5ab);
+    const char *steps[SETUP_COUNT] = {"欢迎", "语言", "软件许可", "本机资料",
+                                         "系统更新", "桌面外观", "准备就绪"};
+    for (enum SetupStep i = SETUP_WELCOME; i < SETUP_COUNT; i++) {
+        int y = 215 + i * 52;
+        if (step == i) soft_roundrect(207, y, 204, 42, 12, 0x29292e);
+        soft_roundrect(217, y + 12, 18, 18, 9, i <= step ? 0xd5d5db : 0x45454d);
+        if (i > step) soft_roundrect(218, y + 13, 16, 16, 8, 0x101013);
+        text(250, y + 9, steps[i], i <= step ? 0xf5f5f6 : 0xa5a5ab);
     }
     rect(482, 507, 573, 1, 0x2c2c32);
-    if (step == 0) {
+    if (step == SETUP_WELCOME) {
         large_text(482, 150, "欢迎使用 MayOS", 0xf5f5f6);
-        text(482, 224, "选择适合你的桌面外观，然后开始使用。", 0xb4b4bb);
+        text(482, 224, "完成几个设置步骤，即可进入桌面。", 0xb4b4bb);
         soft_roundrect(482, 285, 506, 110, 18, 0x212126);
         reference_monitor_icon(505, 321, 0xe7e7eb, 0x212126);
         text(552, 310, "MayKernel 桌面", 0xf5f5f6);
         text(552, 345, "文件与设置保存在本机 MayFS。", 0xb4b4bb);
-    } else if (step == 1) {
+    } else if (step == SETUP_LANGUAGE) {
+        large_text(482, 150, "选择系统语言", 0xf5f5f6);
+        text(482, 224, "选择首次设置使用的语言。", 0xb4b4bb);
+        soft_roundrect(482, 279, 506, 83, 16, 0x75757e);
+        soft_roundrect(483, 280, 504, 81, 15, 0x212126);
+        text(505, 296, "简体中文", 0xf5f5f6);
+        text(505, 322, "Simplified Chinese", 0xb4b4bb);
+        text(894, 308, "已选中", 0xf5f5f6);
+    } else if (step == SETUP_LICENSE) {
+        large_text(482, 150, "软件许可协议", 0xf5f5f6);
+        setup_license();
+    } else if (step == SETUP_PROFILE) {
+        large_text(482, 150, "设置本机用户名", 0xf5f5f6);
+        text(482, 224, "此名称用于 MayShell，并存储在本机 MayFS。", 0xb4b4bb);
+        text(482, 273, "用户名", 0xf5f5f6);
+        soft_roundrect(482, 303, 506, 53, 12, 0x85858c);
+        soft_roundrect(483, 304, 504, 51, 11, 0x212126);
+        int end = text(500, 319, name[0] ? name : "may", name[0] ? 0xf5f5f6 : 0xa5a5ab);
+        rect(name[0] ? end + 2 : 499, 319, 1, 18, 0xf5f5f6);
+        text(482, 373, "最多 20 个字母、数字、连字符或下划线。", 0xb4b4bb);
+        text(482, 403, "留空时使用默认名称 may。", 0xb4b4bb);
+    } else if (step == SETUP_UPDATES) {
+        large_text(482, 150, "系统更新", 0xf5f5f6);
+        text(482, 224, "当前版本    " MAYOS_RELEASE, 0xb4b4bb);
+        soft_roundrect(482, 279, 506, 135, 16, 0x212126);
+        text(505, 302, "手动更新", 0xf5f5f6);
+        text(505, 337, "从新版安装镜像启动，并选择试用升级。", 0xb4b4bb);
+        text(505, 368, "检查新版本正常后，用同一镜像确认。", 0xb4b4bb);
+    } else if (step == SETUP_APPEARANCE) {
         large_text(482, 150, "选择桌面外观", 0xf5f5f6);
         text(482, 224, "以后可在设置中随时切换。", 0xb4b4bb);
         setup_card(482, 279, 0x111113, 0x787881, theme == 0, "深色", "黑色与炭灰");
         setup_card(744, 279, 0xeaeaec, 0xa3a3aa, theme == 1, "浅色", "浅灰与白色");
     } else {
         large_text(482, 150, "你的桌面已就绪", 0xf5f5f6);
-        text(482, 224, "开始使用前，MayOS 会保存你选择的外观。", 0xb4b4bb);
-        setup_card(482, 279, theme == 0 ? 0x111113 : 0xeaeaec, 0x85858c, 1,
-                   theme == 0 ? "已选择深色外观" : "已选择浅色外观", "可在设置中更改");
+        text(482, 224, "确认本机资料与桌面外观，然后开始使用。", 0xb4b4bb);
+        soft_roundrect(482, 271, 506, 158, 16, 0x212126);
+        text(505, 292, "系统语言", 0xb4b4bb);
+        text(690, 292, "简体中文", 0xf5f5f6);
+        rect(505, 329, 460, 1, 0x34343a);
+        text(505, 341, "本机用户名", 0xb4b4bb);
+        text(690, 341, name[0] ? name : "may", 0xf5f5f6);
+        rect(505, 378, 460, 1, 0x34343a);
+        text(505, 390, "桌面外观", 0xb4b4bb);
+        text(690, 390, theme == 0 ? "深色" : "浅色", 0xf5f5f6);
     }
     if (error) text(482, 475, "设置未能保存，请重试。", 0xffaf9f);
-    if (step) {
+    if (step != SETUP_WELCOME) {
         soft_roundrect(483, 529, 108, 46, 12, 0x26262c);
         text(519, 541, "返回", 0xe7e7eb);
     }
     soft_roundrect(889, 529, 166, 46, 12, 0xf2f2f4);
-    text(step == 2 ? 935 : 955, 541, step == 2 ? "开始使用" : "继续", 0x151519);
-    text(665, 545, "Enter 继续", 0xa5a5ab);
+    const char *next = step == SETUP_REVIEW ? "开始使用" :
+                       step == SETUP_LICENSE ? "同意并继续" :
+                       step == SETUP_WELCOME ? "开始设置" : "继续";
+    int label_width = step == SETUP_LICENSE ? 80 :
+                      step == SETUP_REVIEW || step == SETUP_WELCOME ? 64 : 32;
+    text(972 - label_width / 2, 541, next, 0x151519);
+    if (step == SETUP_LICENSE) {
+        soft_roundrect(647, 529, 152, 46, 12, 0x26262c);
+        text(675, 541, "拒绝并关机", 0xe7e7eb);
+    } else {
+        text(665, 545, "Enter 继续", 0xa5a5ab);
+    }
     cursor();
     present(pixels);
 }
 
+static int setup_save(const char *name, int theme) {
+    int index = fs_find(0, profile_file);
+    int existing = index >= 0 && profile_valid(&files[index]);
+    if (name[0] && strcmp(name, "may")) {
+        if (!existing && index == -1) index = fs_create(0, profile_file, 0);
+        else if (!existing) return 0;
+        if (index < 0) return 0;
+        u32 start = sizeof(profile_header) - 1;
+        memcpy(files[index].data, profile_header, start);
+        memcpy(files[index].data + start, name, strlen(name));
+        files[index].size = start + strlen(name);
+    } else if (existing) {
+        fs_remove(index);
+    }
+    int previous_theme = dark;
+    dark = theme == 0;
+    if (preferences_save()) {
+        copy(profile_name, name[0] ? name : "may", sizeof(profile_name));
+        return 1;
+    }
+    dark = previous_theme;
+    return 0;
+}
+
 static void installed_first_boot(void) {
-    int step = 0, theme = 0, error = 0, previous = 0;
-    setup_screen(step, theme, error);
-    serial("MayOS: first boot setup ready\n");
+    enum SetupStep step = SETUP_WELCOME;
+    char name[sizeof(profile_name)] = "";
+    if (strcmp(profile_name, "may")) copy(name, profile_name, sizeof(name));
+    int theme = 0, error = 0, previous = 0;
+    setup_screen(step, name, theme, error);
+    serial(setup_prompts[step]);
     for (;;) {
         int key = 0;
         if (input_poll(&mx, &my, &buttons, &key)) {
-            int old_step = step;
+            enum SetupStep old_step = step;
             int click = (buttons & 1) && !(previous & 1);
             previous = buttons;
-            if (step == 1) {
+            if (step == SETUP_PROFILE) {
+                u32 length = strlen(name);
+                if (key == '\b' && length) name[length - 1] = 0;
+                if (profile_character(key) && length + 1 < sizeof(name)) {
+                    name[length] = (char)key;
+                    name[length + 1] = 0;
+                }
+            }
+            if (step == SETUP_APPEARANCE) {
                 if (key == 0x101 || key == '1' || (click && inside(mx, my, 482, 279, 244, 128)))
                     theme = 0;
                 if (key == 0x102 || key == '2' || (click && inside(mx, my, 744, 279, 244, 128)))
                     theme = 1;
             }
-            if (step && (key == '\b' || (click && inside(mx, my, 483, 529, 108, 46))))
+            if (step == SETUP_LICENSE &&
+                (key == 'n' || key == 'N' || (click && inside(mx, my, 647, 529, 152, 46)))) {
+                serial("MayOS: first boot license declined\n");
+                poweroff();
+                step = SETUP_WELCOME;
+            } else if (step != SETUP_WELCOME &&
+                       (key == 27 || (key == '\b' && step != SETUP_PROFILE) ||
+                        (click && inside(mx, my, 483, 529, 108, 46)))) {
                 step--;
-            else if (key == '\n' || (click && inside(mx, my, 889, 529, 166, 46))) {
-                if (step < 2) step++;
+            } else if (key == '\n' || (step == SETUP_LICENSE && (key == 'y' || key == 'Y')) ||
+                       (click && inside(mx, my, 889, 529, 166, 46))) {
+                if (step != SETUP_REVIEW) step++;
                 else {
-                    dark = theme == 0;
-                    if (preferences_save()) {
+                    if (setup_save(name, theme)) {
                         oldbuttons = buttons;
                         serial("MayOS: first boot setup completed\n");
                         return;
                     }
-                    dark = 1;
                     error = 1;
                 }
             }
-            setup_screen(step, theme, error);
-            if (step != old_step && step == 1) serial("MayOS: first boot appearance ready\n");
-            if (step != old_step && step == 2) serial("MayOS: first boot review ready\n");
+            if (step != old_step) error = 0;
+            setup_screen(step, name, theme, error);
+            if (step != old_step) serial(setup_prompts[step]);
         }
         platform_idle();
     }
@@ -2875,6 +3030,7 @@ void kernel_main(u32 magic, u32 info) {
     fs_init();
     preferences_load();
 #ifndef MAYOS_LINUX
+    profile_load();
     if (fs_installed_setup_pending()) installed_first_boot();
 #endif
     terminal_init();

@@ -25,6 +25,9 @@ SNAPSHOT_BYTES = 512 * SECTOR
 FILE_TABLE_BYTES = 48 * 4160
 MAYFS = "4D41594F-532D-4653-8C4D-415946533031"
 ESP = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B"
+SETUP_PROMPTS = tuple(f"MayOS: first boot {step} ready" for step in (
+    "setup", "language", "license", "profile", "updates", "appearance", "review"
+))
 
 
 def command(*args, **kwargs):
@@ -197,18 +200,17 @@ def trial_boot(root, disk, version, ovmf, vars_template):
             deadline = time.monotonic() + 40
             required = {"MayOS: desktop ready", "MayOS: MayFS mounted",
                         f"MayOS Workstation {version} / MayShell"}
-            setup = iter(("MayOS: first boot setup ready", "MayOS: first boot appearance ready",
-                          "MayOS: first boot review ready"))
-            pending = next(setup)
+            handled = set()
             while time.monotonic() < deadline and vm.poll() is None:
                 lines = set(log.read_text(errors="replace").splitlines()) if log.is_file() else set()
                 if required <= lines:
                     return
-                if pending in lines:
+                pending = lines.intersection(SETUP_PROMPTS) - handled
+                if pending:
                     # These keystrokes and the resulting settings affect only the QEMU snapshot.
                     vm.stdin.write(b"sendkey ret 25\n")
                     vm.stdin.flush()
-                    pending = next(setup, None)
+                    handled.update(pending)
                 time.sleep(.1)
             tail = log.read_text(errors="replace")[-3000:] if log.is_file() else ""
             raise ValueError(f"Installed-disk trial failed\n{tail}")
