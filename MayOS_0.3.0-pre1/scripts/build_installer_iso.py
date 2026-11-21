@@ -43,7 +43,7 @@ def module_bytes(path):
 
 def initramfs(output, payload, busybox, version, writer):
     applets, _ = validate_busybox(busybox)
-    required = {"ash", "mount", "sha256sum", "insmod", "sleep", "poweroff"}
+    required = {"sh", "cat", "mount", "sha256sum", "insmod", "sleep", "poweroff"}
     if not required <= set(applets):
         raise ValueError(f"BusyBox lacks required installer applets: {required - set(applets)}")
     with output.open("wb") as compressed, tempfile.TemporaryFile() as archive:
@@ -57,6 +57,8 @@ def initramfs(output, payload, busybox, version, writer):
         for name in ("bin", "dev", "proc", "sys", "installer", "installer/modules"):
             add(name, stat.S_IFDIR | 0o755)
         add("bin/busybox", stat.S_IFREG | 0o755, busybox.read_bytes())
+        for applet in sorted(required):
+            add(f"bin/{applet}", stat.S_IFLNK | 0o777, b"busybox")
         add("init", stat.S_IFREG | 0o755, (ROOT / "linux/installer-init").read_bytes())
         add("installer/disk.img", stat.S_IFREG | 0o644, payload.read_bytes())
         add("installer/payload.sha256", stat.S_IFREG | 0o644,

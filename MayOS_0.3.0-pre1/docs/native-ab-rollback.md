@@ -55,9 +55,32 @@ Specify a new output filename for each operation. Use a MayKernel ISO built
 with the new GPT partition support. Boot the resulting disk as an x86_64
 UEFI hard drive. An upgraded disk offers both slots in GRUB. A failed
 trial leaves no output image and the input image stays byte-for-byte intact.
-This phase runs on the host and writes virtual disk images. Bootable
-installer media, physical targets and BIOS hard-disk installation are
-subsequent phases.
+The host tool writes virtual disk images.
+
+### Bootable installation media
+
+Build MayKernel with `make`, then supply a Linux x86_64 boot kernel and
+its matching installed module tree to `scripts/build_installer_iso.py`.
+The builder also needs static BusyBox, GCC with static libc, GRUB and the
+partitioning tools listed above. It embeds the checked MayKernel image
+and all runtime payloads in the installer ISO.
+
+```sh
+python3 scripts/build_installer_iso.py --iso build/mayos.iso \
+  --sha256 "$MAYOS_SHA256" --kernel "$LINUX_KERNEL" --kernel-version "$LINUX_VERSION"
+```
+
+Boot `build/mayos-installer.iso` and select the console installer. Enter a
+listed disk path, then type the full confirmation shown on screen. The
+installer takes the target exclusively and checks that every byte is
+zero before writing. Once readback passes, remove the ISO and start the
+installed disk in UEFI mode. Use a dedicated empty virtual disk at least
+80 MiB in size with 512-byte logical sectors. Keep the original MayFS
+disk separate when using the host migration procedure.
+
+The installer medium currently handles fresh installs. Existing-disk
+upgrades and rollback use the host commands above. Physical targets and
+BIOS hard-disk installation still need validation.
 
 ## Actual implementation
 
