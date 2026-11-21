@@ -2,6 +2,7 @@
 """Drive the actual installer console, then boot the disk without the ISO."""
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 
 from dual_boot_smoke import BUILD, BootVM
@@ -16,8 +17,9 @@ def main():
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         disk = root / "target.img"
+        target_size = DISK_BYTES + 16 * 1024 * 1024
         with disk.open("xb") as handle:
-            handle.truncate(DISK_BYTES)
+            handle.truncate(target_size)
 
         def start(tag, media):
             vars_path = root / f"{tag}.fd"
@@ -43,7 +45,7 @@ def main():
         assert digest(disk) == before
 
         with disk.open("r+b") as handle:
-            handle.seek(DISK_BYTES // 2)
+            handle.seek(target_size - 1024 * 1024)
             handle.write(b"existing user data")
         before = digest(disk)
         vm = start("installer-media-nonblank", iso)
@@ -57,7 +59,7 @@ def main():
         print("PASS: cancellation and data-bearing disk leave every byte intact")
 
         with disk.open("wb") as handle:
-            handle.truncate(DISK_BYTES)
+            handle.truncate(target_size)
         vm = start("installer-media-install", iso)
         try:
             console(vm)
@@ -65,6 +67,7 @@ def main():
             vm.wait("MayOS installation complete.")
         finally:
             vm.stop()
+        subprocess.run(["sfdisk", "--verify", str(disk)], check=True)
         vm = start("installer-media-hard-disk", None)
         try:
             vm.wait("MayOS: MayFS GPT partition selected")

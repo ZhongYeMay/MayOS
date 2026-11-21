@@ -2,7 +2,6 @@
 """Build an offline bootable installer ISO from local Linux tools."""
 import argparse
 import gzip
-import hashlib
 from pathlib import Path
 import shutil
 import stat
@@ -10,7 +9,7 @@ import subprocess
 import tempfile
 
 from dual_iso import BUILD, ROOT, bootable_iso
-from install_mayos import DISK_BYTES, install
+from install_mayos import install
 from linux import cpio_member, validate_busybox
 from live_upgrade import digest
 
@@ -42,14 +41,11 @@ def module_bytes(path):
     return path.read_bytes()
 
 
-def initramfs(output, payload, busybox, version):
+def initramfs(output, payload, busybox, version, writer):
     applets, _ = validate_busybox(busybox)
-    required = {"ash", "mount", "sha256sum", "dd", "insmod", "sleep", "poweroff"}
+    required = {"ash", "mount", "sha256sum", "insmod", "sleep", "poweroff"}
     if not required <= set(applets):
         raise ValueError(f"BusyBox lacks required installer applets: {required - set(applets)}")
-    blank = hashlib.sha256()
-    for _ in range(DISK_BYTES // (1024 * 1024)):
-        blank.update(bytes(1024 * 1024))
     with output.open("wb") as compressed, tempfile.TemporaryFile() as archive:
         number = 0
 
@@ -65,7 +61,7 @@ def initramfs(output, payload, busybox, version):
         add("installer/disk.img", stat.S_IFREG | 0o644, payload.read_bytes())
         add("installer/payload.sha256", stat.S_IFREG | 0o644,
             f"{digest(payload)}  /installer/disk.img\n".encode())
-        add("installer/blank.sha256", stat.S_IFREG | 0o644, f"{blank.hexdigest()}\n".encode())
+        add("installer/write-disk", stat.S_IFREG | 0o755, writer.read_bytes())
         script = []
         for index, path in enumerate(modules(version)):
             member = f"installer/modules/{index}.ko"
@@ -95,7 +91,10 @@ def main():
         (boot / "grub").mkdir(parents=True)
         disk = work / "disk.img"
         install(args.iso, args.sha256, disk)
-        initramfs(boot / "installer.cpio.gz", disk, args.busybox, args.kernel_version)
+        writer = work / "write-disk"
+        subprocess.run(["gcc", "-O2", "-static", "-Wall", "-Wextra", "-Werror",
+                        str(ROOT / "linux/installer-write-disk.c"), "-o", str(writer)], check=True)
+        initramfs(boot / "installer.cpio.gz", disk, args.busybox, args.kernel_version, writer)
         shutil.copyfile(args.kernel, boot / "installer-linux")
         (boot / "grub/grub.cfg").write_text(
             "serial --unit=0 --speed=115200\n"

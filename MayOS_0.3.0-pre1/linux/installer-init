@@ -9,7 +9,7 @@ exec </dev/console >/dev/console 2>&1
 . /installer/modules.sh
 echo
 echo "MayOS 0.5.1 | Installation and recovery"
-echo "Install MayKernel to an empty 80 MiB target disk."
+echo "Install MayKernel to an empty target disk (at least 80 MiB)."
 echo "The installer runs offline. Other disks stay outside the installation."
 
 eligible() {
@@ -17,7 +17,8 @@ eligible() {
     name=${1#/dev/}
     sys="/sys/class/block/$name"
     [ -r "$sys/size" ] && [ ! -e "$sys/partition" ] || return 1
-    [ "$(cat "$sys/size")" = "163840" ] || return 1
+    blocks="$(cat "$sys/size")"
+    [ "$blocks" -ge 163840 ] && [ "$blocks" -le 268435455 ] || return 1
     [ "$(cat "$sys/ro")" = "0" ] && [ "$(cat "$sys/removable")" = "0" ] || return 1
     [ "$(cat "$sys/queue/logical_block_size")" = "512" ] || return 1
     case "$name" in
@@ -38,7 +39,7 @@ for sys in /sys/class/block/*; do
     disk="/dev/${sys##*/}"
     if eligible "$disk"; then
         model="$(cat "$sys/device/model" 2>/dev/null)"
-        printf '%s  80 MiB  %s\n' "$disk" "$model"
+        printf '%s  %s MiB  %s\n' "$disk" "$((blocks / 2048))" "$model"
     fi
 done
 echo "Enter the target path, or type cancel."
@@ -52,18 +53,8 @@ IFS= read -r answer || abort "Confirmation cancelled."
 eligible "$target" && [ "$device_id" = "$(cat "$sys/dev")" ] ||
     abort "The selected disk changed. Restart the installer."
 
-# Open one device handle. A disconnect or name reuse cannot redirect the write.
-exec 3<>"$target" || abort "Could not open the target."
 sha256sum -c /installer/payload.sha256 || abort "Installation payload failed verification."
-read -r zero_digest </installer/blank.sha256
-actual="$(sha256sum /proc/self/fd/3)" || abort "Could not read the target."
-[ "${actual%% *}" = "$zero_digest" ] || abort "Target contains data. No sectors were written."
-echo "Writing and verifying the installed MayOS disk..."
-dd if=/installer/disk.img of=/proc/self/fd/3 bs=1048576 conv=fsync ||
-    abort "Write failed. Keep this disk disconnected until it can be checked."
-read -r expected ignored </installer/payload.sha256
-actual="$(sha256sum /proc/self/fd/3)" || abort "Disk readback failed."
-[ "${actual%% *}" = "$expected" ] || abort "Disk readback did not match the installation image."
+/installer/write-disk "$target" "$device_id" || abort "Installation did not complete."
 echo "MayOS installation complete. Remove the ISO and boot from the hard disk."
 echo "Press Enter to power off."
 IFS= read -r answer

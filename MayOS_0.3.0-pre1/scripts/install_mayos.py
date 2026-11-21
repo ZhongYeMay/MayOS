@@ -194,7 +194,8 @@ def trial_boot(root, disk, version, ovmf, vars_template):
 
 def clone_installed(source, root):
     source = regular(source)
-    if source.stat().st_size != DISK_BYTES:
+    size = source.stat().st_size
+    if size < DISK_BYTES or size % SECTOR or size // SECTOR > 0x0fffffff:
         raise ValueError("Choose an image created by this installer")
     disk = root / "upgraded.img"
     shutil.copyfile(source, disk)
