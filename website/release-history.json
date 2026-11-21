@@ -2,9 +2,18 @@
   "schema_version": 1,
   "repository": "ZhongYeMay/MayOS",
   "source": "https://github.com/ZhongYeMay/MayOS/releases",
-  "snapshot_date": "2026-11-17",
+  "snapshot_date": "2026-11-21",
   "description": "Published GitHub Releases, including prereleases and source-only previews. Unreleased branches are not releases.",
   "releases": [
+    {
+      "tag": "v0.5.0-pre2",
+      "name": "MayOS 0.5.0-pre2 — MayKernel 驱动预览",
+      "published_at": "2026-11-21T02:09:26Z",
+      "prerelease": true,
+      "body": "## MayOS 0.5.0-pre2 · MayKernel 驱动预览\n\n本次发布提供 MayKernel x86_64 独立 ISO。GRUB 启动镜像已通过 QEMU BIOS 和 OVMF UEFI 回归，建议在虚拟机中使用独立测试磁盘。\n\n- AHCI SATA 和 NVMe 接入 MayFS，已验证写入、缓存刷新和冷启动读回。旧 IDE/ATA 路径也通过回归。\n- RTL8139、E1000 和 E1000e 共用 MayKernel 的轮询网络栈。QEMU 验证了 ARP、DHCP、DNS、UDP 回显和 TCP 重传。\n- ACPI/PCIe 枚举、xHCI 端口检测和 HDA 编解码器探测已通过混合硬件拓扑测试。\n- 此版本包含签名更新开发线的代码。隔离 ATA 更新诊断覆盖 64 KiB 写盘、重启后复验与篡改拒绝。该诊断使用专用构建。\n\nUSB 键鼠输入、VirtIO-net、HDA 音频播放和在线更新安装仍在开发。实体机与 Secure Boot 兼容性有待验证。\n\n下载 ISO、源码或 QEMU 桌面截图后，可用 `SHA256SUMS.txt` 校验文件。Linux 双内核体验可使用现有的 [0.5.0-pre1 双内核镜像](https://github.com/ZhongYeMay/MayOS/releases/tag/v0.5.0-pre1)。\n\n- [MayKernel x86_64 ISO · 23.46 MiB](https://raw.githubusercontent.com/ZhongYeMay/MayOS/d04be69555c794cbc9076f82db9fbb5a41b71469/MayOS-0.5.0-pre2-MayKernel-x86_64.iso)\n- [SHA-256 校验清单](https://raw.githubusercontent.com/ZhongYeMay/MayOS/d04be69555c794cbc9076f82db9fbb5a41b71469/SHA256SUMS.txt)\n- [源码 ZIP](https://raw.githubusercontent.com/ZhongYeMay/MayOS/d04be69555c794cbc9076f82db9fbb5a41b71469/MayOS-0.5.0-pre2-source.zip)\n- [QEMU 桌面截图](https://raw.githubusercontent.com/ZhongYeMay/MayOS/d04be69555c794cbc9076f82db9fbb5a41b71469/MayOS-0.5.0-pre2-desktop-QEMU.png)\n\n- [本版 ISO 的 QEMU 测试](https://github.com/ZhongYeMay/MayOS/actions/runs/44853367083)\n- [驱动适配](https://github.com/ZhongYeMay/MayOS/pull/46)\n- [隔离 ATA 更新诊断](https://github.com/ZhongYeMay/MayOS/actions/runs/44852528736)\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.5.0-pre2",
+      "assets_count": 0
+    },
     {
       "tag": "v0.5.0-pre1",
       "name": "MayOS 0.5.0-pre1 — premium monochrome UI, MayKernel64 + Linux64",
