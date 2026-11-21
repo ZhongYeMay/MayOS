@@ -20,7 +20,9 @@ def modules(version):
                    "nls_iso8859-1", "evdev", "psmouse", "usbhid", "hid_generic"):
         result = subprocess.run(
             ["modprobe", "--set-version", version, "--show-depends", driver],
-            capture_output=True, text=True, check=True)
+            capture_output=True, text=True)
+        if result.returncode:
+            raise ValueError(f"Cannot resolve installer driver {driver}: {result.stderr.strip()}")
         for line in result.stdout.splitlines():
             if line.startswith("builtin "):
                 continue
@@ -129,9 +131,8 @@ def main():
             "set timeout=8\nset default=0\n"
             "menuentry 'Install MayOS' {\n"
             "  insmod all_video\n"
-            "  set gfxmode=1280x720x32,1024x768x32,auto\n"
+            "  set gfxpayload=1280x720x32,1024x768x32,auto\n"
             "  linux /boot/installer-linux console=tty0 quiet nomodeset mayos_gui\n"
-            "  set gfxpayload=keep\n"
             "  initrd /boot/installer.cpio.gz\n}\n"
             "menuentry 'Install MayOS (serial console)' {\n"
             "  linux /boot/installer-linux console=ttyS0,115200 quiet\n"
