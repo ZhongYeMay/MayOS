@@ -28,8 +28,83 @@ eligible() {
 
 abort() {
     echo "$1"
+    if [ "$mounted" = 1 ]; then
+        sync
+        umount /target
+    fi
     echo "Installer stopped. Power off to exit."
     while :; do sleep 60; done
+}
+
+mounted=0
+mount_esp() {
+    case "$name" in
+        nvme*) part="${name}p1" ;;
+        *) part="${name}1" ;;
+    esac
+    [ -e "$sys/$part/dev" ] &&
+        [ "$(cat "$sys/$part/start")" = "2048" ] &&
+        [ "$(cat "$sys/$part/size")" = "131072" ] ||
+        abort "EFI system partition did not match the selected drive."
+    mount -t vfat -o rw,nosuid,nodev,noexec "/dev/$part" /target ||
+        abort "Could not open the installed EFI system partition."
+    mounted=1
+    grep -Fxq 'MayOS EFI layout 1' /target/mayos-installer-v1 ||
+        abort "This installation predates boot-media upgrades."
+}
+
+replace_file() {
+    cp "$1" "$2.new" && sync && mv -f "$2.new" "$2" && sync ||
+        abort "Could not store and flush the requested boot change."
+}
+
+update_slots() {
+    mount_esp
+    if grep -Fxq active_slot=A /target/mayos-active.env; then
+        active=A
+        spare=B
+    elif grep -Fxq active_slot=B /target/mayos-active.env; then
+        active=B
+        spare=A
+    else
+        abort "The confirmed slot is invalid."
+    fi
+    [ -f "/target/slots/$active.elf" ] || abort "The current kernel is missing."
+    case "$answer" in
+        "UPGRADE $target")
+            if grep -Eq '^(trial_slot|attempted_slot)=[AB]$' /target/mayos-trial.env; then
+                abort "Resolve or discard the previous trial before staging."
+            fi
+            sha256sum -c /installer/update.sha256 || abort "Candidate kernel failed verification."
+            wanted="$(sha256sum /installer/update.elf)"
+            actual="$(sha256sum "/target/slots/$active.elf")"
+            [ "${wanted%% *}" != "${actual%% *}" ] || abort "This kernel is already installed."
+            replace_file /installer/update.elf "/target/slots/$spare.elf"
+            readback="$(sha256sum "/target/slots/$spare.elf")"
+            [ "${wanted%% *}" = "${readback%% *}" ] || abort "Candidate readback failed."
+            replace_file "/installer/trial-$spare.env" /target/mayos-trial.env
+            echo "Trial queued. Remove the ISO and boot from the hard disk once."
+            ;;
+        "CONFIRM $target")
+            grep -Fxq "attempted_slot=$spare" /target/mayos-trial.env &&
+                ! grep -Eq '^trial_slot=[AB]$' /target/mayos-trial.env ||
+                abort "The inactive slot has not completed a trial attempt."
+            sha256sum -c /installer/update.sha256 || abort "Candidate kernel failed verification."
+            wanted="$(sha256sum /installer/update.elf)"
+            actual="$(sha256sum "/target/slots/$spare.elf")"
+            [ "${wanted%% *}" = "${actual%% *}" ] || abort "Use the ISO that staged the tested kernel."
+            replace_file "/installer/active-$spare.env" /target/mayos-active.env
+            replace_file /installer/trial-clear.env /target/mayos-trial.env
+            echo "New MayOS slot confirmed."
+            ;;
+        "DISCARD $target")
+            replace_file /installer/trial-clear.env /target/mayos-trial.env
+            echo "Trial discarded. The confirmed slot remains selected."
+            ;;
+        *) abort "Confirmation cancelled." ;;
+    esac
+    umount /target || abort "Could not unmount the EFI system partition."
+    mounted=0
 }
 
 # Modules may register disks asynchronously. Wait briefly for discovery.
@@ -46,15 +121,28 @@ IFS= read -r target || abort "No target selected."
 [ "$target" != cancel ] || abort "Installation cancelled."
 eligible "$target" || abort "Target is outside the supported disk layout."
 device_id="$(cat "$sys/dev")"
-echo "To continue, type INSTALL $target"
+if /installer/write-disk "$target" "$device_id" check >/dev/null 2>&1; then
+    installed=1
+    echo "MayOS installed disk detected."
+    echo "Type UPGRADE $target to stage a trial, DISCARD $target to keep the current slot,"
+    echo "or CONFIRM $target after you have verified that the trial desktop works."
+else
+    installed=0
+    echo "To continue, type INSTALL $target"
+fi
 IFS= read -r answer || abort "Confirmation cancelled."
-[ "$answer" = "INSTALL $target" ] || abort "Confirmation cancelled."
 eligible "$target" && [ "$device_id" = "$(cat "$sys/dev")" ] ||
     abort "The selected disk changed. Restart the installer."
 
-sha256sum -c /installer/payload.sha256 || abort "Installation payload failed verification."
-/installer/write-disk "$target" "$device_id" || abort "Installation did not complete."
-echo "MayOS installation complete. Remove the ISO and boot from the hard disk."
+if [ "$installed" = 1 ]; then
+    /installer/write-disk "$target" "$device_id" check || abort "Existing installation changed."
+    update_slots
+else
+    [ "$answer" = "INSTALL $target" ] || abort "Confirmation cancelled."
+    sha256sum -c /installer/payload.sha256 || abort "Installation payload failed verification."
+    /installer/write-disk "$target" "$device_id" || abort "Installation did not complete."
+    echo "MayOS installation complete. Remove the ISO and boot from the hard disk."
+fi
 echo "Press Enter to power off."
 IFS= read -r answer
 poweroff -f

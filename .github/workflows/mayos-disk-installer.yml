@@ -31,6 +31,11 @@ jobs:
           python3 scripts/build_installer_iso.py --iso build/mayos.iso \
             --sha256 "$(sha256sum build/mayos.iso | cut -d ' ' -f 1)" \
             --kernel "$kernel" --kernel-version "$version"
+          make -j2 INSTALLER_TEST_VERSION=0.5.1-pre2 all
+          python3 scripts/build_installer_iso.py --iso build/mayos.iso \
+            --sha256 "$(sha256sum build/mayos.iso | cut -d ' ' -f 1)" \
+            --kernel "$kernel" --kernel-version "$version" \
+            --output build/mayos-installer-upgrade-test.iso
           python3 scripts/installer_media_smoke.py
       - uses: actions/upload-artifact@v4
         with:

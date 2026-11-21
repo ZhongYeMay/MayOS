@@ -65,16 +65,30 @@ def publish(disk, output):
 
 def boot_config(slots):
     text = ("set default=0\nset timeout=2\n"
+            "insmod loadenv\n"
+            "load_env --file /mayos-active.env active_slot\n"
+            'if [ "$active_slot" = A -o "$active_slot" = B ]; then\n'
+            '  set default="mayos-$active_slot"\n'
+            "fi\n"
+            "load_env --file /mayos-trial.env trial_slot attempted_slot\n"
+            'if [ "$trial_slot" = A -o "$trial_slot" = B ]; then\n'
+            '  set attempted_slot="$trial_slot"\n'
+            "  set trial_slot=\n"
+            "  if save_env --file /mayos-trial.env trial_slot attempted_slot; then\n"
+            '    set default="mayos-$attempted_slot"\n'
+            "  fi\n"
+            "fi\n"
             "set gfxmode=1280x720x32,1024x768x32,auto\n"
             "insmod all_video\n"
             "loadfont (memdisk)/boot/grub/fonts/unicode.pf2\n"
             "terminal_output gfxterm\n")
-    for slot in slots:
+    for slot in slots if len(slots) > 1 else (slots[0], "B"):
         if slot not in ("A", "B"):
             raise ValueError("Invalid boot slot")
-        text += (f"menuentry 'MayOS slot {slot}' {{\n"
+        text += (f"if [ -f /slots/{slot}.elf ]; then\n"
+                 f"menuentry 'MayOS slot {slot}' --id mayos-{slot} {{\n"
                  f"  multiboot /slots/{slot}.elf\n"
-                 "  set gfxpayload=$gfxmode\n  boot\n}\n")
+                 "  set gfxpayload=$gfxmode\n  boot\n}\nfi\n")
     return text
 
 
@@ -82,7 +96,14 @@ def set_boot_files(root, fat, volume, slots):
     config, state = root / "mayos-grub.cfg", root / "mayos-slot.json"
     config.write_text(boot_config(slots))
     state.write_text(json.dumps({"volume": volume, "active": slots[0]}))
-    command("mcopy", "-o", "-i", str(fat), str(config), str(state), "::/")
+    active, trial = root / "mayos-active.env", root / "mayos-trial.env"
+    command("grub-editenv", str(active), "create")
+    command("grub-editenv", str(active), "set", f"active_slot={slots[0]}")
+    command("grub-editenv", str(trial), "create")
+    marker = root / "mayos-installer-v1"
+    marker.write_text("MayOS EFI layout 1\n")
+    command("mcopy", "-o", "-i", str(fat), str(config), str(state),
+            str(active), str(trial), str(marker), "::/")
 
 
 def legacy_snapshots(path):
@@ -210,7 +231,11 @@ def clone_installed(source, root):
     state = root / "read-slot.json"
     command("mcopy", "-i", fat, "::/mayos-slot.json", str(state))
     metadata = json.loads(state.read_text())
-    volume, active = metadata["volume"], metadata["active"]
+    volume = metadata["volume"]
+    env = root / "read-active.env"
+    command("mcopy", "-i", fat, "::/mayos-active.env", str(env))
+    active = command("grub-editenv", str(env), "list", capture_output=True,
+                     text=True).stdout.strip().removeprefix("active_slot=")
     if active not in ("A", "B") or not isinstance(volume, str) or not re.fullmatch(
             r"[0-9A-F]{4}-[0-9A-F]{4}", volume):
         raise ValueError("Invalid MayOS boot metadata")

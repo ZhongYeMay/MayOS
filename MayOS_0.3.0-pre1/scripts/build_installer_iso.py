@@ -9,14 +9,14 @@ import subprocess
 import tempfile
 
 from dual_iso import BUILD, ROOT, bootable_iso
-from install_mayos import install
+from install_mayos import ESP_START, SECTOR, install
 from linux import cpio_member, validate_busybox
 from live_upgrade import digest
 
 
 def modules(version):
     included = set()
-    for driver in ("ata_piix", "ahci", "sd_mod", "nvme"):
+    for driver in ("ata_piix", "ahci", "sd_mod", "nvme", "vfat", "nls_cp437", "nls_iso8859-1"):
         result = subprocess.run(
             ["modprobe", "--set-version", version, "--show-depends", driver],
             capture_output=True, text=True, check=True)
@@ -41,9 +41,10 @@ def module_bytes(path):
     return path.read_bytes()
 
 
-def initramfs(output, payload, busybox, version, writer):
+def initramfs(output, payload, busybox, version, writer, upgrade_assets):
     applets, _ = validate_busybox(busybox)
-    required = {"sh", "cat", "mount", "sha256sum", "insmod", "sleep", "poweroff"}
+    required = {"sh", "cat", "mount", "umount", "sha256sum", "insmod", "sleep",
+                "poweroff", "grep", "cp", "mv", "sync"}
     if not required <= set(applets):
         raise ValueError(f"BusyBox lacks required installer applets: {required - set(applets)}")
     with output.open("wb") as compressed, tempfile.TemporaryFile() as archive:
@@ -54,7 +55,7 @@ def initramfs(output, payload, busybox, version, writer):
             number += 1
             cpio_member(archive, number, name, mode, data)
 
-        for name in ("bin", "dev", "proc", "sys", "installer", "installer/modules"):
+        for name in ("bin", "dev", "proc", "sys", "target", "installer", "installer/modules"):
             add(name, stat.S_IFDIR | 0o755)
         add("bin/busybox", stat.S_IFREG | 0o755, busybox.read_bytes())
         for applet in sorted(required):
@@ -64,6 +65,8 @@ def initramfs(output, payload, busybox, version, writer):
         add("installer/payload.sha256", stat.S_IFREG | 0o644,
             f"{digest(payload)}  /installer/disk.img\n".encode())
         add("installer/write-disk", stat.S_IFREG | 0o755, writer.read_bytes())
+        for asset in upgrade_assets:
+            add(f"installer/{asset.name}", stat.S_IFREG | 0o644, asset.read_bytes())
         script = []
         for index, path in enumerate(modules(version)):
             member = f"installer/modules/{index}.ko"
@@ -96,7 +99,23 @@ def main():
         writer = work / "write-disk"
         subprocess.run(["gcc", "-O2", "-static", "-Wall", "-Wextra", "-Werror",
                         str(ROOT / "linux/installer-write-disk.c"), "-o", str(writer)], check=True)
-        initramfs(boot / "installer.cpio.gz", disk, args.busybox, args.kernel_version, writer)
+        update = work / "update.elf"
+        subprocess.run(["mcopy", "-i", f"{disk}@@{ESP_START * SECTOR}",
+                        "::/slots/A.elf", str(update)], check=True)
+        update_hash = work / "update.sha256"
+        update_hash.write_text(f"{digest(update)}  /installer/update.elf\n")
+        assets = [update, update_hash]
+        for name, assignment in (("active-A.env", "active_slot=A"),
+                                 ("active-B.env", "active_slot=B"),
+                                 ("trial-A.env", "trial_slot=A"),
+                                 ("trial-B.env", "trial_slot=B"),
+                                 ("trial-clear.env", None)):
+            env = work / name
+            subprocess.run(["grub-editenv", str(env), "create"], check=True)
+            if assignment:
+                subprocess.run(["grub-editenv", str(env), "set", assignment], check=True)
+            assets.append(env)
+        initramfs(boot / "installer.cpio.gz", disk, args.busybox, args.kernel_version, writer, assets)
         shutil.copyfile(args.kernel, boot / "installer-linux")
         (boot / "grub/grub.cfg").write_text(
             "serial --unit=0 --speed=115200\n"

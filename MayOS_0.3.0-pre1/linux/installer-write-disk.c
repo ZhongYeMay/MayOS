@@ -51,6 +51,16 @@ static uint32_t crc32(const unsigned char *bytes, size_t size) {
 
 static void put32(unsigned char *bytes, uint32_t value) { memcpy(bytes, &value, 4); }
 static void put64(unsigned char *bytes, uint64_t value) { memcpy(bytes, &value, 8); }
+static uint32_t get32(const unsigned char *bytes) {
+    uint32_t value;
+    memcpy(&value, bytes, 4);
+    return value;
+}
+static uint64_t get64(const unsigned char *bytes) {
+    uint64_t value;
+    memcpy(&value, bytes, 8);
+    return value;
+}
 
 static void header_crc(unsigned char *header) {
     put32(header + 16, 0);
@@ -70,13 +80,53 @@ static void compare(int fd, const unsigned char *expected, unsigned char *buffer
     }
 }
 
+static void verify_layout(int disk, uint64_t sectors) {
+    static const unsigned char esp[16] = {
+        0x28, 0x73, 0x2a, 0xc1, 0x1f, 0xf8, 0xd2, 0x11,
+        0xba, 0x4b, 0x00, 0xa0, 0xc9, 0x3e, 0xc9, 0x3b
+    };
+    static const unsigned char mayfs[16] = {
+        0x4f, 0x59, 0x41, 0x4d, 0x2d, 0x53, 0x53, 0x46,
+        0x8c, 0x4d, 0x41, 0x59, 0x46, 0x53, 0x30, 0x31
+    };
+    static const unsigned char empty[16];
+    unsigned char first[GPT_HEAD_SIZE], last[GPT_TAIL_SIZE];
+    transfer(disk, first, sizeof(first), 0, 0);
+    transfer(disk, last, sizeof(last), (sectors * SECTOR) - sizeof(last), 0);
+    unsigned char *primary = first + SECTOR, *entries = first + 2 * SECTOR;
+    unsigned char *secondary = last + GPT_TABLE_SIZE;
+    uint32_t primary_crc = get32(primary + 16), secondary_crc = get32(secondary + 16);
+    put32(primary + 16, 0);
+    put32(secondary + 16, 0);
+    if (first[450] != 0xee ||
+        memcmp(primary, "EFI PART", 8) || memcmp(secondary, "EFI PART", 8) ||
+        get32(primary + 12) != 92 || get32(secondary + 12) != 92 ||
+        crc32(primary, 92) != primary_crc || crc32(secondary, 92) != secondary_crc ||
+        get64(primary + 24) != 1 || get64(primary + 32) != sectors - 1 ||
+        get64(secondary + 24) != sectors - 1 || get64(secondary + 32) != 1 ||
+        get64(primary + 72) != 2 || get64(secondary + 72) != sectors - 33 ||
+        get32(primary + 80) != 128 || get32(primary + 84) != 128 ||
+        crc32(entries, GPT_TABLE_SIZE) != get32(primary + 88) ||
+        get32(primary + 88) != get32(secondary + 88) ||
+        memcmp(entries, last, GPT_TABLE_SIZE) ||
+        memcmp(entries, esp, 16) || get64(entries + 32) != 2048 ||
+        get64(entries + 40) != 133119 ||
+        memcmp(entries + 128, mayfs, 16) || get64(entries + 160) != 133120 ||
+        get64(entries + 168) != 149503)
+        fail("Existing disk is not a supported MayOS GPT installation.");
+    for (unsigned offset = 256; offset < GPT_TABLE_SIZE; offset += 128)
+        if (memcmp(entries + offset, empty, 16))
+            fail("Additional GPT partitions are outside this upgrade layout.");
+}
+
 int main(int argc, char **argv) {
-    if (argc != 3) fail("Expected a target device and its sysfs device ID.");
+    int check = argc == 4 && !strcmp(argv[3], "check");
+    if (argc != 3 && !check) fail("Expected a target device and its sysfs device ID.");
     unsigned want_major, want_minor;
     char extra;
     if (sscanf(argv[2], "%u:%u%c", &want_major, &want_minor, &extra) != 2)
         fail("Invalid target device ID.");
-    int disk = open(argv[1], O_RDWR | O_EXCL | O_NOFOLLOW | O_CLOEXEC);
+    int disk = open(argv[1], (check ? O_RDONLY : O_RDWR) | O_EXCL | O_NOFOLLOW | O_CLOEXEC);
     struct stat info;
     int sector = 0;
     uint64_t size = 0;
@@ -86,6 +136,10 @@ int main(int argc, char **argv) {
         ioctl(disk, BLKGETSIZE64, &size) || size % SECTOR ||
         size < TEMPLATE_SIZE || size / SECTOR > 0x0fffffffu)
         fail("Target is unavailable, busy or outside the supported disk layout.");
+    if (check) {
+        verify_layout(disk, size / SECTOR);
+        return close(disk) ? EXIT_FAILURE : EXIT_SUCCESS;
+    }
 
     unsigned char *image = malloc(TEMPLATE_SIZE), *buffer = malloc(CHUNK);
     unsigned char *zero = calloc(1, CHUNK);
