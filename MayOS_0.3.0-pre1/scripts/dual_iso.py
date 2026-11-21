@@ -73,7 +73,7 @@ def grub_directory(explicit, platform, command_directory=None):
     raise ValueError(f"missing {platform} GRUB modules; install {package} or set GRUB_{'PC' if platform == 'i386-pc' else 'EFI'}_DIR")
 
 
-def bootable_iso(stage, output, args):
+def bootable_iso(stage, output, args, *, efi_search_file="/boot/mayos.elf"):
     """Use GRUB's normal BIOS builder with a separate EFI standalone image.
 
     grub-mkrescue's -d option accepts one platform, which matters for packages
@@ -113,7 +113,7 @@ def bootable_iso(stage, output, args):
         # changes to the ISO, so insmod continues using x86_64-efi modules.
         embedded = BUILD / "efi-embedded.cfg"
         embedded.write_text(
-            "search --no-floppy --file --set=root /boot/mayos.elf\n"
+            f"search --no-floppy --file --set=root {efi_search_file}\n"
             "configfile /boot/grub/grub.cfg\n")
         standalone = shlex.split(args.grub_mkstandalone)
         subprocess.run(standalone + ["-O", "x86_64-efi", "-d", str(efi),

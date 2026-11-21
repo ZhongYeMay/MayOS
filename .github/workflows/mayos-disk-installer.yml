@@ -7,6 +7,43 @@ permissions:
   contents: read
 
 jobs:
+  bootable-media:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install builder tools and a matched Linux kernel
+        run: |
+          bash scripts/configure-ci-apt-mirror.sh
+          sudo apt-get install -y --no-install-recommends gcc binutils fdisk \
+            grub-common grub-pc-bin grub-efi-amd64-bin xorriso mtools \
+            qemu-system-x86 ovmf python3-pil fonts-noto-cjk fonts-dejavu-core \
+            linux-image-virtual busybox-static kmod zstd
+      - name: Build and exercise the bootable installer
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          make -j2 all
+          kernel=$(find /boot -maxdepth 1 -type f -name 'vmlinuz-*-generic' | sort -V | tail -1)
+          test -n "$kernel"
+          sudo chmod a+r "$kernel"
+          version=${kernel##*/vmlinuz-}
+          python3 scripts/build_installer_iso.py --iso build/mayos.iso \
+            --sha256 "$(sha256sum build/mayos.iso | cut -d ' ' -f 1)" \
+            --kernel "$kernel" --kernel-version "$version"
+          python3 scripts/installer_media_smoke.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mayos-0.5.1-installer-media
+          path: |
+            MayOS_0.3.0-pre1/build/mayos-installer.iso
+            MayOS_0.3.0-pre1/build/mayos-installer.iso.sha256
+            MayOS_0.3.0-pre1/build/mayos-installer.iso.boot.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mayos-installer-media-logs
+          path: MayOS_0.3.0-pre1/build/installer-media-*.log
   install:
     runs-on: ubuntu-24.04
     timeout-minutes: 15

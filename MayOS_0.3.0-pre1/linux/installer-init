@@ -1,0 +1,71 @@
+#!/bin/busybox sh
+export PATH=/bin
+busybox --install -s /bin
+mount -t devtmpfs devtmpfs /dev || exit 1
+mount -t proc proc /proc || exit 1
+mount -t sysfs sysfs /sys || exit 1
+exec </dev/console >/dev/console 2>&1
+
+. /installer/modules.sh
+echo
+echo "MayOS 0.5.1 | Installation and recovery"
+echo "Install MayKernel to an empty 80 MiB target disk."
+echo "The installer runs offline. Other disks stay outside the installation."
+
+eligible() {
+    [ -b "$1" ] || return 1
+    name=${1#/dev/}
+    sys="/sys/class/block/$name"
+    [ -r "$sys/size" ] && [ ! -e "$sys/partition" ] || return 1
+    [ "$(cat "$sys/size")" = "163840" ] || return 1
+    [ "$(cat "$sys/ro")" = "0" ] && [ "$(cat "$sys/removable")" = "0" ] || return 1
+    [ "$(cat "$sys/queue/logical_block_size")" = "512" ] || return 1
+    case "$name" in
+        sd[a-z]|vd[a-z]|nvme[0-9]n[0-9]) ;;
+        *) return 1 ;;
+    esac
+}
+
+abort() {
+    echo "$1"
+    echo "Installer stopped. Power off to exit."
+    while :; do sleep 60; done
+}
+
+# Modules may register disks asynchronously. Wait briefly for discovery.
+sleep 2
+for sys in /sys/class/block/*; do
+    disk="/dev/${sys##*/}"
+    if eligible "$disk"; then
+        model="$(cat "$sys/device/model" 2>/dev/null)"
+        printf '%s  80 MiB  %s\n' "$disk" "$model"
+    fi
+done
+echo "Enter the target path, or type cancel."
+IFS= read -r target || abort "No target selected."
+[ "$target" != cancel ] || abort "Installation cancelled."
+eligible "$target" || abort "Target is outside the supported disk layout."
+device_id="$(cat "$sys/dev")"
+echo "To continue, type INSTALL $target"
+IFS= read -r answer || abort "Confirmation cancelled."
+[ "$answer" = "INSTALL $target" ] || abort "Confirmation cancelled."
+eligible "$target" && [ "$device_id" = "$(cat "$sys/dev")" ] ||
+    abort "The selected disk changed. Restart the installer."
+
+# Open one device handle. A disconnect or name reuse cannot redirect the write.
+exec 3<>"$target" || abort "Could not open the target."
+sha256sum -c /installer/payload.sha256 || abort "Installation payload failed verification."
+read -r zero_digest </installer/blank.sha256
+actual="$(sha256sum /proc/self/fd/3)" || abort "Could not read the target."
+[ "${actual%% *}" = "$zero_digest" ] || abort "Target contains data. No sectors were written."
+echo "Writing and verifying the installed MayOS disk..."
+dd if=/installer/disk.img of=/proc/self/fd/3 bs=1048576 conv=fsync ||
+    abort "Write failed. Keep this disk disconnected until it can be checked."
+read -r expected ignored </installer/payload.sha256
+actual="$(sha256sum /proc/self/fd/3)" || abort "Disk readback failed."
+[ "${actual%% *}" = "$expected" ] || abort "Disk readback did not match the installation image."
+echo "MayOS installation complete. Remove the ISO and boot from the hard disk."
+echo "Press Enter to power off."
+IFS= read -r answer
+poweroff -f
+while :; do sleep 60; done
