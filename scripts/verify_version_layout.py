@@ -19,7 +19,7 @@ legacy=ROOT/catalog["legacy_symlink"]
 assert legacy.is_symlink(),"Legacy build alias must be a symlink, not duplicated source"
 assert legacy.resolve()==active_dir.resolve(),"Legacy build alias does not point to the active version"
 assert (legacy/"Makefile").is_file()
-assert (legacy/"scripts/installer_media_smoke.py").is_file()
+assert (legacy/"scripts/smoke.py").is_file()
 expected={x["directory"]:x for x in catalog["released"]}
 found={x.name for x in (ROOT/"versions").iterdir() if x.is_dir()}
 assert found==set(expected)|{active}, ("unexpected/missing release directories", found)
