@@ -1,0 +1,3 @@
+16af9c40c738fb3d2e1cdd71b83e1ca2e458c07a15914aa9e49a45cb70ef037c  MayOS-0.5.2-pre3-MayKernel-x86_64.iso
+1f0df9e77370f4cc8d92b16f581f0662114cf14f83112a25ea91d8f25e8b5d7a  MayOS-0.5.2-pre3-hardware-QEMU.mp4
+bcbdfa1551265c332a20355dafc83df066bedd5dd67008e3ccc48c62897c02e0  MayOS-0.5.2-pre3-source.zip
