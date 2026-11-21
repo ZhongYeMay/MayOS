@@ -1,0 +1,40 @@
+name: Verify MayOS Live ISO A/B upgrade
+
+on:
+  push:
+    branches: [feat/mayos-live-ab-upgrade]
+  pull_request:
+    paths:
+      - MayOS_0.3.0-pre1/scripts/live_upgrade*.py
+      - .github/workflows/live-ab-upgrade.yml
+
+permissions:
+  contents: read
+
+jobs:
+  published-iso-upgrade:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install virtual machine tools
+        run: |
+          bash scripts/configure-ci-apt-mirror.sh
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 python3-pil
+      - name: Download and verify the two published MayKernel ISOs
+        run: |
+          set -euo pipefail
+          curl --fail --retry 3 --location --output pre1.iso \
+            https://github.com/ZhongYeMay/MayOS/releases/download/v0.5.0-pre1/MayOS-0.5.0-pre1-MayKernel-x86_64.iso
+          curl --fail --retry 3 --location --output pre2.iso \
+            https://raw.githubusercontent.com/ZhongYeMay/MayOS/d04be69555c794cbc9076f82db9fbb5a41b71469/MayOS-0.5.0-pre2-MayKernel-x86_64.iso
+          printf '%s\n' \
+            'c097d15fb5ae02a6fdb6fb467bae4c23667032cdb816d3365aa09b290cd68aca  pre1.iso' \
+            '7cd60fcbc0cf8596071465a82736c63bf25166d7051eb14771bc735f96a709c9  pre2.iso' | sha256sum -c -
+      - name: Exercise upgrade and rollback on a real BIOS guest
+        run: python3 MayOS_0.3.0-pre1/scripts/live_upgrade_smoke.py pre1.iso pre2.iso
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-ab-upgrade-qemu-logs
+          path: MayOS_0.3.0-pre1/build/live-upgrade-*.log
