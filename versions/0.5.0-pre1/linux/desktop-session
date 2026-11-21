@@ -1,0 +1,12 @@
+#!/bin/sh
+# Invoked on tty1 by BusyBox init. ttyS0 always has a separate Linux shell.
+case " $(cat /proc/cmdline) " in
+    *" mayos.desktop=0 "*) exec /bin/sh -l ;;
+esac
+printf 'Starting MayOS Desktop as a Linux userspace process...\n'
+/bin/mayos-desktop
+status=$?
+printf '\nMayOS Desktop stopped (status %s). Starting Linux text fallback.\n' "$status"
+printf 'See /run/mayos-desktop.log; type /bin/mayos-desktop to retry.\n'
+printf 'MayOS Linux: desktop stopped (status %s); tty1 text fallback active.\n' "$status" > /dev/ttyS0
+exec /bin/sh -l

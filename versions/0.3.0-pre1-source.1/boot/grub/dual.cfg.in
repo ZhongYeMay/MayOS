@@ -1,0 +1,31 @@
+# BIOS and x86_64 UEFI use the same menu; kernels have separate boot protocols.
+set timeout_style=menu
+set timeout=5
+set default=mayos
+set gfxmode=1024x768x32
+insmod all_video
+
+serial --unit=0 --speed=115200
+terminal_input console serial
+terminal_output console serial
+
+menuentry "MayOS - custom kernel (desktop)" --id mayos {
+    set gfxpayload=1024x768x32
+    multiboot /boot/mayos.elf
+    boot
+}
+
+menuentry "Linux @LINUX_VERSION@ - desktop (x86_64)" --id linux {
+    set gfxpayload=1024x768x32
+    linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=1 video=efifb:1024x768-32 panic=10
+    initrd /boot/linux/initramfs.cpio.gz
+    boot
+}
+
+menuentry "Linux @LINUX_VERSION@ - rescue shell (x86_64)" --id linux-rescue {
+    # EFI has no legacy VGA text mode; Linux fbcon supplies the rescue console.
+    set gfxpayload=1024x768x32
+    linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=0 video=efifb:1024x768-32 panic=10
+    initrd /boot/linux/initramfs.cpio.gz
+    boot
+}

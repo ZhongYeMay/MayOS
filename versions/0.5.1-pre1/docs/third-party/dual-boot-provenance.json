@@ -1,0 +1,25 @@
+{
+  "busybox": {
+    "version": "1.36.1",
+    "source_package": "1:1.36.1-6ubuntu3.1",
+    "binary_sha256": "d49b344407a95e3e3198db3ac77d9974bf2398ea0c9723ebdeaa46490bf96d41",
+    "binary_size": 1210216,
+    "arch": "x86_64",
+    "linkage": "static musl",
+    "configuration": "busybox.config",
+    "source_dsc": "sources/busybox_1.36.1-6ubuntu3.1.dsc"
+  },
+  "musl": {
+    "version": "1.2.4-2",
+    "source_dsc": "sources/musl_1.2.4-2.dsc"
+  },
+  "grub": {
+    "version": "2.12-1ubuntu7.3",
+    "source_dsc": "sources/grub2_2.12-1ubuntu7.3.dsc",
+    "platforms": [
+      "i386-pc",
+      "x86_64-efi"
+    ]
+  },
+  "verification": "Each source archive was verified against SHA256 and size fields in its .dsc; apt retrieved .dsc from authenticated Ubuntu package metadata."
+}
