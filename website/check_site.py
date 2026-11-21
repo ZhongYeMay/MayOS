@@ -62,6 +62,10 @@ for page in ROOT.glob("*.html"):
 assert {"index.html", "demos.html", "download.html", "requirements.html", "deployment.html"} <= set(docs)
 assert 'href="deployment.html"' in docs["download.html"][1]
 assert 'id="latest-dual-installer"' in docs["download.html"][1]
+assert 'v0.5.2-pre4-dual-installer-test1' in docs['download.html'][1]
+assert 'v0.5.2-pre4-dual-installer-test1' in docs['deployment.html'][1]
+assert 'MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso' in docs['deployment.html'][1]
+assert 'download.html#latest-dual-installer' in docs['index.html'][1]
 assert "0.5.2-pre4" in docs["deployment.html"][1]
 assert "0.5.2-pre2" in docs["deployment.html"][1]
 assert "QEMU" in docs["deployment.html"][1]
