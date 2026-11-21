@@ -28,7 +28,7 @@ FS_POWERLOSS_SELFTEST ?= 0
 ifeq ($(FS_POWERLOSS_SELFTEST),1)
 CFLAGS += -DMAYOS_FS_POWERLOSS_SELFTEST
 endif
-OBJECTS := build/boot64.o build/core.o build/acpi.o build/pci.o build/mmio.o build/ahci.o build/nvme.o build/xhci.o build/e1000.o build/hda.o build/fs.o build/gui.o build/galgame.o build/update.o build/net.o build/net_ipv4.o build/net_dhcp.o build/sha256.o build/net_tcp.o build/net_tcp_retry.o build/security_clock.o build/security_entropy.o build/security_tls.o build/security_tls_provider.o
+OBJECTS := build/boot64.o build/core.o build/acpi.o build/pci.o build/mmio.o build/ahci.o build/nvme.o build/xhci.o build/e1000.o build/hda.o build/fs.o build/gui.o build/cursor.o build/galgame.o build/update.o build/net.o build/net_ipv4.o build/net_dhcp.o build/sha256.o build/net_tcp.o build/net_tcp_retry.o build/security_clock.o build/security_entropy.o build/security_tls.o build/security_tls_provider.o
 
 # This is an OPTIONAL vendor-link TEST, not an HTTPS enable switch.
 # BEARSSL_SOURCE must be a locally checked-out, pinned upstream source tree.
@@ -195,7 +195,9 @@ build/ahci.o: kernel/ahci.h kernel/pci.h
 build/nvme.o: kernel/nvme.h kernel/pci.h kernel/mmio.h
 build/xhci.o: kernel/xhci.h kernel/pci.h kernel/mmio.h kernel/task_manager.h
 build/mmio.o: kernel/mmio.h
-build/gui.o: kernel/xhci.h kernel/nvme.h
+build/gui.o: kernel/xhci.h kernel/nvme.h kernel/cursor.h
+build/core.o: kernel/cursor.h
+build/cursor.o: kernel/cursor.h kernel/cursor_inflate.h
 build/core.o: kernel/xhci.h kernel/acpi.h
 build/e1000.o: kernel/e1000.h kernel/pci.h
 build/net.o: kernel/pci.h kernel/e1000.h

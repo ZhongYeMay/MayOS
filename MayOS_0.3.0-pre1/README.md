@@ -143,6 +143,19 @@ python3 scripts/linux.py build --version 7.3.1 --offline --rebuild --jobs 4
 
 ## 桌面操作
 
+### 0.5.2-pre4 Windows 鼠标指针
+
+- 打开「设置 → 个性化 → 鼠标指针」，可切换黑白样式、更改大小、预览并应用自定义指针。恢复默认可随时撤销。自定义指针使用文件里的热点和透明度，ANI 按文件定义的帧顺序与停留时间播放。
+- 文档中的 `Cursor.cur`、`Cursor.ani` 与旧版 `Cursor.ppm` 都能直接选择。MayFS 单文件上限为 4095 字节。更大的 Windows 文件可在构建机用 `xorriso` 导入一份新的启动镜像。
+
+```sh
+python3 scripts/import_cursor.py build/mayos.iso tests/cursors/Pulse.ani MayOS-Pointer.iso
+```
+
+从新镜像启动后选择「镜像导入」，预览并应用。原始 ISO 和指针文件会保留。MayKernel64 在可写 MayFS 上保存选择，镜像导入的指针仍需使用含原文件的镜像。Linux64 在当前会话应用。
+
+支持常见位图与非隔行 PNG 封装的 CUR，以及嵌入 CUR 或 ICO 帧的 ANI。镜像导入上限为 256 KiB，ANI 支持最多 24 帧和 96 个播放步骤。支持桌面的普通指针，Windows 指针方案及各状态的单独映射留待后续。
+
 ### 0.5.2-pre3 现代 x86-64 硬件试用
 
 - MayKernel64 支持直连 xHCI 根端口、符合 USB HID Boot Protocol 的有线键盘和相对移动鼠标。保留传统 PS/2 输入路径；固件明确标记没有 8042 时跳过 PS/2。

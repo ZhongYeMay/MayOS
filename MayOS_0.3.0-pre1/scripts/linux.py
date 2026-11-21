@@ -58,6 +58,9 @@ INPUT_FILES = {
     "boot_brand_sha256": ROOT / "assets/limine-mayos-brand.png",
     "explorer_history_sha256": ROOT / "kernel/explorer_history.h",
     "desktop_fs_sha256": ROOT / "kernel/fs.c",
+    "desktop_cursor_sha256": ROOT / "kernel/cursor.c",
+    "desktop_cursor_header_sha256": ROOT / "kernel/cursor.h",
+    "desktop_cursor_inflate_sha256": ROOT / "kernel/cursor_inflate.h",
     "desktop_core_header_sha256": ROOT / "kernel/core.h",
     "framebuffer_adapter_sha256": ROOT / "kernel/framebuffer.h",
     "font_core_source_sha256": ROOT / "kernel/core.c",
@@ -500,6 +503,7 @@ def build(args: argparse.Namespace) -> dict:
              "-I" + str(ROOT / "kernel"), "-I" + str(ROOT / "build"),
              "-isystem", str(OUT / "headers/include"),
              str(ROOT / "linux/desktop.c"), str(ROOT / "kernel/fs.c"),
+             str(ROOT / "kernel/cursor.c"),
              str(ROOT / "kernel/gui.c"), str(task_library), "-o", str(OUT / "mayos-desktop")])
         validate_static_elf(OUT / "mayos-desktop")
     kernel = output / "arch/x86/boot/bzImage"

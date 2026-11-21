@@ -1,6 +1,7 @@
 #include "cat_image.h"
 #include "boot_logo.h"
 #include "core.h"
+#include "cursor.h"
 #include "font.h"
 #include "locale.h"
 #define MAY_IME_RENDER
@@ -169,10 +170,13 @@ static void profile_load(void) {
 }
 #endif
 static int draw_clip_active, draw_clip_left, draw_clip_top, draw_clip_right, draw_clip_bottom;
-/* 0 = black square, 1 = white square, 2 = custom Documents/Cursor.ppm. */
-static int cursor_style = 0;
-static int custom_cursor_width = 0, custom_cursor_height = 0;
-static u32 custom_cursor[16 * 16];
+/* Saved style 2 remains the legacy custom style. The source is stored separately. */
+enum { POINTER_PPM, POINTER_CUR, POINTER_ANI, POINTER_ISO, POINTER_SOURCES };
+static const char *const cursor_source_names[] = {"Cursor.ppm", "Cursor.cur", "Cursor.ani", "ISO"};
+static int cursor_style, cursor_active_source, cursor_choice = POINTER_CUR, desktop_options;
+static u32 cursor_started, cursor_preview_start;
+static MayCursor custom_cursor, preview_cursor;
+static void draw_pointer_frame(const MayCursorFrame *frame, int x, int y, int side);
 /* Parse bounded, plain-text P3 image tokens; "#..." comments are supported. */
 static int cursor_ppm_int(const u8 **at, const u8 *end) {
     while (*at < end) {
@@ -192,7 +196,7 @@ static int cursor_ppm_int(const u8 **at, const u8 *end) {
     }
     return n;
 }
-static int cursor_image_load(int create_sample) {
+static int cursor_ppm_load(MayCursor *out, int create_sample) {
     int i = fs_find(1, "Cursor.ppm");
     if (i < 0 && create_sample) {
         /* Create a sample only on explicit user selection, not at cold boot.
@@ -226,19 +230,75 @@ static int cursor_image_load(int create_sample) {
     int peak = cursor_ppm_int(&at, end);
     if (width < 1 || width > 16 || height < 1 || height > 16 || peak != 255)
         return 0;
-    u32 decoded[16 * 16];
+    MayCursorFrame *frame = &out->frames[0];
     for (int n = 0; n < width * height; n++) {
         int red = cursor_ppm_int(&at, end);
         int green = cursor_ppm_int(&at, end);
         int blue = cursor_ppm_int(&at, end);
         if (red < 0 || red > 255 || green < 0 || green > 255 ||
             blue < 0 || blue > 255) return 0;
-        decoded[n] = ((u32)red << 16) | ((u32)green << 8) | (u32)blue;
+        u32 rgb = (u32)red << 16 | (u32)green << 8 | (u32)blue;
+        frame->pixels[n] = rgb == 0xff00ff ? 0 : 0xff000000u | rgb;
     }
-    memcpy(custom_cursor, decoded, (u32)(width * height) * sizeof(u32));
-    custom_cursor_width = width;
-    custom_cursor_height = height;
+    frame->width = (u16)width;
+    frame->height = (u16)height;
+    frame->hotspot_x = frame->hotspot_y = 0;
+    out->count = out->steps = out->duration = 1;
+    out->step_time[0] = 1;
+    out->sequence[0] = 0;
     return 1;
+}
+
+static int cursor_source_load(int source, MayCursor *out, int sample) {
+    out->count = out->steps = out->duration = 0;
+    if (source == POINTER_PPM) return cursor_ppm_load(out, sample);
+    if (source == POINTER_ISO) {
+        u32 size;
+        const u8 *data = platform_pointer_asset(&size);
+        return may_cursor_decode(data, size, out);
+    }
+    int index = fs_find(1, cursor_source_names[source]);
+    if (index < 0 || files[index].dir) return 0;
+    const u8 *data = files[index].data;
+    u32 size = files[index].size;
+    if (size < 4 || (source == POINTER_CUR ? data[0] || data[1] || data[2] != 2 || data[3] :
+                    data[0] != 'R' || data[1] != 'I' || data[2] != 'F' || data[3] != 'F')) return 0;
+    return may_cursor_decode(data, size, out);
+}
+
+static const char pointer_record[] = "MayOS-Pointer.txt";
+static const char pointer_magic[] = "MAYCUR1\n";
+
+static int cursor_pref_valid(const File *file) {
+    if (file->dir || file->size != sizeof(pointer_magic)) return 0;
+    for (u32 i = 0; i < sizeof(pointer_magic) - 1; i++)
+        if (file->data[i] != (u8)pointer_magic[i]) return 0;
+    u8 source = file->data[sizeof(pointer_magic) - 1];
+    return source >= '0' && source < '0' + POINTER_SOURCES;
+}
+
+static int cursor_source_saved(void) {
+    int index = fs_find(0, pointer_record);
+    return index >= 0 && cursor_pref_valid(&files[index]) ?
+        files[index].data[sizeof(pointer_magic) - 1] - '0' : POINTER_PPM;
+}
+
+static int cursor_source_save(int source) {
+    int index = fs_find(0, pointer_record);
+    if (index < 0 && source == POINTER_PPM) return 1;
+    if (index < 0) index = fs_create(0, pointer_record, 0);
+    else if (!cursor_pref_valid(&files[index])) return 0;
+    if (index < 0) return 0;
+    memcpy(files[index].data, pointer_magic, sizeof(pointer_magic) - 1);
+    files[index].data[sizeof(pointer_magic) - 1] = (u8)('0' + source);
+    files[index].size = sizeof(pointer_magic);
+    return 1;
+}
+
+static void cursor_select(int source, int sample) {
+    cursor_choice = source;
+    cursor_preview_start = ticks;
+    cursor_source_load(source, &preview_cursor, sample);
 }
 #define MAYOS_PREFS_MAGIC 0x4d505246u
 static int preferences_save(void) {
@@ -266,9 +326,17 @@ static void preferences_load(void) {
     high_contrast = (int)(raw[6] & 1u);
     cursor_style = (int)((raw[6] >> 8) & 3u);
     display_set_scale_mode((int)((raw[6] >> 16) & 3u));
-    if (cursor_style == 2 && !cursor_image_load(0)) {
-        cursor_style = 0;
-        serial("MayOS: invalid custom pointer; using black square\n");
+    if (cursor_style == 2) {
+        cursor_active_source = cursor_source_saved();
+        if (cursor_source_load(cursor_active_source, &custom_cursor, 0)) {
+            cursor_started = ticks;
+            serial("MayOS: custom pointer restored: ");
+            serial(cursor_source_names[cursor_active_source]);
+            serial("\n");
+        } else {
+            cursor_style = 0;
+            serial("MayOS: custom pointer unavailable; using default\n");
+        }
     }
     serial("MayOS: desktop preferences applied\n");
 }
@@ -1779,6 +1847,71 @@ static void frame(int id) {
     if (high_contrast)
         border(w->x + 2, w->y + 2, w->w - 4, w->h - 4, line);
 }
+static const char *pointer_label(const char *zh, const char *en) {
+    return display_language == MAY_ZH_HANS || display_language == MAY_ZH_HANT ? zh : en;
+}
+
+/* Keep the legacy desktop controls and Windows pointer choices in one Settings tab. */
+static void personalization(int x, int y, int width) {
+    heading_text(x, y - 8, pointer_label("个性化", "Personalization"), ink);
+    button(x, y + 33, 142, pointer_label("鼠标指针", "Mouse pointer"), !desktop_options);
+    button(x + 154, y + 33, 142, pointer_label("桌面", "Desktop"), desktop_options);
+    if (desktop_options) {
+        text(x, y + 81, pointer_label("桌面背景", "Background"), ink);
+        const char *styles[] = {pointer_label("柔和渐变", "Gradient"), pointer_label("纯色背景", "Solid"),
+                                pointer_label("网格背景", "Grid")};
+        for (int i = 0; i < 3; i++)
+            button(x + i * 154, y + 108, 142, styles[i], desktop_style == i);
+        text(x, y + 158, pointer_label("桌面版本标识", "Desktop version label"), ink);
+        button(x, y + 186, 142, pointer_label("显示", "Show"), show_brand);
+        button(x + 154, y + 186, 142, pointer_label("隐藏", "Hide"), !show_brand);
+        button(x, y + 290, 174, pointer_label("恢复默认设置", "Restore defaults"), 0);
+        return;
+    }
+    text(x, y + 80, pointer_label("样式", "Style"), muted);
+    button(x + 96, y + 75, 128, pointer_label("黑色指针", "Dark pointer"), cursor_style == 0);
+    button(x + 230, y + 75, 128, pointer_label("白色指针", "Light pointer"), cursor_style == 1);
+    button(x + 364, y + 75, 148, pointer_label("恢复默认", "Restore default"), 0);
+    text(x, y + 118, pointer_label("大小", "Size"), muted);
+    const char *sizes[] = {pointer_label("小", "Small"), pointer_label("标准", "Standard"),
+                           pointer_label("大", "Large")};
+    for (int i = 0; i < 3; i++)
+        button(x + 96 + i * 101, y + 113, 94, sizes[i], pointer_size == i);
+
+    int card_y = y + 158;
+    ui_card(x, card_y, width, 155, 16, bg);
+    text(x + 14, card_y + 9, pointer_label("自定义指针", "Custom pointer"), ink);
+    const char *sources[] = {"Cursor.ppm", "Cursor.cur", "Cursor.ani",
+                             pointer_label("镜像导入", "ISO import")};
+    for (int i = 0; i < POINTER_SOURCES; i++)
+        button(x + 14 + i % 2 * 142, card_y + 38 + i / 2 * 36, 133,
+               sources[i], cursor_choice == i);
+
+    int preview_x = x + width - 170, preview_y = card_y + 18;
+    ui_card(preview_x, preview_y, 150, 115, 10, panel);
+    for (int row = 0; row < 5; row++)
+        for (int col = 0; col < 8; col++)
+            rect(preview_x + 10 + col * 16, preview_y + 10 + row * 16, 16, 16,
+                 (row + col) & 1 ? surface_high : selected_fill);
+    if (preview_cursor.count) {
+        u32 index = may_cursor_frame(&preview_cursor, ticks - cursor_preview_start);
+        const MayCursorFrame *frame = &preview_cursor.frames[index];
+        draw_pointer_frame(frame, preview_x + 74, preview_y + 45, 36);
+        text(preview_x + 10, preview_y + 93, preview_cursor.steps > 1 ?
+            pointer_label("动画预览", "Animated preview") : pointer_label("静态预览", "Static preview"), muted);
+    } else {
+        text(preview_x + 10, preview_y + 93, pointer_label("没有预览", "No preview"), muted);
+    }
+    text(x + 14, card_y + 116, preview_cursor.count ?
+         pointer_label("点击应用以更换指针", "Apply to change the pointer") :
+         pointer_label("文件缺失或格式不支持", "Missing or unsupported file"), muted);
+    button(x + width - 138, y + 326, 138, pointer_label("应用指针", "Apply pointer"),
+           preview_cursor.count != 0);
+    text(x, y + 333, cursor_style == 2 && cursor_active_source == cursor_choice ?
+         pointer_label("当前使用此自定义指针", "Current custom pointer") :
+         pointer_label("CUR、ANI 或旧版 PPM", "CUR, ANI or legacy PPM"), muted);
+}
+
 static void settings(Window *w) {
     int x = w->x, y = w->y, cx = x + 264, cy = y + 53, cw = w->w - 286;
     rect(x + 1, y + 36, 240, w->h - 38, dark ? 0x080809 : 0xf7f7f9);
@@ -1788,7 +1921,7 @@ static void settings(Window *w) {
     symbol(x + 28, y + 90, 4, 15, muted);
     text(x + 51, y + 91, L(SEARCH_SETTINGS), muted);
     const char *tabs[] = {L(GENERAL), L(DISPLAY), L(SOUND), L(NETWORK),
-                          L(PRIVACY), L(UPDATES), L(ABOUT), L(LANG_REGION)};
+                          pointer_label("个性化", "Personalization"), L(UPDATES), L(ABOUT), L(LANG_REGION)};
     const int tab_icons[] = {1, 11, 7, 8, 12, 10, 10, 4};
     for (int i = 0; i < 8; i++) {
         int yy = y + 132 + i * 36;
@@ -1964,44 +2097,7 @@ static void settings(Window *w) {
         text(cx, cy + 479, "完整许可与对应源码见发行包的 licenses 文档。", muted);
         text(cx, cy + 513, "MayOS Team 2023 - 2026.", ink);
     } else {
-        text(cx, cy, "DESKTOP / POINTER", accent);
-        large_text(cx, cy + 26, "桌面与指针", ink);
-        text(cx, cy + 77, "可随时预览；无需重新启动桌面。", muted);
-        text(cx, cy + 112, "桌面背景", ink);
-        const char *styles[] = {"柔和渐变", "纯色背景", "网格背景"};
-        for (int i = 0; i < 3; i++) {
-            int px = cx + i * 176;
-            roundrect(px, cy + 141, 160, 100, i == desktop_style ? selected_fill : bg);
-            rect(px + 11, cy + 152, 138, 58, dark ? 0x24202b : 0xe8e1ec);
-            if (i == 0)
-                for (int j = 0; j < 58; j += 4)
-                    rect(px + 11, cy + 152 + j, 138, 4,
-                         blend(dark ? 0x101013 : 0xf2f2f3,
-                               dark ? 0x35353a : 0xd4d4d9, (u32)j * 255 / 58));
-            if (i == 2)
-                for (int j = 0; j < 138; j += 23)
-                    rect(px + 11 + j, cy + 152, 1, 58, accent);
-            text(px + 19, cy + 215, styles[i], ink);
-            if (desktop_style == i) circle(px + 148, cy + 150, 5, accent);
-        }
-        text(cx, cy + 260, "鼠标指针大小", ink);
-        const char *pointers[] = {"小", "标准", "大"};
-        for (int i = 0; i < 3; i++)
-            button(cx + i * 154, cy + 298, 142, pointers[i], pointer_size == i);
-        text(cx, cy + 343, "鼠标指针样式", ink);
-        const char *shapes[] = {"■ 黑色方块", "□ 白色方块", "自定义图片"};
-        for (int i = 0; i < 3; i++)
-            button(cx + i * 168, cy + 376, 158, shapes[i], cursor_style == i);
-        text(cx, cy + 412, "自定义：文档/Cursor.ppm（P3，最大16×16）", muted);
-        text(cx, cy + 440, "桌面版本标识", ink);
-        button(cx, cy + 455, 130, "显示", show_brand);
-        button(cx + 144, cy + 455, 130, "隐藏", !show_brand);
-        button(cx, cy + 495, 145, "恢复默认设置", 0);
-#ifdef MAYOS_LINUX
-        text(cx + 168, cy + 505, "Linux: 本次会话有效", muted);
-#else
-        text(cx + 168, cy + 505, disk_ready ? "MayFS: 自动保存" : "RAM: 本次会话有效", muted);
-#endif
+        personalization(cx, cy, cw);
     }
 }
 static int file_list[FS_MAX], file_count;
@@ -2627,18 +2723,32 @@ static void easter_draw(void) {
     text(306, 653, "按 Esc 返回", muted);
     button(610, 646, 108, "返回桌面", 1);
 }
+static void draw_pointer_frame(const MayCursorFrame *frame, int x, int y, int side) {
+    if (!frame->width || !frame->height) return;
+    int edge = frame->width > frame->height ? frame->width : frame->height;
+    int width = (frame->width * side + edge - 1) / edge;
+    int height = (frame->height * side + edge - 1) / edge;
+    int left = x - frame->hotspot_x * width / frame->width;
+    int top = y - frame->hotspot_y * height / frame->height;
+    for (int row = 0; row < height; row++)
+        for (int col = 0; col < width; col++) {
+            int px = left + col, py = top + row;
+            if (px < 0 || px >= W || py < 0 || py >= H) continue;
+            u32 color = frame->pixels[(row * frame->height / height) * frame->width +
+                                      col * frame->width / width];
+            u32 alpha = color >> 24, rgb = color & 0xffffffu;
+            if (alpha == 255) rect(px, py, 1, 1, rgb);
+            else if (alpha) rect(px, py, 1, 1, blend(pixels[py * W + px], rgb, alpha));
+            else if (rgb) rect(px, py, 1, 1, pixels[py * W + px] ^ rgb);
+        }
+}
+
 static void cursor(void) {
     int side = 12 + pointer_size * 6;
-    if (cursor_style == 2 && custom_cursor_width && custom_cursor_height) {
-        /* Pixel-art nearest-neighbor scaling. Magenta means transparency. */
-        for (int y = 0; y < side; y++)
-            for (int x = 0; x < side; x++) {
-                int sx = x * custom_cursor_width / side;
-                int sy = y * custom_cursor_height / side;
-                u32 color = custom_cursor[sy * custom_cursor_width + sx];
-                if (color != 0xff00ff)
-                    rect(mx + x, my + y, 1, 1, color);
-            }
+    if (cursor_style == 2 && custom_cursor.count) {
+        u32 frame = may_cursor_frame(&custom_cursor, ticks - cursor_started);
+        draw_pointer_frame(&custom_cursor.frames[frame], mx, my,
+                           cursor_active_source == POINTER_PPM ? side : 24 + pointer_size * 8);
         return;
     }
     /* Native arrow pointer: a high-contrast outline remains visible over
@@ -3087,6 +3197,12 @@ static void left_click(void) {
                         language_choice = display_language;
                         language_save_failed = 0;
                     }
+                    if (tab == 4 && settings_tab != 4) {
+                        u32 size;
+                        int preset = cursor_style == 2 ? cursor_active_source :
+                            platform_pointer_asset(&size) ? POINTER_ISO : POINTER_CUR;
+                        cursor_select(preset, 0);
+                    }
                     settings_tab = tab;
                 }
             } else if (settings_tab == 7) {
@@ -3123,25 +3239,51 @@ static void left_click(void) {
                     preferences_save();
                 }
             } else if (settings_tab == 4) {
-                if (ry >= 206 && ry < 306 && rx >= 204 && rx < 732) {
-                    int i = (rx - 204) / 176;
-                    if (i < 3) { desktop_style = i; preferences_save(); }
-                } else if (ry >= 363 && ry < 398 && rx >= 204 && rx < 666) {
-                    int i = (rx - 204) / 154;
-                    if (i < 3) { pointer_size = i; preferences_save(); }
-                } else if (ry >= 441 && ry < 477 && rx >= 204 && rx < 718) {
-                    int i = (rx - 204) / 168;
-                    if (i == 2 && !cursor_image_load(1)) {
-                        notify("请检查文档/Cursor.ppm（P3，最大16×16）");
-                        return;
+                int cw = w->w - 286;
+                if (inside(rx, ry, 264, 86, 142, 30)) desktop_options = 0;
+                else if (inside(rx, ry, 418, 86, 142, 30)) desktop_options = 1;
+                else if (desktop_options) {
+                    for (int i = 0; i < 3; i++)
+                        if (inside(rx, ry, 264 + i * 154, 161, 142, 30)) {
+                            desktop_style = i;
+                            preferences_save();
+                        }
+                    if (inside(rx, ry, 264, 239, 142, 30) ||
+                        inside(rx, ry, 418, 239, 142, 30)) {
+                        show_brand = rx < 418;
+                        preferences_save();
+                    } else if (inside(rx, ry, 264, 343, 174, 30)) {
+                        preferences_reset();
+                        notify(pointer_label("个性化设置已恢复默认", "Personalization restored"));
                     }
-                    if (i >= 0 && i < 3) { cursor_style = i; preferences_save(); }
-                } else if (ry >= 520 && ry < 553 && rx >= 204 && rx < 478) {
-                    show_brand = rx < 348;
-                    preferences_save();
-                } else if (inside(rx, ry, 204, 560, 145, 34)) {
-                    preferences_reset();
-                    notify("个性化设置已恢复默认");
+                } else {
+                    if (inside(rx, ry, 360, 128, 128, 30) ||
+                        inside(rx, ry, 494, 128, 128, 30) ||
+                        inside(rx, ry, 628, 128, 148, 30)) {
+                        cursor_style = rx >= 494 && rx < 622;
+                        if (rx >= 628) pointer_size = 0;
+                        preferences_save();
+                    }
+                    for (int i = 0; i < 3; i++)
+                        if (inside(rx, ry, 360 + i * 101, 166, 94, 30)) {
+                            pointer_size = i;
+                            preferences_save();
+                        }
+                    for (int i = 0; i < POINTER_SOURCES; i++)
+                        if (inside(rx, ry, 278 + i % 2 * 142, 249 + i / 2 * 36, 133, 30))
+                            cursor_select(i, i == POINTER_PPM);
+                    if (preview_cursor.count && inside(rx, ry, 264 + cw - 138, 379, 138, 30)) {
+                        int remember = cursor_source_save(cursor_choice);
+                        memcpy(&custom_cursor, &preview_cursor, sizeof(custom_cursor));
+                        cursor_style = 2;
+                        cursor_active_source = cursor_choice;
+                        cursor_started = ticks;
+                        if (remember) preferences_save();
+                        notify(pointer_label("自定义指针已应用", "Custom pointer applied"));
+                        serial("MayOS: custom pointer applied: ");
+                        serial(cursor_source_names[cursor_active_source]);
+                        serial("\n");
+                    }
                 }
             } else if (settings_tab == 2 && inside(rx, ry, 204, 501, 126, 30))
                 notify(fs_sync() ? "已同步到磁盘" : "磁盘不可写");
@@ -3718,6 +3860,13 @@ void kernel_main(u32 magic, u32 info) {
 #ifndef MAYOS_LINUX
         may_net_poll(); /* bounded polling, no IRQ or user-space dependency */
 #endif
+        static u32 last_pointer_frame, last_preview_frame;
+        u32 pointer_frame = cursor_style == 2 ? may_cursor_frame(&custom_cursor, ticks - cursor_started) : 0;
+        u32 preview_frame = windows[1].open && !windows[1].min && settings_tab == 4 && !desktop_options ?
+            may_cursor_frame(&preview_cursor, ticks - cursor_preview_start) : 0;
+        if (pointer_frame != last_pointer_frame || preview_frame != last_preview_frame) dirty = 1;
+        last_pointer_frame = pointer_frame;
+        last_preview_frame = preview_frame;
         if (animation_step(mx, my)) dirty = 1;
         if (dirty)
             render();

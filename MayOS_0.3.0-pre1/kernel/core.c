@@ -1,4 +1,5 @@
 #include "core.h"
+#include "cursor.h"
 #include "io.h"
 #include "framebuffer.h"
 #include "procfs.h"
@@ -392,6 +393,34 @@ static void mouse_cmd(u8 v) {
 }
 static int ps2_available;
 static int ram_only;
+static u8 imported_pointer[MAY_CURSOR_FILE_MAX];
+static u32 imported_pointer_size;
+
+const u8 *platform_pointer_asset(u32 *size) {
+    *size = imported_pointer_size;
+    return imported_pointer_size ? imported_pointer : 0;
+}
+
+static void load_pointer_module(const u8 *info, u32 flags) {
+    if (!(flags & (1u << 3))) return;
+    u32 count = *(const u32 *)(info + 20), address = *(const u32 *)(info + 24);
+    if (!address || !count || count > 32 || address > 0xffffffffu - count * 16u) return;
+    const u32 *modules = (const u32 *)(uptr)address;
+    for (u32 i = 0; i < count; i++, modules += 4) {
+        u32 first = modules[0], last = modules[1], tag_address = modules[2];
+        const char tag[] = "mayos-pointer";
+        if (!first || last <= first || last - first > sizeof(imported_pointer) ||
+            !tag_address || tag_address > 0xffffffffu - sizeof(tag)) continue;
+        const char *name = (const char *)(uptr)tag_address;
+        u32 length = 0;
+        while (length < sizeof(tag) && name[length] == tag[length]) length++;
+        if (length != sizeof(tag)) continue;
+        imported_pointer_size = last - first;
+        memcpy(imported_pointer, (const void *)(uptr)first, imported_pointer_size);
+        serial("MayOS: pointer asset loaded from boot media\n");
+        return;
+    }
+}
 int platform_ram_only(void) { return ram_only; }
 
 static int boot_ram_only(const u8 *info, u32 flags) {
@@ -465,6 +494,7 @@ void hardware_init(u32 magic, u32 info) {
     number(display_number, display.height); serial(display_number); serial("x"); number(display_number, display.bpp); serial(display_number); serial("\n");
     boot_splash_begin("MayKernel64");
     ram_only = boot_ram_only(m, flags);
+    load_pointer_module(m, flags);
     memory_init(m, flags);
     u32 a, b, c, d;
     a = 0x80000000U;

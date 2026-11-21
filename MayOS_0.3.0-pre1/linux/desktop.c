@@ -16,12 +16,14 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/sysinfo.h>
 #include <sys/utsname.h>
 #include <time.h>
 #include <unistd.h>
 #include "core.h"
+#include "cursor.h"
 #include "framebuffer.h"
 #include "task_manager.h"
 #undef memset
@@ -29,6 +31,31 @@
 #undef strlen
 #undef strcmp
 #include "network.h"
+
+const u8 *platform_pointer_asset(u32 *size) {
+    static u8 pointer_asset[MAY_CURSOR_FILE_MAX];
+    static int attempted;
+    static u32 length;
+    if (!attempted) {
+        attempted = 1;
+        int fd = open("/mayos-pointer.bin", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+        struct stat info;
+        if (fd >= 0) {
+            if (!fstat(fd, &info) && S_ISREG(info.st_mode) &&
+                info.st_size > 0 && info.st_size <= (off_t)sizeof(pointer_asset)) {
+                while (length < (u32)info.st_size) {
+                    ssize_t count = read(fd, pointer_asset + length, (u32)info.st_size - length);
+                    if (count < 0 && errno == EINTR) continue;
+                    if (count <= 0) { length = 0; break; }
+                    length += (u32)count;
+                }
+            }
+            close(fd);
+        }
+    }
+    *size = length;
+    return length ? pointer_asset : NULL;
+}
 
 void *mayos_memset(void *destination, int value, u32 length) {
     return memset(destination, value, length);
