@@ -8,7 +8,7 @@ import os
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
-CURRENT = "0.5.0-pre2"
+CURRENT = "0.5.1-pre1"
 HISTORIC_DEMOS = "0.4.1-pre2"
 DEMO_RELEASE = "0.4.0-pre3"
 PREFIX = "MayOS-0.4.0-pre3-all-features-"
@@ -67,7 +67,10 @@ assert "0.5.0-pre1-dev" in docs["index.html"][1], "development UI preview missin
 assert 'id="design-preview"' in docs["index.html"][1], "preview anchor missing"
 assert "不是 QEMU 实测画面" in docs["index.html"][1], "design preview must not be passed off as QEMU"
 assert "0.4.1-pre2" in docs["download.html"][1], "historic release download not retained"
-assert f"MayOS-{CURRENT}-MayKernel-x86_64.iso" in docs["download.html"][1]
+assert f"MayOS-{CURRENT}-Installer-x86_64.iso" in docs["download.html"][1]
+assert f"/download/v{CURRENT}/SHA256SUMS.txt" in docs["download.html"][1]
+assert "installer-preview" in docs["demos.html"][0].ids
+assert "0.5.2 · 多语言系统" in docs["changelog.html"][1]
 assert f"/releases/tag/v{CURRENT}" in docs["index.html"][1]
 assert HISTORIC_DEMOS in docs["demos.html"][1], "historic QEMU demo missing"
 
@@ -131,7 +134,7 @@ assert history["repository"] == "ZhongYeMay/MayOS"
 assert len(history["releases"]) >= 10
 tags = [r["tag"] for r in history["releases"]]
 assert len(tags) == len(set(tags)), "duplicate release tag in snapshot"
-assert f"v{CURRENT}" in tags, "current prerelease missing from history snapshot"
+assert tags[0] == f"v{CURRENT}", "current prerelease missing from the top of the history snapshot"
 assert "v0.5.0-pre1" in tags and "v0.3.0" in tags, "historical release omitted"
 for entry in history["releases"]:
     assert entry["name"] and entry["published_at"]

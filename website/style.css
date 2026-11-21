@@ -22,6 +22,7 @@
 .actual-desktop{max-width:920px;position:relative;margin:58px auto 0;padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:28px;box-shadow:0 32px 85px rgba(0,0,0,.15)}
 .actual-desktop:before{content:'';position:absolute;z-index:-1;inset:14px 8% -15px;border-radius:40px;background:rgba(60,63,68,.13);filter:blur(30px)}
 .actual-desktop a{display:block;border-radius:18px;overflow:hidden;background:#151619;aspect-ratio:4/3}
+.release-preview a{aspect-ratio:8/5}
 .actual-desktop img{display:block;width:100%;height:100%;object-fit:contain;transition:transform .36s ease}
 .actual-desktop a:hover img{transform:scale(1.009)}
 .actual-desktop .hero-note{margin:12px 0 2px}

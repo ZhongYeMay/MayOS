@@ -6,6 +6,15 @@
   "description": "Published GitHub Releases, including prereleases and source-only previews. Unreleased branches are not releases.",
   "releases": [
     {
+      "tag": "v0.5.1-pre1",
+      "name": "MayOS 0.5.1-pre1 — 图形安装与首次开机",
+      "published_at": "2026-11-21T10:48:55Z",
+      "prerelease": true,
+      "body": "## 0.5.1 开发预览\n\n- 图形安装器支持选盘、确认、写入和读回校验。可将 MayKernel64 离线安装到空白 GPT 硬盘。\n- 插入新版安装镜像后可试启动新内核，测试后确认升级或保留原版本。QEMU 测试验证了升级前后 MayFS 内容逐字节一致。\n- 首次开机参考 MayDOS 的分步流程，包含简体中文、MIT 许可、MayShell 用户名、手动更新说明与深浅外观。用户名和外观会保存到 MayFS。\n\nISO 在 QEMU 的 BIOS 与 x86-64 UEFI 模式下启动通过，安装后的硬盘启动在 UEFI 下验证。测试时请关闭 Secure Boot，并使用专用空白磁盘。物理机兼容性待验证。\n\n下载后可使用 `SHA256SUMS.txt` 校验 ISO。\n\n[QEMU 回归测试与截图](https://github.com/ZhongYeMay/MayOS/actions/runs/44895359541)\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.5.1-pre1",
+      "assets_count": 3
+    },
+    {
       "tag": "v0.5.0-pre2",
       "name": "MayOS 0.5.0-pre2 — MayKernel 驱动预览",
       "published_at": "2026-11-21T02:09:26Z",

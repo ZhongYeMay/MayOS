@@ -50,12 +50,22 @@
       const cleaned = line.replace(/\*\*/g, '').replace(/(?<!\w)[\x60]/g, '');
       const heading = /^(#{1,4})\s+(.*)$/.exec(cleaned);
       const item = /^[-*]\s+(.+)$/.exec(cleaned);
+      const reference = /^\[([^\]]+)\]\((https:\/\/[^\s()]+)\)$/.exec(cleaned);
       if (heading) {
         ul = null;
         target.append(el('h4', 'update-note-heading', heading[2]));
       } else if (item) {
         if (!ul) { ul = el('ul', 'update-note-list'); target.append(ul); }
         ul.append(el('li', '', item[1]));
+      } else if (reference) {
+        ul = null;
+        const link = el('a', 'link', reference[1]);
+        link.href = reference[2];
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        const paragraph = el('p', 'update-note');
+        paragraph.append(link);
+        target.append(paragraph);
       } else {
         ul = null;
         target.append(el('p', 'update-note', cleaned));
