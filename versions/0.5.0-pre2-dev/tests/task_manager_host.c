@@ -1,5 +1,4 @@
 /* Host-side smoke test for the *actual* Linux /proc resource collector. */
-#define MAYOS_LINUX
 #include <assert.h>
 #include <stdio.h>
 #include <unistd.h>
