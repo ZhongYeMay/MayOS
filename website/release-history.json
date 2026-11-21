@@ -6,6 +6,15 @@
   "description": "Published GitHub Releases, including prereleases and source-only previews. Unreleased branches are not releases.",
   "releases": [
     {
+      "tag": "v0.5.2-pre3",
+      "name": "MayOS 0.5.2-pre3 — 现代硬件试用",
+      "published_at": "2026-11-21T17:44:36Z",
+      "prerelease": true,
+      "body": "## MayOS 0.5.2-pre3 · 现代 x86-64 硬件试用\n\n- MayKernel64 新增直连 xHCI 根端口的 USB Boot Protocol 键盘与相对移动鼠标输入，保留 PS/2 路径。\n- xHCI 与 NVMe 可访问 UEFI 分配在 64 GiB 以上的 PCI MMIO。MayShell 的 hardware 命令显示设备识别结果。\n- 启动菜单新增 Test hardware (RAM only)，桌面可用，文件只存在于内存会话。\n\nQEMU Q35/OVMF 禁用 PS/2 后通过双 xHCI 控制器测试、USB 键盘重连、NVMe 写入冷启动读回以及从 GPT NVMe 硬盘启动并用 USB 完成首次设置。RAM-only 试用前后的 SATA 和 NVMe 镜像 SHA-256 一致。传统 BIOS/PS/2 输入也通过回归。\n\n录屏为 QEMU 虚拟机实录。实体机型号、多品牌固件、Secure Boot、集线器、I²C 触摸板和 4Kn 存储仍待验证。\n\n### 下载\n\n- [MayKernel64 启动 ISO · 23.86 MiB](https://raw.githubusercontent.com/ZhongYeMay/MayOS/a180faedb32c040d3c5a27ac0c6b504b6bf2c877/MayOS-0.5.2-pre3-MayKernel-x86_64.iso)\n- [现代硬件适配 QEMU 实录](https://raw.githubusercontent.com/ZhongYeMay/MayOS/a180faedb32c040d3c5a27ac0c6b504b6bf2c877/MayOS-0.5.2-pre3-hardware-QEMU.mp4)\n- [SHA-256 校验清单](https://raw.githubusercontent.com/ZhongYeMay/MayOS/a180faedb32c040d3c5a27ac0c6b504b6bf2c877/SHA256SUMS.txt)\n- [源码 ZIP](https://raw.githubusercontent.com/ZhongYeMay/MayOS/a180faedb32c040d3c5a27ac0c6b504b6bf2c877/MayOS-0.5.2-pre3-source.zip)\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.5.2-pre3",
+      "assets_count": 0
+    },
+    {
       "tag": "v0.5.2-pre2",
       "name": "MayOS 0.5.2-pre2 — 中日韩输入与新版安装器",
       "published_at": "2026-11-21T17:21:37Z",
