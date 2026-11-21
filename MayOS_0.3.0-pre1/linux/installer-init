@@ -57,7 +57,7 @@ mount_esp() {
         [ "$(cat "$sys/$part/start")" = "2048" ] &&
         [ "$(cat "$sys/$part/size")" = "131072" ] ||
         abort "EFI system partition did not match the selected drive."
-    mount -t vfat -o rw,nosuid,nodev,noexec "/dev/$part" /target ||
+    mount -t vfat -o rw,nosuid,nodev,noexec,iocharset=iso8859-1 "/dev/$part" /target ||
         abort "Could not open the installed EFI system partition."
     mounted=1
     grep -Fxq 'MayOS EFI layout 1' /target/mayos-installer-v1 ||

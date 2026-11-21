@@ -75,6 +75,17 @@ jobs:
       - name: Build MayKernel and boot from an installed virtual hard disk
         working-directory: MayOS_0.3.0-pre1
         run: |
+          set -euo pipefail
+          report_failure() {
+            local message
+            message=$(tail -24 "${RUNNER_TEMP}/native-install-test.log")
+            message=${message//%/%25}
+            message=${message//$'\n'/%0A}
+            message=${message//$'\r'/%0D}
+            echo "::error::${message}"
+          }
+          trap report_failure ERR
+          exec > >(tee "${RUNNER_TEMP}/native-install-test.log") 2>&1
           make -j2 all
           make test-update test-update-verify
           cp build/mayos.iso build/installer-base.iso
