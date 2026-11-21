@@ -23,5 +23,6 @@ void mayperf_note_network(int transmit, u32 bytes);
 #ifndef MAYOS_LINUX
 void mayperf_note_idle_cycles(u64 cycles);
 u32 mayperf_managed_pages(void);
+u32 mayperf_used_pages(void);
 #endif
 #endif
