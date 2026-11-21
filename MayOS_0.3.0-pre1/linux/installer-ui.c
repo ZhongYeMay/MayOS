@@ -6,6 +6,7 @@
 #include <linux/vt.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -226,7 +227,17 @@ static void advance(void) {
     else if (page == FAILED) exit(2);
 }
 
-static void event(const struct input_event *e) {
+static int absolute_position(int fd, unsigned axis, int value, int extent, int current) {
+    struct input_absinfo range;
+    if (ioctl(fd, EVIOCGABS(axis), &range) || range.maximum <= range.minimum)
+        return current;
+    if (value <= range.minimum) return 0;
+    if (value >= range.maximum) return extent - 1;
+    return (int)(((int64_t)value - range.minimum) * (extent - 1) /
+                 ((int64_t)range.maximum - range.minimum));
+}
+
+static void event(int fd, const struct input_event *e) {
     if (e->type == EV_REL) {
         if (e->code == REL_X) x += e->value;
         if (e->code == REL_Y) y += e->value;
@@ -234,6 +245,9 @@ static void event(const struct input_event *e) {
         if (y < 0) y = 0;
         if (x >= W) x = W - 1;
         if (y >= H) y = H - 1;
+    } else if (e->type == EV_ABS) {
+        if (e->code == ABS_X) x = absolute_position(fd, ABS_X, e->value, W, x);
+        if (e->code == ABS_Y) y = absolute_position(fd, ABS_Y, e->value, H, y);
     } else if (e->type == EV_KEY && e->value == 1) {
         if (e->code == KEY_ENTER || e->code == KEY_KPENTER) advance();
         else if (e->code == KEY_ESC || e->code == KEY_BACKSPACE) back();
@@ -351,7 +365,7 @@ int main(void) {
             if (!(inputs[i].revents & POLLIN)) continue;
             struct input_event input_event;
             while (read(inputs[i].fd, &input_event, sizeof(input_event)) == sizeof(input_event))
-                event(&input_event);
+                event(inputs[i].fd, &input_event);
         }
         paint();
     }

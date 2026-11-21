@@ -4,10 +4,26 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 
 from dual_boot_smoke import BUILD, BootVM
 from install_mayos import DATA_BLOCKS, DATA_START, DISK_BYTES, SECTOR
 from live_upgrade import digest
+
+
+def click_continue(vm):
+    mouse = next(device for device in vm.q("query-mice") if device["current"])
+    if not mouse["absolute"]:
+        vm.click(955, 552)
+        return
+    events = [{"type": "abs", "data": {"axis": axis, "value": coord * 32767 // (size - 1)}}
+              for axis, coord, size in (("x", 955, 1280), ("y", 552, 720))]
+    vm.q("input-send-event", {"events": events})
+    for down in (True, False):
+        vm.q("input-send-event", {"events": [
+            {"type": "btn", "data": {"button": "left", "down": down}}
+        ]})
+        time.sleep(.08)
 
 
 def main():
@@ -116,7 +132,7 @@ def main():
             vm.wait("MayOS installer graphical frontend ready")
             vm.wait("@SELECT")
             vm.shot("installer-media-gui-welcome")
-            vm.click(955, 552)
+            click_continue(vm)
             vm.shot("installer-media-gui-disk")
             vm.key("ret")
             vm.wait("@MODE 0")
