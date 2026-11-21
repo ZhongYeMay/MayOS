@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the A/B launcher against two published MayKernel ISOs."""
 import argparse
+from datetime import date
 import json
 from pathlib import Path
 import subprocess
@@ -9,6 +10,7 @@ import tempfile
 
 from dual_boot_smoke import BUILD, BootVM
 from live_upgrade import digest
+from package_signed_release import produce
 
 
 def main():
@@ -65,7 +67,23 @@ def main():
         assert selected() == before and digest(disk) == original
         print("PASS: invalid digest and failed trial preserve active ISO and every disk byte")
 
-        ok = upgrade("0.5.0-pre2", digest(new), "60")
+        key, public_key = root / "test.pem", root / "test-public.pem"
+        subprocess.run(["openssl", "genpkey", "-algorithm", "Ed25519", "-out", str(key)],
+                       check=True)
+        subprocess.run(["openssl", "pkey", "-in", str(key), "-pubout", "-out", str(public_key)],
+                       check=True)
+        manifest, signature = produce(argparse.Namespace(
+            image=new, private_key=key, output_dir=root / "signed", version="0.5.0-pre2",
+            date=date.today().isoformat(), eta_minutes=1, changelog="Live upgrade smoke test"))
+        original_signature = signature.read_bytes()
+        signature.write_bytes(bytes([original_signature[0] ^ 1]) + original_signature[1:])
+        command = [*launcher, "upgrade", "--iso", str(new), "--manifest", str(manifest),
+                   "--signature", str(signature), "--trusted-public-key", str(public_key)]
+        bad_signature = subprocess.run(command, capture_output=True, text=True)
+        assert bad_signature.returncode and "signature rejected" in bad_signature.stderr
+        assert selected() == before and digest(disk) == original
+        signature.write_bytes(original_signature)
+        ok = subprocess.run(command, capture_output=True, text=True)
         assert ok.returncode == 0, ok
         assert selected()["active"]["slot"] == "B" and digest(disk) == original
         shell_boot(slots / "B.iso", "live-upgrade-new", [
@@ -79,6 +97,12 @@ def main():
             ("cat keep.txt", "\nold-data\n"),
             ("cat new.txt", "\nnew-data\n"),
         ])
+        subprocess.run([*launcher, "rollback"], check=True)
+        with (slots / "B.iso").open("ab") as image:
+            image.write(b"damaged")
+        subprocess.run([*launcher, "rollback"], check=True)
+        assert selected()["active"]["slot"] == "A"
+        assert selected()["previous"] is None
         print("PASS: upgrade pre1 to pre2 and roll back with both versions' files intact")
 
 

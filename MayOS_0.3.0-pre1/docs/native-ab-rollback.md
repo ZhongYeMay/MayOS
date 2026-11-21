@@ -1,5 +1,35 @@
 # MayKernel Rust no_std A/B boot rollback policy — diagnostic milestone
 
+## Live ISO upgrade on the QEMU host
+
+`scripts/live_upgrade.py` manages two bootable ISO files and a fixed, separate
+MayFS data image. It targets the published x86_64 MayKernel Live ISOs with QEMU
+BIOS. Close the VM and back up the existing MayFS image before enrolling it.
+Use the SHA-256 values from the corresponding release's trusted checksums.
+
+```sh
+python3 scripts/live_upgrade.py --directory ./boot-slots init \
+  --disk /absolute/path/to/mayos-disk.img --iso ./pre1.iso \
+  --version 0.5.0-pre1 --sha256 "$PRE1_SHA256"
+python3 scripts/live_upgrade.py --directory ./boot-slots upgrade \
+  --iso ./pre2.iso --version 0.5.0-pre2 --sha256 "$PRE2_SHA256"
+python3 scripts/live_upgrade.py --directory ./boot-slots run
+```
+
+For signed releases, pass `--manifest Update.may --signature Update.sig`
+and `--trusted-public-key /separate/path/MayOS-public.pem` to `upgrade`
+in place of `--version` and `--sha256`. This requires OpenSSL 3.
+
+The trial uses a temporary disk overlay and verifies the version banner,
+the MayFS mount and desktop readiness over serial. The old ISO stays active
+if the trial fails. After success, `run` boots the selected ISO with the
+original MayFS image. Use `status` to inspect the selection and `rollback`
+to select the previous verified ISO. Rollback keeps the current MayFS data,
+including files saved after upgrading.
+
+Settings-based updates and installed-PC boot slots require a separate
+bootloader contract. See the MayKernel policy and diagnostics below.
+
 ## Actual implementation
 
 A real Rust no_std state machine (`rust/maykernel_policy/src/ab_policy.rs`) defines a bounded, C ABI-compatible 48-byte boot-journal record. It models A/B active and trial slots, a trusted minimum security epoch, a monotonically incremented journal generation, a three-boot trial limit, and success/rollback transitions. It never allocates memory or calls a kernel service.

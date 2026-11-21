@@ -20,7 +20,7 @@ jobs:
       - name: Install virtual machine tools
         run: |
           bash scripts/configure-ci-apt-mirror.sh
-          sudo apt-get install -y --no-install-recommends qemu-system-x86 python3-pil
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 python3-pil openssl
       - name: Download and verify the two published MayKernel ISOs
         run: |
           set -euo pipefail

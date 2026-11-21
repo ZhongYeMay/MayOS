@@ -14,15 +14,25 @@ import subprocess
 import tempfile
 import time
 
+from verify_signed_release import verified_metadata
+
 
 SLOTS = ("A", "B")
-VERSION = re.compile(r"\d+\.\d+\.\d+(?:-pre\d+)?")
+VERSION = re.compile(r"([0-9]{1,7})\.([0-9]{1,7})\.([0-9]{1,7})(?:-pre([0-9]{1,7}))?")
 DIGEST = re.compile(r"[0-9a-f]{64}")
 
 
 def digest(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def version_order(version):
+    match = VERSION.fullmatch(version)
+    if not match:
+        raise ValueError("Specify a valid MayOS version")
+    major, minor, patch, preview = match.groups()
+    return int(major), int(minor), int(patch), preview is None, int(preview or 0)
 
 
 def durable_replace(source, target):
@@ -121,6 +131,35 @@ def regular(path):
     return path
 
 
+def candidate_metadata(args, source):
+    signed = (args.manifest, args.signature, args.trusted_public_key)
+    if not any(signed):
+        if args.version and args.sha256:
+            return args.version, args.sha256
+        raise ValueError("Provide a version and trusted SHA-256, or signed metadata")
+    if not all(signed) or args.version or args.sha256:
+        raise ValueError("Signed mode requires a manifest, signature and independent trusted key")
+    manifest, signature, key = map(regular, signed)
+    if key.parent in {manifest.parent, signature.parent, source.parent}:
+        raise ValueError("Keep the trusted public key outside the release directory")
+    with tempfile.TemporaryDirectory(prefix="mayos-signature-") as directory:
+        root = Path(directory)
+        manifest_copy, signature_copy = root / "manifest", root / "signature"
+        # Authenticate and parse the same private bytes. The later slot copy
+        # uses the authenticated digest even if the source ISO is replaced.
+        for path, target, maximum in ((manifest, manifest_copy, 2048),
+                                      (signature, signature_copy, 64)):
+            with path.open("rb") as stream:
+                content = stream.read(maximum + 1)
+            if not 0 < len(content) <= maximum:
+                raise ValueError("Invalid signed metadata size")
+            target.write_bytes(content)
+        raw = verified_metadata(manifest=manifest_copy, signature=signature_copy,
+                                image=source, public_key=key)
+    fields = dict(line.split("=", 1) for line in raw.decode("ascii").splitlines())
+    return fields["version"], fields["sha256"]
+
+
 def operate(args):
     directory = args.directory.resolve()
     directory.mkdir(parents=True, exist_ok=True)
@@ -141,16 +180,20 @@ def operate(args):
 
         state = json.loads(state_path.read_text())
         active = state["active"]
+        if args.action == "rollback":
+            previous = state.get("previous")
+            if not previous or previous.get("slot") == active.get("slot"):
+                raise ValueError("No previous verified boot slot")
+            slot_image(directory, previous)
+            try:
+                slot_image(directory, active)
+            except (OSError, ValueError):
+                active = None
+            set_state(directory, {**state, "active": previous, "previous": active})
+            return 0
         active_image = slot_image(directory, active)
         if args.action == "status":
             print(json.dumps(state, indent=2))
-            return 0
-        if args.action == "rollback":
-            previous = state.get("previous")
-            if not previous:
-                raise ValueError("No previous verified boot slot")
-            slot_image(directory, previous)
-            set_state(directory, {**state, "active": previous, "previous": active})
             return 0
 
         disk = regular(Path(state["disk"]))
@@ -161,15 +204,16 @@ def operate(args):
         source = regular(args.iso)
         if source.samefile(disk):
             raise ValueError("The candidate ISO and MayFS disk must be different files")
-        if args.version == active["version"]:
-            raise ValueError("The requested version is already selected")
+        version, expected = candidate_metadata(args, source)
+        if version_order(version) <= version_order(active["version"]):
+            raise ValueError("Upgrade requires a newer version. Use rollback to return to the previous slot.")
         inactive = "B" if active["slot"] == "A" else "A"
-        with stage(directory, source, inactive, args.version, args.sha256) as (candidate, image):
-            print(f"Starting isolated trial of MayOS {args.version}.", flush=True)
+        with stage(directory, source, inactive, version, expected) as (candidate, image):
+            print(f"Starting isolated trial of MayOS {version}.", flush=True)
             with tempfile.TemporaryDirectory(prefix="mayos-trial-") as session:
                 trial_log = Path(session) / "serial.log"
                 try:
-                    trial(args.qemu, image, disk, args.version, args.timeout, trial_log)
+                    trial(args.qemu, image, disk, version, args.timeout, trial_log)
                 finally:
                     if trial_log.exists():
                         shutil.copyfile(trial_log, directory / "last-trial.log")
@@ -180,7 +224,7 @@ def operate(args):
                 set_state(directory, {**state, "previous": None})
             durable_replace(image, directory / (inactive + ".iso"))
             set_state(directory, {**state, "active": candidate, "previous": active})
-        print(f"MayOS {args.version} selected. Previous ISO available through rollback.")
+        print(f"MayOS {version} selected. Previous ISO available through rollback.")
         return 0
 
 
@@ -192,13 +236,16 @@ def main():
         command = commands.add_parser(name)
         if name in ("init", "upgrade"):
             command.add_argument("--iso", type=Path, required=True)
-            command.add_argument("--sha256", required=True)
-            command.add_argument("--version", required=True)
+            command.add_argument("--sha256", required=name == "init")
+            command.add_argument("--version", required=name == "init")
         if name == "init":
             command.add_argument("--disk", type=Path, required=True)
         if name in ("upgrade", "run"):
             command.add_argument("--qemu", default="qemu-system-x86_64")
         if name == "upgrade":
+            command.add_argument("--manifest", type=Path)
+            command.add_argument("--signature", type=Path)
+            command.add_argument("--trusted-public-key", type=Path)
             command.add_argument("--timeout", type=int, choices=range(5, 181),
                                  default=60, metavar="5..180")
     args = parser.parse_args()
