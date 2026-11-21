@@ -46,6 +46,10 @@ void page_free(void *);
 int page_stress_test(void);
 #endif
 void hardware_init(u32, u32);
+void boot_splash_begin(const char *kernel);
+void boot_splash_log(const char *message);
+void boot_splash_step(unsigned int completed, const char *message);
+void boot_splash_finish(const char *message);
 int input_poll(int *, int *, int *, int *);
 void poweroff(void);
 void reboot(void);

@@ -1,20 +1,5 @@
-# BIOS and x86_64 UEFI use the same menu; kernels have separate boot protocols.
-set timeout_style=menu
-set timeout=5
 set default=mayos
-set gfxmode=1280x720x32,1024x768x32,1024x768,800x600x32,800x600,640x480x32,640x480,auto
-insmod all_video
-insmod cpuid
-insmod gfxterm
-insmod png
-# GRUB cannot activate a serial terminal before the controller exists.
-# Initialize COM1 FIRST; mirror every menu message to VGA and real serial.
-insmod serial
-serial --unit=0 --speed=115200
-terminal_input console serial
-terminal_output gfxterm serial
-set theme=/boot/grub/themes/mayos/theme.txt
-export theme
+source /boot/grub/menu.cfg
 
 if cpuid -l; then
 menuentry "MayOS - custom x86_64 kernel" --id mayos {
@@ -27,7 +12,7 @@ menuentry "MayOS - custom x86_64 kernel" --id mayos {
 
 menuentry "Linux @LINUX_VERSION@ - desktop (x86_64)" --id linux {
     set gfxpayload=$gfxmode
-    linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=1 panic=10
+    linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 quiet rdinit=/init mayos.desktop=1 panic=10
     initrd /boot/linux/initramfs.cpio.gz
     boot
 }

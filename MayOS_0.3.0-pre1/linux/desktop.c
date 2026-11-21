@@ -74,6 +74,26 @@ static void write_text(int fd, const char *text) {
 void serial(const char *text) {
     write_text(log_fd, text);
     write_text(serial_fd, text);
+    boot_splash_log(text);
+}
+
+static void startup_kernel_log(void) {
+    int fd = open("/dev/kmsg", O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) return;
+    char record[4096];
+    for (int i = 0; i < 1024; i++) {
+        ssize_t length = read(fd, record, sizeof(record) - 1);
+        if (length < 0 && (errno == EINTR || errno == EPIPE)) continue;
+        if (length <= 0) break;
+        record[length] = 0;
+        char *message = strchr(record, ';');
+        if (!message) continue;
+        message++;
+        message[strcspn(message, "\n")] = 0;
+        boot_splash_log(message);
+        boot_splash_log("\n");
+    }
+    close(fd);
 }
 
 static void cleanup(void) {
@@ -307,12 +327,16 @@ void hardware_init(u32 magic, u32 info) {
     display.data = framebuffer;
     if (ioctl(terminal_fd, KDSETMODE, KD_GRAPHICS))
         fail("switch tty1 to graphics");
-    memset(framebuffer, 0, framebuffer_size);
+    startup_kernel_log();
+    serial("MayOS Linux: framebuffer mapped\n");
+    boot_splash_begin("Linux64");
+    boot_splash_step(2, "Opening input devices");
     open_input_devices();
     char text[256];
     snprintf(text, sizeof(text), "MayOS Linux desktop: backend ready; kernel=%s pid=%ld fb=%ux%ux%u driver=%.16s\n",
              system.release, (long)getpid(), variable.xres, variable.yres, variable.bits_per_pixel, fixed.id);
     serial(text);
+    boot_splash_step(3, "Starting MayOS session");
     FILE *pidfile = fopen("/run/mayos-desktop.pid", "w");
     if (pidfile) {
         fprintf(pidfile, "%ld\n", (long)getpid());

@@ -49,6 +49,8 @@ INPUT_FILES = {
     "desktop_session_sha256": ROOT / "linux/desktop-session",
     "desktop_backend_sha256": ROOT / "linux/desktop.c",
     "desktop_gui_sha256": ROOT / "kernel/gui.c",
+    "boot_art_generator_sha256": ROOT / "scripts/boot_art.py",
+    "boot_brand_sha256": ROOT / "assets/limine-mayos-brand.png",
     "explorer_history_sha256": ROOT / "kernel/explorer_history.h",
     "desktop_fs_sha256": ROOT / "kernel/fs.c",
     "desktop_core_header_sha256": ROOT / "kernel/core.h",
@@ -470,6 +472,7 @@ def build(args: argparse.Namespace) -> dict:
         run(make + [f"INSTALL_HDR_PATH={OUT / 'headers'}", "headers_install"])
         run([sys.executable, str(ROOT / "scripts/font.py")])
         run([sys.executable, str(ROOT / "scripts/photo.py")])
+        run([sys.executable, str(ROOT / "scripts/boot_art.py"), str(ROOT / "build/boot_logo.h")])
         run([desktop_compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
              "-DMAYOS_LINUX", "-fno-pie", "-no-pie", "-static",
              "-I" + str(ROOT / "kernel"), "-I" + str(ROOT / "build"),

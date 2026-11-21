@@ -156,13 +156,15 @@ build/config-flags.txt: FORCE | build
 	@if ! cmp -s $@.tmp $@; then mv $@.tmp $@; else rm -f $@.tmp; fi
 build/font.h: scripts/font.py $(wildcard kernel/*.c) | build
 	$(PYTHON) scripts/font.py
+build/boot_logo.h: scripts/boot_art.py assets/limine-mayos-brand.png | build
+	$(PYTHON) scripts/boot_art.py $@
 build/cat_image.h: scripts/photo.py assets/easter-cat.jpg | build
 	$(PYTHON) scripts/photo.py
 # Actual licensed Material Symbols Rounded glyphs are rasterized at build time.
 # No external font or browser runtime is required in the finished ISO.
 build/material_icons.h: assets/material_symbols.py | build
 	$(PYTHON) assets/material_symbols.py
-build/gui.o: build/cat_image.h build/material_icons.h kernel/explorer_history.h kernel/galgame.h kernel/update.h kernel/net.h kernel/security_tls.h kernel/rust_bridge.h
+build/gui.o: build/cat_image.h build/material_icons.h build/boot_logo.h kernel/explorer_history.h kernel/galgame.h kernel/update.h kernel/net.h kernel/security_tls.h kernel/rust_bridge.h
 build/ab_journal_disk.o: kernel/rust_bridge.h
 build/update_stage_codec.o: kernel/update_stage_codec.h
 build/update_stage_disk.o: kernel/update_stage_codec.h kernel/sha256.h
@@ -197,7 +199,7 @@ build/%.o: kernel/%.c kernel/core.h kernel/io.h kernel/version.h build/font.h bu
 build/mayos.elf: $(OBJECTS) $(RUST_LIB) $(BEARSSL_LIB) kernel/linker64.ld
 	$(LD) -m elf_x86_64 -T kernel/linker64.ld -o $@ $(OBJECTS) $(RUST_LIB) $(BEARSSL_LIB)
 	$(GRUB_FILE) --is-x86-multiboot $@
-build/mayos.iso: build/mayos.elf boot/grub/grub.cfg scripts/dual_iso.py
+build/mayos.iso: build/mayos.elf boot/grub/grub.cfg boot/grub/menu.cfg boot/grub/themes/mayos/theme.txt scripts/dual_iso.py scripts/boot_art.py
 	$(PYTHON) scripts/dual_iso.py --custom-only --firmware "$(BOOT_FIRMWARE)" --grub-mkrescue '$(GRUB_MKRESCUE)'
 build/mayos-disk.img: | build
 	truncate -s 8M $@
@@ -337,4 +339,4 @@ run-uefi: dual
 test-uefi: dual
 	OVMF_CODE="$(OVMF_CODE)" OVMF_VARS="$(OVMF_VARS)" QEMU64="$(QEMU64)" $(PYTHON) scripts/uefi_smoke.py
 clean:
-	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/*.a build/rust_manifest_tests build/update_stage_codec_test build/config-flags.txt build/release_pubkey.h build/tls_x509_fixture.h build/font.h build/cat_image.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h
+	rm -rf build/iso build/dual-iso build/*.o build/*.elf build/*.iso build/*.a build/rust_manifest_tests build/update_stage_codec_test build/config-flags.txt build/release_pubkey.h build/tls_x509_fixture.h build/font.h build/cat_image.h build/boot_logo.h build/material_icons.h build/summer_art.h build/summer_art.bin build/summer_story.h

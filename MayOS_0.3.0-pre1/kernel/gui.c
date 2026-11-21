@@ -1,4 +1,5 @@
 #include "cat_image.h"
+#include "boot_logo.h"
 #include "core.h"
 #include "font.h"
 #include "material_icons.h"
@@ -353,6 +354,81 @@ static int text(int x, int y, const char *s, u32 color) {
     }
     return x;
 }
+
+enum { BOOT_LOG_ROWS = 8, BOOT_LOG_WIDTH = 106, BOOT_PHASES = 5 };
+static char boot_lines[BOOT_LOG_ROWS][BOOT_LOG_WIDTH + 1];
+static char boot_line[BOOT_LOG_WIDTH + 1];
+static unsigned int boot_line_length, boot_log_count;
+static int boot_log_closed;
+static u32 boot_splash_started;
+static const char *boot_splash_kernel;
+
+void boot_splash_log(const char *message) {
+    if (boot_log_closed) return;
+    for (; *message; message++) {
+        unsigned char ch = (unsigned char)*message;
+        if (ch == '\r') continue;
+        if (ch == '\n') {
+            if (!boot_line_length) continue;
+            boot_line[boot_line_length] = 0;
+            if (boot_log_count == BOOT_LOG_ROWS) {
+                for (unsigned int i = 1; i < BOOT_LOG_ROWS; i++)
+                    memcpy(boot_lines[i - 1], boot_lines[i], sizeof(boot_line));
+                boot_log_count--;
+            }
+            copy(boot_lines[boot_log_count++], boot_line, sizeof(boot_line));
+            boot_line_length = 0;
+        } else if (boot_line_length < BOOT_LOG_WIDTH) {
+            boot_line[boot_line_length++] = ch == '\t' ? ' ' : (ch < 32 || ch > 126 ? '?' : (char)ch);
+        }
+    }
+}
+
+void boot_splash_step(unsigned int completed, const char *message) {
+    if (!boot_splash_kernel || boot_log_closed) return;
+    const u32 background = 0x070709;
+    rect(0, 0, W, H, background);
+    int logo_x = (W - BOOT_LOGO_W) / 2;
+    for (int y = 0; y < BOOT_LOGO_H; y++)
+        for (int x = 0; x < BOOT_LOGO_W; x++)
+            pixels[(69 + y) * W + logo_x + x] =
+                blend(background, 0xf7f7fa, boot_logo[y * BOOT_LOGO_W + x]);
+
+    text((W - (int)strlen(boot_splash_kernel) * 8) / 2, 285, boot_splash_kernel, 0xe6e6eb);
+    text((W - (int)strlen(message) * 8) / 2, 319, message, 0xafafb9);
+    const int bar_x = 424, bar_y = 361;
+    soft_roundrect(bar_x, bar_y, 432, 30, 7, 0x34343d);
+    soft_roundrect(bar_x + 1, bar_y + 1, 430, 28, 6, 0x151519);
+    for (unsigned int segment = 0; segment < BOOT_PHASES * 4; segment++)
+        rect(bar_x + 8 + (int)segment * 21, bar_y + 7, 17, 16,
+             segment < completed * 4 ? 0xd0d0d9 : 0x27272e);
+
+    soft_roundrect(174, 420, 932, 245, 16, 0x36363e);
+    soft_roundrect(175, 421, 930, 243, 15, 0x101014);
+    text(199, 438, "Startup log", 0xececf0);
+    rect(199, 469, 881, 1, 0x2c2c33);
+    for (unsigned int i = 0; i < boot_log_count; i++)
+        text(199, 480 + (int)i * 21, boot_lines[i], 0xa6a6b2);
+    present(pixels);
+}
+
+void boot_splash_begin(const char *kernel) {
+    boot_splash_kernel = kernel;
+    boot_splash_started = ticks;
+    boot_splash_step(1, "Framebuffer ready");
+    serial("MayOS: startup splash ready\n");
+}
+
+void boot_splash_finish(const char *message) {
+    boot_splash_step(BOOT_PHASES, message);
+    serial("MayOS: startup splash complete\n");
+    /* Leave enough time to read the last logs on a fast virtual machine. */
+    u32 completed = ticks;
+    while (ticks - boot_splash_started < 130 || ticks - completed < 60)
+        platform_idle();
+    boot_log_closed = 1;
+}
+
 static int large_text(int x, int y, const char *s, u32 color) {
     while (*s) {
         int c = utf(&s), g = glyph(c), width = c < 128 ? 8 : 16;
@@ -3029,10 +3105,15 @@ void kernel_main(u32 magic, u32 info) {
     hardware_init(magic, info);
     fs_init();
     preferences_load();
+    boot_splash_step(4, "Applying desktop settings");
 #ifndef MAYOS_LINUX
     profile_load();
-    if (fs_installed_setup_pending()) installed_first_boot();
+    if (fs_installed_setup_pending()) {
+        boot_splash_finish("Opening first-boot setup");
+        installed_first_boot();
+    } else
 #endif
+    boot_splash_finish("Opening MayOS desktop");
     terminal_init();
     serial("MayOS: desktop ready\n");
     u32 last = 0;

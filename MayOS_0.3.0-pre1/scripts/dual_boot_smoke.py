@@ -288,6 +288,8 @@ def main():
         vm.wait(f'Linux {release} - desktop', timeout=5)
         vm.menu_shot('test-dual-menu')
         # No keypress: exercise the configured default and its visible countdown.
+        vm.wait('MayOS: startup splash complete', timeout=30)
+        vm.shot('test-dual-maykernel-splash')
         vm.wait('MayOS: desktop ready', timeout=30)
         vm.wait('MayOS: CPU long mode active (64-bit)')
         vm.shot('test-dual-desktop')
@@ -323,6 +325,8 @@ def main():
         vm.menu_shot('test-dual-linux-selected', timeout=10)
         vm.key('ret')
         vm.wait('MayOS Linux: ready')
+        vm.wait('MayOS: startup splash complete')
+        vm.shot('test-dual-linux-splash')
         vm.wait('MayOS-Linux# ')
         vm.wait('MayOS: desktop ready')
         version_output = vm.shell_check(f'test "$(uname -r)" = "{release}" && uname -r', 'VERSION')

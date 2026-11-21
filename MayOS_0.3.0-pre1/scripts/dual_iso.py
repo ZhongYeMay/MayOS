@@ -14,10 +14,28 @@ import shlex
 import shutil
 import subprocess
 import sys
+from boot_art import menu_background, menu_selection
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "build"
 LINUX = BUILD / "linux"
+
+
+def stage_menu(grub):
+    shutil.copy2(ROOT / "boot/grub/menu.cfg", grub / "menu.cfg")
+    shutil.copytree(ROOT / "boot/grub/themes", grub / "themes")
+    theme = grub / "themes/mayos"
+    menu_background(theme / "mayos-brand.png")
+    menu_selection(theme)
+    fonts = grub / "fonts"
+    fonts.mkdir()
+    font_source = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    subprocess.run(["grub-mkfont", "-s", "18", "-r", "32-126", "-o",
+                    str(fonts / "mayos-menu.pf2"), font_source], check=True)
+    console_font = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
+    subprocess.run(["grub-mkfont", "-s", "14", "-r", "32-126", "-o",
+                    str(fonts / "mayos-console.pf2"), console_font], check=True)
+    shutil.copy2(ROOT / "docs/third-party/DejaVu-copyright.txt", fonts)
 
 
 def sha256(path):
@@ -183,9 +201,7 @@ def main():
         (stage / "boot/grub").mkdir(parents=True)
         shutil.copy2(BUILD / "mayos.elf", stage / "boot/mayos.elf")
         shutil.copy2(ROOT / "boot/grub/grub.cfg", stage / "boot/grub/grub.cfg")
-        shutil.copytree(ROOT / "boot/grub/themes", stage / "boot/grub/themes")
-        shutil.copy2(ROOT / "assets/limine-mayos-brand.png",
-                     stage / "boot/grub/themes/mayos/mayos-brand.png")
+        stage_menu(stage / "boot/grub")
         bootable_iso(stage, BUILD / "mayos.iso", args)
         return
 
@@ -226,9 +242,7 @@ def main():
     if "@LINUX_VERSION@" not in template:
         raise ValueError("GRUB template must have a Linux version placeholder")
     (boot / "grub/grub.cfg").write_text(template.replace("@LINUX_VERSION@", version))
-    shutil.copytree(ROOT / "boot/grub/themes", boot / "grub/themes")
-    shutil.copy2(ROOT / "assets/limine-mayos-brand.png",
-                 boot / "grub/themes/mayos/mayos-brand.png")
+    stage_menu(boot / "grub")
     output = BUILD / "mayos-dual.iso"
     bootable_iso(stage, output, args)
     print(f"MayOS custom desktop + Linux {version} x86_64 desktop / rescue shell")

@@ -50,11 +50,12 @@ void number(char *b, u32 n) {
     b[j] = 0;
 }
 void serial(const char *s) {
-    while (*s) {
+    for (const char *byte = s; *byte; byte++) {
         for (int i = 0; i < 100000 && !(inb(0x3fd) & 32); i++)
             ;
-        outb(0x3f8, *s++);
+        outb(0x3f8, *byte);
     }
+    boot_splash_log(s);
 }
 /* A fatal CPU exception must leave a serial diagnosis, not silently triple-fault.
  * This is not process isolation or exception recovery. */
@@ -401,6 +402,7 @@ void hardware_init(u32 magic, u32 info) {
     char display_number[12];
     serial("MayOS: firmware framebuffer "); number(display_number, display.width); serial(display_number); serial("x");
     number(display_number, display.height); serial(display_number); serial("x"); number(display_number, display.bpp); serial(display_number); serial("\n");
+    boot_splash_begin("MayKernel64");
     memory_init(m, flags);
     u32 a, b, c, d;
     a = 0x80000000U;
@@ -417,6 +419,7 @@ void hardware_init(u32 magic, u32 info) {
     cpu_name[48] = 0;
     ps2_init();
     timer_init();
+    boot_splash_step(2, "Probing devices");
     acpi_init();
     pci_init();
     xhci_init();
@@ -428,6 +431,7 @@ void hardware_init(u32 magic, u32 info) {
     __asm__ volatile("ud2");
 #endif
     serial("MayOS: framebuffer, memory, PIT and PS/2 ready\n");
+    boot_splash_step(3, "Opening MayFS");
 }
 void present(u32 *p) {
     surface_present(&display, p, display_scale_mode);
