@@ -130,6 +130,42 @@ def main():
         results["second_boot_restored"] = "PASS"
         print("PASS: second real Linux64 boot restored the original GUI file", flush=True)
 
+        # A successful GUI save includes file fsync + atomic rename +
+        # directory fsync. The next shutdown deliberately kills the QEMU
+        # process WITHOUT telling Linux to sync or unmount the ext4 volume.
+        # This tests dirty-journal and abrupt-host-power-loss recovery, rather
+        # than merely testing normal guest shutdown and clean ext4 mounts.
+        after_cut = "survived-abrupt-qemu-power-loss"
+        vm = boot(iso, marked_disk, "linux-persist-abrupt-cut")
+        try:
+            vm.wait("MayOS Linux: persistent desktop profile restored")
+            vm.key("f1")
+            offset = len(vm.text)
+            vm.keyboard_command("write Documents/persist-test.txt " + after_cut)
+            vm.wait("\\nOK\\n", offset=offset, timeout=35)
+            vm.pump()
+            vm.proc.kill()  # intentionally unclean: no poweroff command/QMP quit
+            vm.proc.wait(timeout=10)
+        finally:
+            vm.stop()
+        results["abrupt_qemu_power_loss_after_fsync"] = "PASS"
+        print("PASS: deliberately killed QEMU immediately after a committed desktop save", flush=True)
+
+        vm = boot(iso, marked_disk, "linux-persist-after-powercut")
+        try:
+            vm.wait("MayOS Linux: persistent desktop profile restored", timeout=50)
+            vm.key("f1")
+            offset = len(vm.text)
+            vm.keyboard_command("cat Documents/persist-test.txt")
+            vm.wait("\\n" + after_cut + "\\n", offset=offset, timeout=35)
+            qemu_host_screens(vm, "linux-persist-after-powercut",
+                              BUILD / "linux-persist-after-powercut.png")
+            vm.shutdown()
+        finally:
+            vm.stop()
+        results["power_loss_reboot_readback"] = "PASS"
+        print("PASS: Linux64 cold-reboot after abrupt power cut restored fsync'ed GUI file", flush=True)
+
         vm = boot(iso, empty, "linux-persist-unmarked-boot")
         try:
             vm.wait("MayOS Linux profile: explicit marker missing; will not write")
@@ -145,6 +181,24 @@ def main():
             "FAIL: no-marker test disk changed after guest boot; unsafe"
         )
         results["unmarked_ext4_disk_unchanged"] = "PASS"
+        # The test covers a clean shutdown; also verify that a future
+        # kernel journaling change cannot modify an unmarked disk.
+        vm = boot(iso, empty, "linux-persist-unmarked-powercut")
+        try:
+            vm.wait("MayOS Linux profile: explicit marker missing; will not write")
+            vm.key("f1")
+            offset = len(vm.text)
+            vm.keyboard_command("write Documents/ram-only.txt keep-disk-unchanged")
+            vm.wait("\\nOK (RAM only; disk sync unavailable)\\n", offset=offset,
+                    timeout=35)
+            vm.proc.kill()
+            vm.proc.wait(timeout=10)
+        finally:
+            vm.stop()
+        assert sha(empty) == empty_hash, (
+            "FAIL: unmarked ext4 disk changed after abrupt QEMU termination")
+        results["unmarked_powercut_disk_unchanged"] = "PASS"
+        print("PASS: unmarked ext4 disk remains byte-identical after QEMU power cut", flush=True)
         print("PASS: unmarked ext4 QEMU disk byte-identical despite GUI RAM edits", flush=True)
 
     results["iso_sha256"] = sha(iso)
