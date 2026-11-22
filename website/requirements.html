@@ -44,6 +44,14 @@
 <p>MayKernel64/Live 通过 GRUB 与固件自动选择 GOP/VBE 模式；Linux64 从已连接的 DRM 模式列表检测并尝试设置 framebuffer。显卡不允许切换时保留固件已启用模式。鼠标与触摸屏坐标随画面比例调整，避免超宽屏和竖屏点击偏移。</p>
 <p><strong>限制：</strong>目前还是 1280×720 逻辑桌面按比例绘制；尚未支持真正原生 HiDPI 字体排版、热插拔自动重新配置和所有实体显卡显示器组合。此功能<strong>没有包含在已发布的 0.5.2 正式 ISO 中</strong>。</p>
 <div class="actions"><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/tree/main/versions/0.5.3-dev">查看下一开发版源码</a><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/actions/runs/44980712480">查看 4K 自动适配 QEMU 测试</a></div></article>
+<article class="download-panel" id="linux-persistence-054">
+<p class="eyebrow">0.5.4-dev · 已合并开发源码 · QEMU 持久化验收通过</p>
+<h2>Linux64 基础文件持久化：通过两次真实启动验证</h2>
+<p>MayOS 的 Linux64 桌面在下一开发版本中支持<strong>用户明确启用的独立 ext4 数据盘</strong>。先以只读方式验证预置的 <code>.mayos-profile-enabled</code> 标记，再允许保存桌面文件与设置；文件保存在双份 CRC32 校验、原子重命名的 A/B 快照中。没有授权标记、没有指定设备或使用 Live 模式时，仍只运行于 RAM，不自动格式化或写入其他磁盘。</p>
+<p><strong>真实 QEMU 验收：</strong>首次启动保存文件、关机、第二次启动读取到原文件，且未授权 ext4 磁盘的 SHA-256 在运行前后完全一致；原有双内核启动和 Linux 图形桌面回归也通过。</p>
+<p><strong>仍有重要限制：</strong>此功能<strong>不包含在正式版 0.5.2 ISO</strong>；当前文件槽位与单文件容量有限，实体电脑存储兼容性、随机断电与广泛稳定性尚未全面认证。不要在存有个人数据的实体磁盘上使用此开发功能。</p>
+<div class="actions"><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/tree/main/versions/0.5.4-dev">查看 0.5.4-dev 源码和 QEMU 操作说明</a><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/actions/runs/44991291384">实际 QEMU 启动、保存与恢复测试</a><a class="link" href="https://github.com/ZhongYeMay/MayOS/pull/54">已合并的开发 PR #54</a></div>
+</article>
 <article class="download-panel" id="limitations"><h2>尚未验证的硬件与功能</h2><p>实体机安装和多品牌 UEFI 固件、Secure Boot、USB 集线器、I²C 触摸板、无线网卡、独立显卡加速、完整音频栈、4Kn 存储和掉电回滚仍待验证。</p></article>
 <article class="download-panel" id="published"><p class="eyebrow">历史版本 · 0.5.0-pre2</p><h2>MayKernel 启动预览</h2>
 <p>目前验证环境为 QEMU x86_64，128 MiB 或以上的虚拟机内存用于基础 MayKernel 测试，标准 VGA/固件 framebuffer、PS/2 输入与 BIOS 或 OVMF UEFI x64。真实硬件最低内存、显卡和外围设备兼容范围尚未测定；不能将虚拟机验证结果当作通用最低配置。</p>
