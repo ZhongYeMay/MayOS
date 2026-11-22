@@ -36,7 +36,37 @@ jobs:
             fonts-noto-cjk fonts-dejavu-core flex bison bc fdisk util-linux \
             libelf-dev libssl-dev xz-utils busybox-static rsync libcurl4-openssl-dev \
             pkg-config ca-certificates zstd
+      - name: Reuse byte-identical compiled v0.5.2 ISO after proving source and builder were unchanged
+        id: cached
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          original=7204948dc73884962cfecbdbcb0db2d7158adf42
+          git fetch --depth=1 origin "$original"
+          for path in versions/0.5.2 scripts/build_official_v052_iso.py scripts/retarget_installer_payload.py; do
+            old="$(git rev-parse "$original:$path")"
+            now="$(git rev-parse "HEAD:$path")"
+            test "$old" = "$now" || { echo "Source divergence: $path"; exit 1; }
+            echo "PASS: original and current source blob/tree identical: $path $now"
+          done
+          mkdir -p build
+          gh run download 44974088412 --repo "$GITHUB_REPOSITORY" \
+            --name MayOS-v0.5.2-Live-DualKernel-Installer-QEMU-verified \
+            --dir build
+          echo 'a394e27c608e09d5dd1848b288cf540541319841b022e9da60448e3a2a4bba91  build/MayOS-0.5.2-DualKernel-Live-Installer-x86_64.iso' | sha256sum -c
+          (cd build && sha256sum -c SHA256SUMS.txt)
+          python3 - <<'PY'
+          import json
+          m=json.load(open('build/MayOS-0.5.2-DualKernel-Live-Installer-x86_64.manifest.json'))
+          assert m['source_commit']=='7204948dc73884962cfecbdbcb0db2d7158adf42'
+          assert m['release']=='0.5.2'
+          assert m['sha256']=='a394e27c608e09d5dd1848b288cf540541319841b022e9da60448e3a2a4bba91'
+          print('PASS: imported prior ISO has exact source provenance and stable release version')
+          PY
+          echo "reuse=true" >> "$GITHUB_OUTPUT"
       - name: Fetch strictly SHA-pinned original installer Linux runtime
+        if: steps.cached.outputs.reuse != 'true'
         run: |
           set -euo pipefail
           mkdir -p build/inputs
@@ -45,16 +75,19 @@ jobs:
             -o build/inputs/MayOS-0.5.2-pre2-Installer-x86_64.iso
           echo 'c46ee45ded237f0c5823f94e498dad89700f7c54c0d80ba4137e5be3bf572a1a  build/inputs/MayOS-0.5.2-pre2-Installer-x86_64.iso' | sha256sum -c
       - name: Compile actual MayKernel v0.5.2 ELF and original BIOS/UEFI ISO
+        if: steps.cached.outputs.reuse != 'true'
         run: |
           set -euo pipefail
           make -C versions/0.5.2 all
           make -C versions/0.5.2 test-update test-sha256 test-update-verify
       - name: Compile Linux 7.3.1 desktop FROM v0.5.2 source (not old pre-release)
+        if: steps.cached.outputs.reuse != 'true'
         run: |
           set -euo pipefail
           make -C versions/0.5.2 linux LINUX_VERSION=7.3.1 LINUX_JOBS=4
           python3 versions/0.5.2/scripts/linux.py status
       - name: Build version-consistent 4-mode BIOS/UEFI ISO
+        if: steps.cached.outputs.reuse != 'true'
         run: |
           set -euo pipefail
           python3 scripts/build_official_v052_iso.py \
