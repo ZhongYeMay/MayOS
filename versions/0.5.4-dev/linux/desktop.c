@@ -85,6 +85,40 @@ static struct timespec started;
 static void *allocated_pages[64];
 static int left_shift, right_shift, left_ctrl, right_ctrl, caps_lock;
 
+/* The updater atomically renames a complete 1280x720 RGB565 file. This
+ * mapped view stays valid across renames, and is checked only every 15 s. */
+const u16 *platform_wallpaper_bitmap(void) {
+    enum { WALL_BYTES = W * H * 2 };
+    static void *mapped;
+    static ino_t cached_inode;
+    static time_t checked_at = (time_t)-1;
+    time_t now = time(NULL);
+    if (now != (time_t)-1 && checked_at != (time_t)-1 &&
+        now >= checked_at && now - checked_at < 15)
+        return (const u16 *)mapped;
+    checked_at = now;
+    int fd = open("/run/mayos-wallpaper/current.r565",
+                  O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) return (const u16 *)mapped;
+    struct stat st;
+    if (fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_size != WALL_BYTES) {
+        close(fd);
+        return (const u16 *)mapped;
+    }
+    if (mapped && cached_inode == st.st_ino) {
+        close(fd);
+        return (const u16 *)mapped;
+    }
+    void *next = mmap(NULL, WALL_BYTES, PROT_READ, MAP_PRIVATE, fd, 0);
+    close(fd);
+    if (next == MAP_FAILED) return (const u16 *)mapped;
+    if (mapped) munmap(mapped, WALL_BYTES);
+    mapped = next;
+    cached_inode = st.st_ino;
+    serial("MayOS Linux: Bing daily wallpaper bitmap loaded\n");
+    return (const u16 *)mapped;
+}
+
 static void write_text(int fd, const char *text) {
     if (fd < 0)
         return;
