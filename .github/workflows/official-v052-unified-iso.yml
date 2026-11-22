@@ -119,7 +119,7 @@ jobs:
       - name: Independently verify artifact and all eight results
         run: |
           set -euo pipefail
-          cd verified/build
+          cd verified
           sha256sum -c SHA256SUMS.txt
           python3 - <<'PY'
           import json
@@ -134,7 +134,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cd verified/build
+          cd verified
           if gh release view v0.5.2 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo 'v0.5.2 already exists; refusing to replace assets'
             exit 1
