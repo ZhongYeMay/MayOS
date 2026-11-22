@@ -25,9 +25,15 @@ while :; do
     delay=1800
     if /usr/bin/mayos-wallpaper /run/mayos-wallpaper/current.r565 \
                                 /run/mayos-wallpaper/current.date; then
-        if [ -n "$profile" ]; then
-            # Stage and rename the two files. The bitmap always commits first.
-            if cp /run/mayos-wallpaper/current.r565 "$profile/current.r565.new" &&
+        if [ -n "$profile" ] &&
+           { [ ! -f "$profile/current.date" ] ||
+             [ ! -f "$profile/current.r565" ] ||
+             [ ! "$(cat "$profile/current.date")" = "$(cat /run/mayos-wallpaper/current.date)" ]; }; then
+            # No repeat disk write when Bing reports the same daily picture.
+            # Never follow a pre-existing symlink at a temporary cache path.
+            if [ ! -L "$profile/current.r565.new" ] &&
+               [ ! -L "$profile/current.date.new" ] &&
+               cp /run/mayos-wallpaper/current.r565 "$profile/current.r565.new" &&
                cp /run/mayos-wallpaper/current.date "$profile/current.date.new"; then
                 sync
                 mv -f "$profile/current.r565.new" "$profile/current.r565"
