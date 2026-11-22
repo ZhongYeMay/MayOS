@@ -24,26 +24,43 @@ jobs:
             -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
             qemu-system-x86 e2fsprogs python3-pil
           python3 -m py_compile versions/0.5.4-dev/scripts/linux_persistence_qemu_smoke.py
-      - name: Restore exact prior successful QEMU Linux64 ISO (no unnecessary rebuild)
-        uses: actions/download-artifact@v4
-        with:
-          name: MayOS-Linux64-profile-persistence-054-test-evidence
-          run-id: 44991291384
-          github-token: ${{ github.token }}
-          path: verified
-      - name: Check published CI source ISO SHA-256 against prior real build
+      - name: Restore SHA-pinned QEMU ISO, or rebuild from same source if artifact expired
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          echo '82203365ceb352c454a432350273e35276c21b6ef2bcb5a558aaf860ff5b4cb7  verified/mayos-dual.iso' | sha256sum --check
-          mkdir -p versions/0.5.4-dev/build
-          cp verified/mayos-dual.iso versions/0.5.4-dev/build/mayos-dual.iso
+          mkdir -p verified versions/0.5.4-dev/build
+          if gh run download 44991291384 --repo "$GITHUB_REPOSITORY" \
+            --name MayOS-Linux64-profile-persistence-054-test-evidence --dir verified; then
+            echo '82203365ceb352c454a432350273e35276c21b6ef2bcb5a558aaf860ff5b4cb7  verified/mayos-dual.iso' | sha256sum --check
+            cp verified/mayos-dual.iso versions/0.5.4-dev/build/mayos-dual.iso
+            echo 'Source ISO: SHA-pinned previous successful QEMU test artifact'
+          else
+            echo 'Previous CI artifact expired or inaccessible: rebuilding equivalent current 0.5.4-dev source'
+            bash scripts/configure-ci-apt-mirror.sh
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+              -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
+              build-essential gcc-multilib musl-tools linux-libc-dev \
+              grub-common grub-pc-bin grub-efi-amd64-bin xorriso mtools \
+              ffmpeg fonts-noto-cjk fonts-dejavu-core flex bison bc \
+              libelf-dev libssl-dev xz-utils busybox-static rsync \
+              libcurl4-openssl-dev pkg-config ca-certificates
+            make -C versions/0.5.4-dev build/font.h build/cat_image.h build/material_icons.h
+            make -C versions/0.5.4-dev linux LINUX_VERSION=7.3.1 LINUX_JOBS=4
+            make -C versions/0.5.4-dev all
+            python3 versions/0.5.4-dev/scripts/inject_qemu_persist_menu.py
+            make -C versions/0.5.4-dev dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+            echo 'Source ISO: rebuilt from local 0.5.4-dev tree'
+          fi
+          sha256sum versions/0.5.4-dev/build/mayos-dual.iso | tee verified/iso-sha256.txt
+          test -s versions/0.5.4-dev/build/mayos-dual.iso
           python3 - <<'PY'
           from pathlib import Path
           data = Path('versions/0.5.4-dev/scripts/linux_persistence_qemu_smoke.py').read_text()
-          assert "vm.proc.kill()" in data
-          assert "power_loss_reboot_readback" in data
-          assert "unmarked_powercut_disk_unchanged" in data
-          print('PASS: exact validated Linux ISO reused; three additional powercut checks exist')
+          assert 'vm.proc.kill()' in data
+          assert 'power_loss_reboot_readback' in data
+          assert 'unmarked_powercut_disk_unchanged' in data
+          print('PASS: real QEMU test covers force-kill, reboot and unmarked disk')
           PY
       - name: Real QEMU 5-boot persistence and abrupt-power-loss regression
         run: |
@@ -62,7 +79,8 @@ jobs:
                       'unmarked_ext4_disk_unchanged', 'unmarked_powercut_disk_unchanged'):
               assert result.get(key)=='PASS',(key,result)
           actual=hashlib.sha256((root/'mayos-dual.iso').read_bytes()).hexdigest()
-          assert actual=='82203365ceb352c454a432350273e35276c21b6ef2bcb5a558aaf860ff5b4cb7'
+          expected=(Path('verified/iso-sha256.txt').read_text().strip().split()[0])
+          assert actual==expected, 'Tested ISO hash changed during QEMU execution'
           print('PASS: all cross-reboot, crash and unmarked-disk safety gates, QEMU-only')
           PY
       - name: Preserve real QEMU screenshots, machine logs and test summary
