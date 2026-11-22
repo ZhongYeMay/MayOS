@@ -641,9 +641,16 @@ int input_poll(int *mouse_x, int *mouse_y, int *buttons, int *key) {
             } else if (event.type == EV_ABS && (event.code == ABS_X || event.code == ABS_Y)) {
                 struct input_absinfo range;
                 if (!ioctl(inputs[i].fd, EVIOCGABS(event.code), &range) && range.maximum > range.minimum) {
-                    int value = (int)((int64_t)(event.value - range.minimum) *
-                                     (event.code == ABS_X ? W - 1 : H - 1) / (range.maximum - range.minimum));
-                    if (event.code == ABS_X) *mouse_x = value; else *mouse_y = value;
+                    /* Absolute input coordinates are physical monitor pixels.
+                     * Apply the INVERSE of the actual Fit/Fill presentation,
+                     * including 4:3 or ultrawide letterboxing offsets. */
+                    int vertical = event.code == ABS_Y;
+                    u32 physical_extent = vertical ? display.height : display.width;
+                    u32 physical = (u32)((int64_t)(event.value - range.minimum) *
+                                         (physical_extent - 1) / (range.maximum - range.minimum));
+                    int value = surface_screen_to_desktop(&display, display_scale_mode,
+                                                          physical, vertical);
+                    if (vertical) *mouse_y = value; else *mouse_x = value;
                     changed = 1;
                 }
             } else if (event.type == EV_KEY) {
