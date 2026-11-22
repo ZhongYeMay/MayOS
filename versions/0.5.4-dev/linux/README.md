@@ -9,8 +9,7 @@ COM1 / ttyS0 保留独立 BusyBox shell。桌面复用 MayOS 的窗口、文件�
 编辑器、终端与设置前端，通过 Linux fbdev 显示、evdev 键鼠、时钟与系统信息
 系统调用运行；不会执行 ATA 端口 I/O 或 `hlt` 等特权指令。
 
-桌面文件保存在该进程的 RAM 对象中，桌面退出即丢失；与 Linux shell 中的
-临时根文件系统是两个独立空间。系统不自动挂载、格式化或写入 MayFS 数据盘。
+默认桌面仍使用 RAM；仅当用户通过内核参数显式选择带 MayOS 标记的现有 ext4 卷时，桌面才保存 CRC32 验证的 A/B 原子快照。此卷与 Linux shell 的临时根文件系统独立。系统不自动挂载、格式化或写入 MayFS 数据盘。
 Linux 根目录内的临时文件在关机后丢失。系统信息窗口与 MayShell `fastfetch` 命令由真实的静态 x86_64 Fastfetch 进程生成；自研 MayKernel 分支不具备 Linux 用户态，不会假称运行 Fastfetch。尚无桌面文件持久化、包管理器、
 完整发行版服务或应用沙箱。
 
@@ -74,3 +73,8 @@ BusyBox 按 GPL v2 分发。分发含这些二进制的 ISO / 压缩包时，必
 本配置面向验证过的 QEMU 虚拟硬件；要求至少 1024×768 的 RGB888 / 32 位
 framebuffer。BIOS 与 OVMF x64 UEFI 需要分别通过启动验证，UEFI 不等于
 Secure Boot 支持。Linux 启动环境会尝试通过 QEMU e1000 的首个以太网设备获取 DHCP 地址，并提供基础 IPv4、DNS、ping 和 Explorer HTTP 文本预览；尚无 virtio-net、Wi-Fi、TLS / HTTPS 或完整浏览器。不能据此承诺实体机、任意 GPU、无线网络或候选主线版本可用。
+
+
+## 0.5.4-dev 可选持久化
+
+完整 QEMU 配置、标记要求与安全约束见上层 `README.md`。不会自动格式化磁盘，Live 和无标记设备仍使用 RAM。
