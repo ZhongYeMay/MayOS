@@ -1,0 +1,56 @@
+{
+  "schema_version": 2,
+  "release": "0.5.3-pre2",
+  "status": "prerelease",
+  "artifact": "MayOS-0.5.3-pre2-DualKernel-Live-Installer-x86_64.iso",
+  "sha256": "f23e9c8835cb587e456825d23bf5f5fa083dacd31d83098e6ca450b7da07e23e",
+  "source_commit": "fd67773cd860c2cabf9fd24c63015552013b9567",
+  "firmware": [
+    "BIOS",
+    "UEFI x64"
+  ],
+  "boot_modes": [
+    {
+      "id": "mayos",
+      "name": "MayKernel64",
+      "version": "0.5.3-pre2",
+      "kernel_sha256": "4c8e4f413014f74327c73e1c6dd1998fffcb6831bea4be550334d2fab148a17c",
+      "disk_writes_allowed": true
+    },
+    {
+      "id": "mayos-live",
+      "name": "MayOS Live",
+      "version": "0.5.3-pre2",
+      "kernel_sha256": "4c8e4f413014f74327c73e1c6dd1998fffcb6831bea4be550334d2fab148a17c",
+      "boot_argument": "mayos.ram",
+      "disk_writes_allowed": false
+    },
+    {
+      "id": "linux",
+      "name": "Linux64 MayOS desktop",
+      "mayos_version": "0.5.3-pre2",
+      "linux_kernel_version": "7.3.1"
+    },
+    {
+      "id": "mayos-install",
+      "name": "MayOS offline installer",
+      "version": "0.5.3-pre2",
+      "installed_version": "0.5.3-pre2",
+      "installed_kernel_sha256": "4c8e4f413014f74327c73e1c6dd1998fffcb6831bea4be550334d2fab148a17c"
+    }
+  ],
+  "installer": {
+    "source_installer": "0.5.2-pre2",
+    "source_installer_iso_sha256": "c46ee45ded237f0c5823f94e498dad89700f7c54c0d80ba4137e5be3bf572a1a",
+    "installer_payload_sha256": "9f0601b34e6f715065b3a73a6772a66eedc20ccc81f97da27799bd02a409a499",
+    "installer_initramfs_sha256": "551edaed63a107fe274b503ecbadba5b098b6809e18abc3e699f994d2e718154",
+    "installed_mayos_version": "0.5.3-pre2"
+  },
+  "linux": {
+    "version": "7.3.1",
+    "source_directory": "versions/0.5.3-pre2",
+    "bzImage_sha256": "595da6894997412abbb906d1846a9d50b82a977212f95e75497836f336665962",
+    "initramfs_sha256": "2f798f007bc8cfe5795b57214ac9af62ea3af57bb6ce5751e5ea4f4b54b22879"
+  },
+  "physical_hardware_validation": "not established; QEMU verification only"
+}
