@@ -21,6 +21,7 @@ with tempfile.TemporaryDirectory() as folder:
             target.chmod(mode & 0o777)
     assert (stage / "etc/ssl/certs/ca-certificates.crt").stat().st_size > 1000
     assert (stage / "usr/share/doc/mayos/network-runtime.json").is_file()
+    assert (stage / "usr/bin/mayos-wallpaper").is_file()
     if "--chroot" in sys.argv:
         subprocess.run(["sudo", "-n", "chroot", str(stage), "/usr/bin/mayos-fetch", "--capabilities"], check=True)
     else:
