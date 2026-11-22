@@ -64,7 +64,14 @@ def take(vm, screenshots: Path, name: str):
     source = vm.shot(name)
     target = screenshots / (name + ".png")
     shutil.copyfile(source, target)
-    assert target.stat().st_size > 10000, name
+    # A uniform serial/GRUB framebuffer compresses to far below 10 KiB.
+    # Verify real PNG structure and full framebuffer dimensions instead.
+    header = target.read_bytes()[:24]
+    assert header[:8] == b"\\x89PNG\\r\\n\\x1a\\n", name
+    assert len(header) >= 24, name
+    width = int.from_bytes(header[16:20], "big")
+    height = int.from_bytes(header[20:24], "big")
+    assert width >= 640 and height >= 480, (name, width, height)
 
 
 def main():
