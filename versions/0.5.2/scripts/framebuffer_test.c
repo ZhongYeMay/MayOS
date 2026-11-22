@@ -46,6 +46,16 @@ static void run(u32 width, u32 height, u32 bpp, int bgr) {
     invalid.green = invalid.red; assert(!surface_valid(&invalid, capacity));
     invalid = s; invalid.xoffset = 0xffffffffU; assert(!surface_valid(&invalid, capacity));
     invalid = s; invalid.bpp = 8; assert(!surface_valid(&invalid, capacity));
+    /* A touch pointer at the center must hit the logical center, even with
+     * bars/cropping on non-16:9 and portrait displays. */
+    for (int mode = 0; mode <= 3; mode++) {
+        int x = surface_screen_to_desktop(&s, mode, width / 2, 0);
+        int y = surface_screen_to_desktop(&s, mode, height / 2, 1);
+        assert(x >= W / 2 - 2 && x <= W / 2 + 2);
+        assert(y >= H / 2 - 2 && y <= H / 2 + 2);
+        assert(surface_screen_to_desktop(&s, mode, 0, 0) >= 0);
+        assert(surface_screen_to_desktop(&s, mode, height - 1, 1) < H);
+    }
     free(pixels); free(memory);
 }
 int main(void) {
