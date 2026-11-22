@@ -1,0 +1,12 @@
+{
+  "bios_maykernel": "PASS",
+  "bios_linux": "PASS",
+  "bios_live_no_disk_writes": "PASS",
+  "uefi_live_no_disk_writes": "PASS",
+  "uefi_installer_cancel_without_writes": "PASS",
+  "uefi_installer_install": "PASS",
+  "uefi_installed_slot_exact_sha256": "PASS",
+  "uefi_iso_free_cold_boot": "PASS",
+  "iso_sha256": "2a8b2478e82355f2bbbf079b3b885425ace114c0a2f612aaf8fc97e8ee1c1cbc",
+  "release": "0.5.4-pre1"
+}
