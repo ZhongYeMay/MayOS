@@ -39,6 +39,11 @@
 <p>当前安装器仅接受 <code>/dev/sd[a-z]</code> 或 <code>/dev/nvme[0-9]n[0-9]</code> 形式的非可移动整盘，拒绝分区、只读盘、非 512 字节逻辑扇区与已有内容的目标。安装后需移除 ISO，并由目标硬盘通过 UEFI x64 引导。</p>
 <div class="info-strip"><p><strong>仅使用独立空白测试盘</strong><br>全新安装会对选中的整盘写入 GPT 与 MayOS 镜像。测试请使用专用 QEMU 虚拟硬盘，检查目标盘后再确认。</p></div>
 <div class="actions"><a class="btn blue" href="download.html#latest-dual-installer">下载 0.5.2 正式版</a><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/actions/runs/44975102066">八项 QEMU 验收</a></div></article>
+<article class="download-panel" id="display-auto-4k"><p class="eyebrow">0.5.3-dev · 开发版本 / 尚未正式发布</p><h2>自动识别分辨率，最高支持 4K 模式</h2>
+<p>下一开发版本优先使用显示器与显卡驱动公布的模式，<strong>不强制固定 1080p，也不会强制所有显示器使用 4K</strong>。范围包括常见 4:3、5:4、16:10、16:9、21:9、32:9、竖屏、3840×2160 UHD 与 4096×2160 DCI 4K；自动选择最长边不超过 4096 像素的可用优先模式。</p>
+<p>MayKernel64/Live 通过 GRUB 与固件自动选择 GOP/VBE 模式；Linux64 从已连接的 DRM 模式列表检测并尝试设置 framebuffer。显卡不允许切换时保留固件已启用模式。鼠标与触摸屏坐标随画面比例调整，避免超宽屏和竖屏点击偏移。</p>
+<p><strong>限制：</strong>目前还是 1280×720 逻辑桌面按比例绘制；尚未支持真正原生 HiDPI 字体排版、热插拔自动重新配置和所有实体显卡显示器组合。此功能<strong>没有包含在已发布的 0.5.2 正式 ISO 中</strong>。</p>
+<div class="actions"><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/tree/main/versions/0.5.3-dev">查看下一开发版源码</a><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/actions/runs/44980712480">查看 4K 自动适配 QEMU 测试</a></div></article>
 <article class="download-panel" id="limitations"><h2>尚未验证的硬件与功能</h2><p>实体机安装和多品牌 UEFI 固件、Secure Boot、USB 集线器、I²C 触摸板、无线网卡、独立显卡加速、完整音频栈、4Kn 存储和掉电回滚仍待验证。</p></article>
 <article class="download-panel" id="published"><p class="eyebrow">历史版本 · 0.5.0-pre2</p><h2>MayKernel 启动预览</h2>
 <p>目前验证环境为 QEMU x86_64，128 MiB 或以上的虚拟机内存用于基础 MayKernel 测试，标准 VGA/固件 framebuffer、PS/2 输入与 BIOS 或 OVMF UEFI x64。真实硬件最低内存、显卡和外围设备兼容范围尚未测定；不能将虚拟机验证结果当作通用最低配置。</p>
