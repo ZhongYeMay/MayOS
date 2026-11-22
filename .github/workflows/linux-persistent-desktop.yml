@@ -59,6 +59,8 @@ jobs:
             fonts-noto-cjk fonts-dejavu-core flex bison bc \
             libelf-dev libssl-dev xz-utils busybox-static rsync \
             libcurl4-openssl-dev pkg-config ca-certificates e2fsprogs
+      - name: Generate real MayOS font/icon/resource headers before Linux desktop compile
+        run: make -C versions/0.5.4-dev build/font.h build/cat_image.h build/material_icons.h
       - name: Build Linux 7.3.1 with persistent backend and unchanged desktop design
         run: make -C versions/0.5.4-dev linux LINUX_VERSION=7.3.1 LINUX_JOBS=4
       - name: Compile real MayKernel + dual-kernel ISO for QEMU
