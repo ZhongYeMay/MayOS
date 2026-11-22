@@ -89,6 +89,9 @@ static int ata_sector(u32 lba, void *buf, int write) {
     return ata_wait(0);
 }
 static int disk_sector(u32 lba, void *buf, int write) {
+    /* Defense in depth: a MayOS Live session must never issue a physical
+     * write even if a future caller bypasses the MayFS mounted-disk guard. */
+    if (write && platform_ram_only()) return 0;
     if (lba >= disk_sectors) return 0;
     int result;
     if (storage_nvme)
@@ -561,7 +564,7 @@ void fs_init(void) {
     }
     if (platform_ram_only()) {
         fs_start = fs_blocks = 0;
-        serial("MayOS: hardware trial uses RAM only; disk writes disabled\n");
+        serial("MayOS Live: session filesystem runs in RAM; disk writes disabled\n");
     } else {
         select_mayfs_region();
     }
