@@ -25,6 +25,7 @@
 #include "core.h"
 #include "cursor.h"
 #include "framebuffer.h"
+#include "display_modes.h"
 #include "task_manager.h"
 #undef memset
 #undef memcpy
@@ -344,6 +345,97 @@ static void open_input_devices(void) {
     fail("keyboard or pointer evdev device unavailable after 5 seconds");
 }
 
+
+/* Modes from /sys/class/drm/<connector>/modes are the kernel's connected
+ * display/EDID modes. Prefer the first EDID timing, not a hardcoded 16:9 or
+ * 4K value. The framebuffer may reject the mode switch (simpledrm/efifb);
+ * in that case preserve the firmware-selected output and keep scaling. */
+static int mayos_drm_preferred_mode(MayDisplayMode *chosen, char *connector,
+                                   size_t connector_size) {
+    DIR *directory = opendir("/sys/class/drm");
+    if (!directory) return 0;
+    struct dirent *entry;
+    int found = 0;
+    while ((entry = readdir(directory))) {
+        if (strncmp(entry->d_name, "card", 4) ||
+            !strchr(entry->d_name, '-') ||
+            strchr(entry->d_name, '/') ||
+            strlen(entry->d_name) > 90)
+            continue;
+        char path[180];
+        snprintf(path, sizeof(path), "/sys/class/drm/%s/status", entry->d_name);
+        FILE *state = fopen(path, "r");
+        if (!state) continue;
+        char word[32] = {0};
+        int connected = fgets(word, sizeof(word), state) &&
+                        !strncmp(word, "connected", 9);
+        fclose(state);
+        if (!connected) continue;
+        snprintf(path, sizeof(path), "/sys/class/drm/%s/modes", entry->d_name);
+        FILE *list = fopen(path, "r");
+        if (!list) continue;
+        /* Mode lists are usually small; parse each line rather than limiting
+         * to an assumed set of video timings or aspect ratios. */
+        char line[100];
+        while (fgets(line, sizeof(line), list)) {
+            if (may_display_parse(line, chosen)) {
+                snprintf(connector, connector_size, "%s", entry->d_name);
+                found = 1;
+                break;
+            }
+        }
+        fclose(list);
+        if (found) break; /* primary connected display, single FB desktop */
+    }
+    closedir(directory);
+    return found;
+}
+static void mayos_choose_monitor_mode(void) {
+    MayDisplayMode preferred;
+    char connector[96] = {0};
+    char message[256];
+    if (!mayos_drm_preferred_mode(&preferred, connector, sizeof(connector))) {
+        serial("MayOS display: no connected DRM/EDID mode; keeping firmware framebuffer\n");
+        return;
+    }
+    snprintf(message, sizeof(message),
+             "MayOS display: %s first supported monitor mode %ux%u (max dimension 4096)\n",
+             connector, preferred.width, preferred.height);
+    serial(message);
+    if (variable.xres == preferred.width && variable.yres == preferred.height) {
+        serial("MayOS display: already using preferred monitor resolution\n");
+        return;
+    }
+    struct fb_var_screeninfo saved = variable;
+    struct fb_var_screeninfo requested = variable;
+    requested.xres = preferred.width;
+    requested.yres = preferred.height;
+    requested.xres_virtual = preferred.width;
+    requested.yres_virtual = preferred.height;
+    requested.xoffset = 0;
+    requested.yoffset = 0;
+    requested.activate = FB_ACTIVATE_NOW;
+    if (ioctl(framebuffer_fd, FBIOPUT_VSCREENINFO, &requested) == 0) {
+        struct fb_var_screeninfo actual;
+        struct fb_fix_screeninfo updated;
+        if (!ioctl(framebuffer_fd, FBIOGET_VSCREENINFO, &actual) &&
+            !ioctl(framebuffer_fd, FBIOGET_FSCREENINFO, &updated) &&
+            actual.xres == preferred.width && actual.yres == preferred.height) {
+            variable = actual;
+            fixed = updated;
+            serial("MayOS display: monitor preferred mode activated\n");
+            return;
+        }
+        /* Drivers may silently return a different geometry. Revert when it
+         * differs, rather than treating it as successfully selected 4K. */
+        ioctl(framebuffer_fd, FBIOPUT_VSCREENINFO, &saved);
+    }
+    if (ioctl(framebuffer_fd, FBIOGET_VSCREENINFO, &variable) ||
+        ioctl(framebuffer_fd, FBIOGET_FSCREENINFO, &fixed))
+        fail("read framebuffer after rejected monitor mode");
+    serial("MayOS display: monitor mode switch unsupported; firmware mode retained\n");
+}
+
 void hardware_init(u32 magic, u32 info) {
     (void)magic;
     (void)info;
@@ -396,6 +488,7 @@ void hardware_init(u32 magic, u32 info) {
         fail("open /dev/fb0; boot with a graphics framebuffer");
     if (ioctl(framebuffer_fd, FBIOGET_FSCREENINFO, &fixed) || ioctl(framebuffer_fd, FBIOGET_VSCREENINFO, &variable))
         fail("framebuffer information");
+    mayos_choose_monitor_mode();
     display = (MaySurface){.width=variable.xres, .height=variable.yres,
         .pitch=fixed.line_length, .bpp=variable.bits_per_pixel,
         .xoffset=variable.xoffset, .yoffset=variable.yoffset,
