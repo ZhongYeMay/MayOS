@@ -4,12 +4,12 @@ on:
     branches: [feat/display-auto-native-4k-20261122]
   pull_request:
     paths:
-      - 'versions/0.5.2/boot/grub/**'
-      - 'versions/0.5.2/kernel/framebuffer.h'
-      - 'versions/0.5.2/kernel/display_modes.h'
-      - 'versions/0.5.2/linux/desktop.c'
-      - 'versions/0.5.2/scripts/display_auto_test.c'
-      - 'versions/0.5.2/scripts/framebuffer_test.c'
+      - 'versions/0.5.3-dev/boot/grub/**'
+      - 'versions/0.5.3-dev/kernel/framebuffer.h'
+      - 'versions/0.5.3-dev/kernel/display_modes.h'
+      - 'versions/0.5.3-dev/linux/desktop.c'
+      - 'versions/0.5.3-dev/scripts/display_auto_test.c'
+      - 'versions/0.5.3-dev/scripts/framebuffer_test.c'
       - '.github/workflows/display-auto-4k.yml'
 permissions:
   contents: read
@@ -23,7 +23,7 @@ jobs:
       - name: Compile host tests and Linux framebuffer desktop
         run: |
           set -euxo pipefail
-          cd versions/0.5.2
+          cd versions/0.5.3-dev
           gcc -std=gnu11 -O2 -Wall -Wextra -Werror \
             scripts/display_auto_test.c -o /tmp/mayos-display-auto-test
           gcc -std=gnu11 -O2 -Wall -Wextra -Werror \
@@ -38,7 +38,7 @@ jobs:
       - name: Confirm firmware auto comes first and no fixed-720p priority
         run: |
           set -euxo pipefail
-          cd versions/0.5.2
+          cd versions/0.5.3-dev
           grep -Fq 'set gfxmode=auto,' boot/grub/menu.cfg
           ! grep -q '^set gfxmode=1280x720' boot/grub/menu.cfg
           grep -Fq 'set gfxpayload=keep' boot/grub/dual.cfg.in
@@ -62,11 +62,11 @@ jobs:
             xorriso mtools qemu-system-x86 ovmf python3-pil \
             fonts-noto-cjk fonts-dejavu-core
       - name: Build real updated MayKernel preview ISO
-        run: make -C versions/0.5.2 all
+        run: make -C versions/0.5.3-dev all
       - name: Boot actual QEMU desktop and inspect firmware framebuffer
         run: |
           set -euxo pipefail
-          cd versions/0.5.2
+          cd versions/0.5.3-dev
           python3 scripts/smoke.py
       - name: Upload actual boot ISO and serial logs (not a claim of physical EDID support)
         if: always()
@@ -75,6 +75,6 @@ jobs:
           name: MayOS-display-auto-4k-QEMU-evidence
           if-no-files-found: warn
           path: |
-            versions/0.5.2/build/mayos.iso
-            versions/0.5.2/build/*smoke*.log
-            versions/0.5.2/build/*qemu*.log
+            versions/0.5.3-dev/build/mayos.iso
+            versions/0.5.3-dev/build/*smoke*.log
+            versions/0.5.3-dev/build/*qemu*.log
