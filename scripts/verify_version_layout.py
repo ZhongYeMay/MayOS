@@ -22,7 +22,14 @@ assert (legacy/"Makefile").is_file()
 assert (legacy/"scripts/smoke.py").is_file()
 expected={x["directory"]:x for x in catalog["released"]}
 found={x.name for x in (ROOT/"versions").iterdir() if x.is_dir()}
-assert found==set(expected)|{active}, ("unexpected/missing release directories", found)
+development=set(catalog.get("development_snapshots", []))
+assert not (development & (set(expected)|{active})), "Duplicate release/dev directories"
+assert found==set(expected)|{active}|development, ("unexpected/missing release directories", found)
+for directory in development:
+    path=ROOT/"versions"/directory
+    assert path.is_dir() and not path.is_symlink()
+    assert (path/"Makefile").is_file() and (path/"kernel/version.h").is_file()
+    print("PASS: separate development snapshot", directory, flush=True)
 for directory,item in expected.items():
     path=ROOT/"versions"/directory
     assert path.is_dir() and not path.is_symlink(),directory
