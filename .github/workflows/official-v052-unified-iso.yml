@@ -1,0 +1,202 @@
+name: MayOS v0.5.2 Official — Live, DualKernel, Installer
+on:
+  push:
+    branches: [release/unified-v0.5.2-20261122]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: mayos-v052-unified
+  cancel-in-progress: true
+jobs:
+  build-and-verify:
+    name: Official ISO build + 8 real QEMU installation/Live tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Assert official version and Python scripts compile
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/build_official_v052_iso.py scripts/retarget_installer_payload.py scripts/test_official_v052_iso.py
+          test "$(cat versions/0.5.2/VERSION)" = "0.5.2"
+          grep -Fq '#define MAYOS_VERSION "0.5.2"' versions/0.5.2/kernel/version.h
+          grep -Fq 'mayos.ram' versions/0.5.2/boot/grub/dual.cfg.in
+      - name: Configure verified Ubuntu packages
+        run: bash scripts/configure-ci-apt-mirror.sh
+      - name: Install real QEMU, Linux/MayKernel build tools and offline installer packers
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
+            build-essential gcc-multilib musl-tools linux-libc-dev grub-common grub-pc-bin grub-efi-amd64-bin \
+            xorriso mtools cpio qemu-system-x86 ovmf ffmpeg python3-pil python3-h2 \
+            fonts-noto-cjk fonts-dejavu-core flex bison bc fdisk util-linux \
+            libelf-dev libssl-dev xz-utils busybox-static rsync libcurl4-openssl-dev \
+            pkg-config ca-certificates zstd
+      - name: Reuse byte-identical compiled v0.5.2 ISO after proving source and builder were unchanged
+        id: cached
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          original=7204948dc73884962cfecbdbcb0db2d7158adf42
+          git fetch --depth=1 origin "$original"
+          for path in versions/0.5.2 scripts/build_official_v052_iso.py scripts/retarget_installer_payload.py; do
+            old="$(git rev-parse "$original:$path")"
+            now="$(git rev-parse "HEAD:$path")"
+            test "$old" = "$now" || { echo "Source divergence: $path"; exit 1; }
+            echo "PASS: original and current source blob/tree identical: $path $now"
+          done
+          mkdir -p build
+          gh run download 44974088412 --repo "$GITHUB_REPOSITORY" \
+            --name MayOS-v0.5.2-Live-DualKernel-Installer-QEMU-verified \
+            --dir build
+          echo 'a394e27c608e09d5dd1848b288cf540541319841b022e9da60448e3a2a4bba91  build/MayOS-0.5.2-DualKernel-Live-Installer-x86_64.iso' | sha256sum -c
+          (cd build && sha256sum -c SHA256SUMS.txt)
+          python3 - <<'PY'
+          import json
+          m=json.load(open('build/MayOS-0.5.2-DualKernel-Live-Installer-x86_64.manifest.json'))
+          assert m['source_commit']=='7204948dc73884962cfecbdbcb0db2d7158adf42'
+          assert m['release']=='0.5.2'
+          assert m['sha256']=='a394e27c608e09d5dd1848b288cf540541319841b022e9da60448e3a2a4bba91'
+          print('PASS: imported prior ISO has exact source provenance and stable release version')
+          PY
+          echo "reuse=true" >> "$GITHUB_OUTPUT"
+      - name: Fetch strictly SHA-pinned original installer Linux runtime
+        if: steps.cached.outputs.reuse != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p build/inputs
+          curl --fail --location --retry 5 --retry-all-errors --silent --show-error \
+            'https://raw.githubusercontent.com/ZhongYeMay/MayOS/6b28838524fc843469600c605013a37aa1d21851/MayOS-0.5.2-pre2-Installer-x86_64.iso' \
+            -o build/inputs/MayOS-0.5.2-pre2-Installer-x86_64.iso
+          echo 'c46ee45ded237f0c5823f94e498dad89700f7c54c0d80ba4137e5be3bf572a1a  build/inputs/MayOS-0.5.2-pre2-Installer-x86_64.iso' | sha256sum -c
+      - name: Compile actual MayKernel v0.5.2 ELF and original BIOS/UEFI ISO
+        if: steps.cached.outputs.reuse != 'true'
+        run: |
+          set -euo pipefail
+          make -C versions/0.5.2 all
+          make -C versions/0.5.2 test-update test-sha256 test-update-verify
+      - name: Compile Linux 7.3.1 desktop FROM v0.5.2 source (not old pre-release)
+        if: steps.cached.outputs.reuse != 'true'
+        run: |
+          set -euo pipefail
+          make -C versions/0.5.2 linux LINUX_VERSION=7.3.1 LINUX_JOBS=4
+          python3 versions/0.5.2/scripts/linux.py status
+      - name: Build version-consistent 4-mode BIOS/UEFI ISO
+        if: steps.cached.outputs.reuse != 'true'
+        run: |
+          set -euo pipefail
+          python3 scripts/build_official_v052_iso.py \
+            --kernel-iso versions/0.5.2/build/mayos.iso \
+            --installer-iso build/inputs/MayOS-0.5.2-pre2-Installer-x86_64.iso \
+            --source-commit "$GITHUB_SHA" \
+            --output build/MayOS-0.5.2-DualKernel-Live-Installer-x86_64.iso
+          cd build
+          sha256sum -c SHA256SUMS.txt
+          xorriso -indev MayOS-0.5.2-DualKernel-Live-Installer-x86_64.iso -report_el_torito plain > v052-boot-catalog.txt
+          grep -Eq 'El Torito boot img[[:space:]]*:[[:space:]]*[0-9]+[[:space:]]+BIOS' v052-boot-catalog.txt
+          grep -Eq 'El Torito boot img[[:space:]]*:[[:space:]]*[0-9]+[[:space:]]+UEFI' v052-boot-catalog.txt
+      - name: 8 real QEMU tests — BIOS, UEFI, Live zero writes, UEFI installation, installed ELF equality, ISO-free boot
+        run: python3 scripts/test_official_v052_iso.py --iso build/MayOS-0.5.2-DualKernel-Live-Installer-x86_64.iso
+      - name: Require all 8 QEMU PASS results and independently hash installed/Live ELF
+        run: |
+          set -euo pipefail
+          cd build
+          sha256sum -c SHA256SUMS.txt
+          python3 - <<'PY'
+          import json,pathlib,hashlib
+          root=pathlib.Path('.')
+          manifest=json.loads((root/'MayOS-0.5.2-DualKernel-Live-Installer-x86_64.manifest.json').read_text())
+          tested=json.loads((root/'qemu-v052-official-acceptance.json').read_text())
+          assert manifest['release']==tested['release']=='0.5.2'
+          assert tested['iso_sha256']==manifest['sha256']
+          cases=[k for k in tested if k not in ('release','iso_sha256')]
+          assert len(cases)==8 and all(tested[k]=='PASS' for k in cases),tested
+          boot={item['id']:item for item in manifest['boot_modes']}
+          actual=hashlib.sha256((root/'installed-A.elf').read_bytes()).hexdigest()
+          assert actual==boot['mayos']['kernel_sha256']==boot['mayos-live']['kernel_sha256']==boot['mayos-install']['installed_kernel_sha256']
+          assert boot['mayos-live']['disk_writes_allowed'] is False
+          print('PASS: official v0.5.2 verified 8 live/install/boot scenarios, installed ELF exactly matches live')
+          PY
+      - name: Retain actual ISO, source manifest, SHA-256, real QEMU screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-v0.5.2-Live-DualKernel-Installer-QEMU-verified
+          retention-days: 90
+          if-no-files-found: warn
+          path: |
+            build/MayOS-0.5.2-DualKernel-Live-Installer-x86_64.iso
+            build/MayOS-0.5.2-DualKernel-Live-Installer-x86_64.manifest.json
+            build/SHA256SUMS.txt
+            build/qemu-v052-official-acceptance.json
+            build/installed-v052-cold-boot.log
+            build/v052-boot-catalog.txt
+            build/installed-A.elf
+            build/screenshots/*.png
+  publish-official:
+    name: Publish real non-prerelease v0.5.2 ONLY after verified install/Live
+    needs: build-and-verify
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: MayOS-v0.5.2-Live-DualKernel-Installer-QEMU-verified
+          path: verified
+      - name: Independently verify artifact and all eight results
+        run: |
+          set -euo pipefail
+          cd verified
+          sha256sum -c SHA256SUMS.txt
+          python3 - <<'PY'
+          import json
+          m=json.load(open('MayOS-0.5.2-DualKernel-Live-Installer-x86_64.manifest.json'))
+          t=json.load(open('qemu-v052-official-acceptance.json'))
+          assert m['release']=='0.5.2'
+          checks=[v for k,v in t.items() if k not in ('release','iso_sha256')]
+          assert len(checks)==8 and all(v=='PASS' for v in checks)
+          PY
+      - name: Publish official non-pre-release v0.5.2
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd verified
+          if gh release view v0.5.2 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'v0.5.2 already exists; refusing to replace assets'
+            exit 1
+          fi
+          cat > RELEASE_NOTES.txt <<'EOF'
+          MayOS v0.5.2 — official x86_64 BIOS/UEFI release.
+
+          One ISO includes:
+          - MayKernel64 desktop: v0.5.2
+          - MayOS Live: v0.5.2, RAM-only, disk writes disabled
+          - Linux64 MayOS desktop/rescue: v0.5.2, Linux kernel 7.3.1
+          - Offline graphical and serial installer: installs EXACTLY v0.5.2
+
+          The Live, normal desktop, and installed MayKernel have byte-identical
+          ELF SHA-256. No version-label-only substitution.
+
+          8 real QEMU tests passed: BIOS MayKernel; BIOS Linux desktop; BIOS
+          Live with byte-for-byte unchanged disk; UEFI Live unchanged disk;
+          UEFI installer cancel unchanged disk; real blank disk installation;
+          installed slot exact kernel SHA; ISO-free UEFI disk cold boot.
+
+          Physical computer/USB boot and real-device installation compatibility
+          are NOT yet broadly verified. Disable Secure Boot; first test on
+          disposable QEMU disks. Mission Center re-development is separate.
+          EOF
+          gh release create v0.5.2 \
+            MayOS-0.5.2-DualKernel-Live-Installer-x86_64.iso \
+            MayOS-0.5.2-DualKernel-Live-Installer-x86_64.manifest.json \
+            SHA256SUMS.txt qemu-v052-official-acceptance.json \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title 'MayOS v0.5.2 Official — Live + DualKernel + Installer' \
+            --notes-file RELEASE_NOTES.txt --latest
