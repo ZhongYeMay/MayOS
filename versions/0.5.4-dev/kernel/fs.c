@@ -2,6 +2,9 @@
 #include "procfs.h"
 #include "utf8.h"
 #include "version.h"
+#ifdef MAYOS_LINUX
+#include "../linux/profile_persist.h"
+#endif
 #ifndef MAYOS_LINUX
 #include "io.h"
 #include "pci.h"
@@ -339,8 +342,10 @@ int fs_sync(void) {
     return 1;
 }
 #else
-/* Linux desktop files are session RAM objects. Never open raw block devices. */
-int fs_sync(void) { return 0; }
+/* Linux only persists to explicitly mounted and marked ext4 data volumes. */
+int fs_sync(void) {
+    return mayos_linux_profile_save(files, saved_prefs, prefs_ready);
+}
 #endif
 int fs_prefs_read(u8 *destination, u32 bytes) {
     if (!destination || bytes != PREFS_LENGTH || !prefs_ready)
@@ -542,9 +547,14 @@ void fs_init(void) {
     prefs_ready = 0;
     memset(saved_prefs, 0, sizeof(saved_prefs));
 #ifdef MAYOS_LINUX
-    disk_ready = 0;
-    int valid = 0;
-    serial("MayOS Linux: RAM filesystem; no block devices opened\n");
+    int valid = mayos_linux_profile_load(files, saved_prefs, &prefs_ready);
+    disk_ready = mayos_linux_profile_enabled();
+    if (valid)
+        serial("MayOS Linux: persistent desktop profile restored\n");
+    else if (disk_ready)
+        serial("MayOS Linux: empty marked profile; initializing first snapshot\n");
+    else
+        serial("MayOS Linux: RAM filesystem; no persistent volume opened\n");
 #else
     storage_nvme = nvme_init();
     storage_ahci = !storage_nvme && ahci_init();
@@ -667,7 +677,8 @@ void fs_init(void) {
         fs_sync();
     }
 #ifdef MAYOS_LINUX
-    serial("MayOS Linux: RAM filesystem initialized\n");
+    serial(disk_ready ? "MayOS Linux: persistent desktop storage ready\n"
+                      : "MayOS Linux: temporary RAM-only desktop storage\n");
 #else
     serial(valid ? "MayOS: MayFS mounted\n" : "MayOS: MayFS initialized (or RAM fallback)\n");
 #endif
