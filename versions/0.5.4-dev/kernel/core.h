@@ -33,6 +33,8 @@ const u16 *platform_wallpaper_bitmap(void);
 void platform_idle(void);
 #else
 static inline const char *platform_kernel(void) { return "MayKernel x86_64 (custom)"; }
+/* Native MayKernel needs authenticated HTTPS and a large-image cache first. */
+static inline const u16 *platform_wallpaper_bitmap(void) { return (const u16 *)0; }
 #ifdef MAYOS_RUST_CORE
 void platform_idle(void);
 #else
