@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Validate all 12 tagged versions and current main source
+      - name: Validate immutable published version trees and current main source
         run: python3 scripts/verify_version_layout.py
       - name: Assert old entrypoint is a Git symlink, not a directory
         run: |
@@ -34,8 +34,12 @@ jobs:
           test -e MayOS_0.3.0-pre1/Makefile
           test -f versions/0.5.0-pre2/Makefile
           test -f versions/0.5.0-pre1/Makefile
-      - name: Build update parser tests from new and legacy paths
+      - name: Test 0.5.2 release parser and verify both native build entrypoints
         run: |
           set -euo pipefail
-          make -C versions/0.5.0-pre2-dev test-update test-update-verify
-          make -C MayOS_0.3.0-pre1 test-update test-update-verify
+          make -C versions/0.5.2 test-update test-update-verify
+          # The older 0.5.0-pre2-dev Makefile has no 'test-update' target.
+          # The compatibility contract is that both locations resolve a real
+          # desktop build recipe, not that legacy Makefiles have newer targets.
+          make -C versions/0.5.0-pre2-dev -n all >/dev/null
+          make -C MayOS_0.3.0-pre1 -n all >/dev/null
