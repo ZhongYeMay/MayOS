@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Boot the built MayOS ISO and exercise its native HTTPS ELF over QEMU NAT."""
+import argparse
 import base64
 import http.server
 from pathlib import Path
@@ -8,6 +9,10 @@ import subprocess
 import tempfile
 import threading
 from dual_boot_smoke import BootVM, BUILD
+
+parser = argparse.ArgumentParser(description='Test actual MayOS guest networking with a selected QEMU NIC')
+parser.add_argument('--nic', choices=('e1000', 'e1000e', 'virtio-net-pci'), default='e1000')
+args = parser.parse_args()
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args): pass
@@ -31,12 +36,14 @@ with tempfile.TemporaryDirectory() as folder:
     context.load_cert_chain(cert, key)
     server.socket = context.wrap_socket(server.socket, server_side=True)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    disk = BUILD / "test-modern-network-disk.img"
+    disk = BUILD / f"test-modern-network-{args.nic}-disk.img"
     with disk.open("wb") as stream: stream.truncate(8 * 1024 * 1024)
     vm = None
     try:
-        vm = BootVM(iso=BUILD / "mayos-dual.iso", disk=disk, tag="test-modern-network",
-                    qemu="qemu-system-x86_64", memory=512, timeout=60)
+        vm = BootVM(iso=BUILD / "mayos-dual.iso", disk=disk,
+                    tag=f"test-modern-network-{args.nic}",
+                    qemu="qemu-system-x86_64", memory=512, timeout=60,
+                    nic_model=args.nic)
         vm.wait("custom kernel", timeout=30)
         vm.key("down"); vm.key("ret")
         vm.wait("MayOS-Linux# ", timeout=120)
@@ -52,7 +59,7 @@ with tempfile.TemporaryDirectory() as folder:
         vm.shell_check(f"MAYOS_CA_BUNDLE=/tmp/qa-ca.pem /usr/bin/mayos-fetch {url} > /tmp/tls.txt && "
                        "grep -q 'MayOS guest TLS transport verified' /tmp/tls.txt", "TLS13_TRUSTED")
         vm.shell_check(f"! /usr/bin/mayos-fetch {url}", "TLS_UNTRUSTED_REJECTED")
-        print("PASS: real MayOS guest native ELF + libraries, RTC-valid TLS1.3, CA verification, IPv6 kernel and e1000 NAT")
+        print(f"PASS: real MayOS Linux guest {args.nic} DHCP/NAT, verified TLS1.3, CA trust and IPv6 kernel")
     finally:
         if vm: vm.stop()
         server.shutdown(); server.server_close()
