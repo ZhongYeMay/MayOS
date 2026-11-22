@@ -20,25 +20,25 @@
 #undef strcmp
 #undef strlen
 
-static File files[FS_MAX];
+static File desktop[FS_MAX];
 static u8 prefs[32];
 
 static void set_document(const char *message) {
-    memset(files, 0, sizeof(files));
+    memset(desktop, 0, sizeof(desktop));
     memset(prefs, 0, sizeof(prefs));
     for (int i = 0; i < 4; i++) {
-        files[i].used = 1;
-        files[i].dir = 1;
-        files[i].parent = 0;
+        desktop[i].used = 1;
+        desktop[i].dir = 1;
+        desktop[i].parent = 0;
     }
-    files[4].used = 1;
-    files[4].dir = 0;
-    files[4].parent = 1;
-    strcpy(files[4].name, "recovery.txt");
+    desktop[4].used = 1;
+    desktop[4].dir = 0;
+    desktop[4].parent = 1;
+    strcpy(desktop[4].name, "recovery.txt");
     size_t n = strlen(message);
     assert(n < FILE_CAP);
-    memcpy(files[4].data, message, n + 1);
-    files[4].size = (u32)n;
+    memcpy(desktop[4].data, message, n + 1);
+    desktop[4].size = (u32)n;
     prefs[0] = 0x5a;
 }
 
@@ -73,11 +73,11 @@ static void cleanup(const char *root) {
 }
 static void read_and_expect(const char *message) {
     int valid = 0;
-    memset(files, 0, sizeof(files));
+    memset(desktop, 0, sizeof(desktop));
     memset(prefs, 0, sizeof(prefs));
-    assert(mayos_linux_profile_load(files, prefs, &valid));
+    assert(mayos_linux_profile_load(desktop, prefs, &valid));
     assert(valid == 1);
-    assert(strcmp((char *)files[4].data, message) == 0);
+    assert(strcmp((char *)desktop[4].data, message) == 0);
     assert(prefs[0] == 0x5a);
 }
 static void try_crash(const char *stage) {
@@ -87,7 +87,7 @@ static void try_crash(const char *stage) {
         assert(setenv("MAYOS_PROFILE_TEST_CRASH", stage, 1) == 0);
         set_document("new state after interrupted commit");
         /* Should _exit(97) inside the profile backend at the test-only stage. */
-        (void)mayos_linux_profile_save(files, prefs, 1);
+        (void)mayos_linux_profile_save(desktop, prefs, 1);
         _exit(99);
     }
     int code = 0;
@@ -105,14 +105,14 @@ int main(int argc, char **argv) {
     assert(setenv("MAYOS_PROFILE_DIR", root, 1) == 0);
     assert(mayos_linux_profile_enabled());
     set_document("last known good");
-    assert(mayos_linux_profile_save(files, prefs, 1));
+    assert(mayos_linux_profile_save(desktop, prefs, 1));
     assert(file_exists(root, "desktop-state-a.bin"));
     read_and_expect("last known good");
 
     if (!strcmp(stage, "partial_enospc")) {
         assert(setenv("MAYOS_PROFILE_TEST_ERROR", "partial_enospc", 1) == 0);
         set_document("should not persist with full disk");
-        assert(!mayos_linux_profile_save(files, prefs, 1));
+        assert(!mayos_linux_profile_save(desktop, prefs, 1));
         assert(unsetenv("MAYOS_PROFILE_TEST_ERROR") == 0);
         assert(!file_exists(root, "desktop-state.tmp"));
         assert(!file_exists(root, "desktop-state-b.bin"));
@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
         /* A later successful save must remove any abandoned tmp file and
          * commit another valid generation without destroying the backup. */
         set_document("subsequent successful save");
-        assert(mayos_linux_profile_save(files, prefs, 1));
+        assert(mayos_linux_profile_save(desktop, prefs, 1));
         assert(!file_exists(root, "desktop-state.tmp"));
         read_and_expect("subsequent successful save");
     }
