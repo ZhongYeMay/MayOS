@@ -60,6 +60,9 @@ INPUT_FILES = {
     "boot_brand_sha256": ROOT / "assets/limine-mayos-brand.png",
     "explorer_history_sha256": ROOT / "kernel/explorer_history.h",
     "desktop_fs_sha256": ROOT / "kernel/fs.c",
+    "profile_persistence_c_sha256": ROOT / "linux/profile_persist.c",
+    "profile_persistence_header_sha256": ROOT / "linux/profile_persist.h",
+    "profile_mount_script_sha256": ROOT / "linux/persistence-mount",
     "desktop_cursor_sha256": ROOT / "kernel/cursor.c",
     "desktop_cursor_header_sha256": ROOT / "kernel/cursor.h",
     "desktop_cursor_inflate_sha256": ROOT / "kernel/cursor_inflate.h",
@@ -381,6 +384,7 @@ def build_initramfs(busybox: Path, fastfetch: Path, version: str) -> dict:
                                  ("etc/profile", "profile", 0o644),
                                  ("bin/mayos-session", "desktop-session", 0o755),
                                  ("bin/mayos-network", "network-start", 0o755),
+                                 ("bin/mayos-persistence", "persistence-mount", 0o755),
                                  ("bin/mayos-dhcp", "dhcp-hook", 0o755),
                                  ("usr/share/doc/mayos/linux-readme.txt", "README.md", 0o644)):
         entries.append((target, stat.S_IFREG | mode, (ROOT / "linux" / source).read_bytes(), 0, 0))
@@ -505,6 +509,7 @@ def build(args: argparse.Namespace) -> dict:
              "-I" + str(ROOT / "kernel"), "-I" + str(ROOT / "build"),
              "-isystem", str(OUT / "headers/include"),
              str(ROOT / "linux/desktop.c"), str(ROOT / "kernel/fs.c"),
+              str(ROOT / "linux/profile_persist.c"),
              str(ROOT / "kernel/cursor.c"),
              str(ROOT / "kernel/gui.c"), str(task_library), "-o", str(OUT / "mayos-desktop")])
         validate_static_elf(OUT / "mayos-desktop")
