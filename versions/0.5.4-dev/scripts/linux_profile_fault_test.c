@@ -15,6 +15,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "../linux/profile_persist.h"
+#undef memcpy
+#undef memset
+#undef strcmp
+#undef strlen
 
 static File files[FS_MAX];
 static u8 prefs[32];
