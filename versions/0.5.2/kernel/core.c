@@ -494,6 +494,8 @@ void hardware_init(u32 magic, u32 info) {
     number(display_number, display.height); serial(display_number); serial("x"); number(display_number, display.bpp); serial(display_number); serial("\n");
     boot_splash_begin("MayKernel64");
     ram_only = boot_ram_only(m, flags);
+    if (ram_only)
+        serial("MayOS Live 0.5.2: RAM-only session; disk writes blocked\n");
     load_pointer_module(m, flags);
     memory_init(m, flags);
     u32 a, b, c, d;
