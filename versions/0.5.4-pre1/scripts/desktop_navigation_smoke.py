@@ -77,6 +77,8 @@ def exercise(args, disk, linux):
         vm.click(176, 16)  # File menu.
         vm.click(200, 121)  # New text file.
         vm.keyboard_command("menu-check.txt")
+        time.sleep(.7)
+        vm.click(600, 393)  # Select the new document in the third row.
         vm.click(233, 16)  # Edit menu.
         vm.click(251, 54)  # Copy selected file.
         vm.click(233, 16)

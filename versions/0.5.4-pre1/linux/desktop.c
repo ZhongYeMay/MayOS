@@ -156,12 +156,19 @@ int platform_wallpaper_poll(u32 *pixels, char date[9], int active) {
         refresh = active && success;
     }
     if (active && (i32)(ticks - wallpaper_next) >= 0) {
-        wallpaper_child = fork();
-        if (wallpaper_child == 0) {
-            execl(MAY_WALLPAPER_WORKER, MAY_WALLPAPER_WORKER, (char *)NULL);
-            _exit(127);
+        char connection[160];
+        if (!platform_network_status(connection, sizeof(connection))) {
+            /* DHCP often completes just after the desktop becomes ready. */
+            wallpaper_next = ticks + 300U;
+        } else {
+            wallpaper_child = fork();
+            if (wallpaper_child == 0) {
+                if (serial_fd >= 0) dup2(serial_fd, STDERR_FILENO);
+                execl(MAY_WALLPAPER_WORKER, MAY_WALLPAPER_WORKER, (char *)NULL);
+                _exit(127);
+            }
+            if (wallpaper_child < 0) wallpaper_next = ticks + 30000U;
         }
-        if (wallpaper_child < 0) wallpaper_next = ticks + 30000U;
     }
     if (!refresh) return 0;
 
