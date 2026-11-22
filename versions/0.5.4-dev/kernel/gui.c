@@ -1774,8 +1774,20 @@ static void document_symbol(int x, int y, int size, u32 color) {
     stroke(x0 + 6, y0 + size / 2 + 7, x1 - 5, y0 + size / 2 + 7, 2, color);
 }
 static void desktop_wallpaper(void) {
-    /* Pure-black monochrome with two thin silver arcs; native framebuffer only. */
+    /* Both kernels share this path. Linux can supply a verified Bing RGB565
+       cache; MayKernel keeps the approved local background until its own
+       trusted network transport and large-image persistence exist. */
     if (desktop_style == 0) {
+        const u16 *daily = platform_wallpaper_bitmap();
+        if (daily) {
+            for (int i = 0; i < W * H; i++) {
+                u32 px = daily[i];
+                pixels[i] = (((px >> 11) & 31u) * 255u / 31u << 16) |
+                            (((px >> 5) & 63u) * 255u / 63u << 8) |
+                            ((px & 31u) * 255u / 31u);
+            }
+            return;
+        }
         for (int y = 0; y < H; y++)
             rect(0, y, W, 1, blend(dark ? 0x030304 : 0xf9f9fb,
                                    dark ? 0x151518 : 0xe7e7eb, (u32)y * 120 / H));
