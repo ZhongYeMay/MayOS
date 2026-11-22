@@ -48,9 +48,9 @@
 <p class="eyebrow">0.5.4-dev · 已合并开发源码 · QEMU 持久化验收通过</p>
 <h2>Linux64 基础文件持久化：通过两次真实启动验证</h2>
 <p>MayOS 的 Linux64 桌面在下一开发版本中支持<strong>用户明确启用的独立 ext4 数据盘</strong>。先以只读方式验证预置的 <code>.mayos-profile-enabled</code> 标记，再允许保存桌面文件与设置；文件保存在双份 CRC32 校验、原子重命名的 A/B 快照中。没有授权标记、没有指定设备或使用 Live 模式时，仍只运行于 RAM，不自动格式化或写入其他磁盘。</p>
-<p><strong>真实 QEMU 验收：</strong>首次启动保存文件、关机、第二次启动读取到原文件，且未授权 ext4 磁盘的 SHA-256 在运行前后完全一致；原有双内核启动和 Linux 图形桌面回归也通过。</p>
-<p><strong>仍有重要限制：</strong>此功能<strong>不包含在正式版 0.5.2 ISO</strong>；当前文件槽位与单文件容量有限，实体电脑存储兼容性、随机断电与广泛稳定性尚未全面认证。不要在存有个人数据的实体磁盘上使用此开发功能。</p>
-<div class="actions"><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/tree/main/versions/0.5.4-dev">查看 0.5.4-dev 源码和 QEMU 操作说明</a><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/actions/runs/44991291384">实际 QEMU 启动、保存与恢复测试</a><a class="link" href="https://github.com/ZhongYeMay/MayOS/pull/54">已合并的开发 PR #54</a></div>
+<p><strong>真实 QEMU 验收：</strong>首次启动保存文件、关机、第二次启动读取到原文件；另已验证保存完成（fsync）后直接强制终止 QEMU，重新冷启动仍可读回最新文件。未授权 ext4 磁盘即使遇到强制终止，镜像 SHA-256 也保持完全一致；双内核和 Linux 桌面基础回归通过。</p>
+<p><strong>仍有重要限制：</strong>此功能<strong>不包含在正式版 0.5.2 ISO</strong>；当前文件槽位与单文件容量有限，实体电脑存储兼容性、写入过程中的任意断电时机与广泛稳定性尚未全面认证。不要在存有个人数据的实体磁盘上使用此开发功能。</p>
+<div class="actions"><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/tree/main/versions/0.5.4-dev">查看 0.5.4-dev 源码和 QEMU 操作说明</a><a class="btn secondary" href="https://github.com/ZhongYeMay/MayOS/actions/runs/44991291384">实际 QEMU 启动、保存与恢复测试</a><a class="link" href="https://github.com/ZhongYeMay/MayOS/pull/54">已合并的开发 PR #54</a><a class="link" href="https://github.com/ZhongYeMay/MayOS/actions/runs/44994088617">异常断电恢复实测</a></div>
 </article>
 <article class="download-panel" id="limitations"><h2>尚未验证的硬件与功能</h2><p>实体机安装和多品牌 UEFI 固件、Secure Boot、USB 集线器、I²C 触摸板、无线网卡、独立显卡加速、完整音频栈、4Kn 存储和掉电回滚仍待验证。</p></article>
 <article class="download-panel" id="published"><p class="eyebrow">历史版本 · 0.5.0-pre2</p><h2>MayKernel 启动预览</h2>
