@@ -26,7 +26,6 @@ from install_mayos import install, ESP_START, SECTOR  # noqa: E402
 
 VERSION = "0.5.2"
 OLD_HEADING = b"MayOS 0.5.1 | Installation and recovery"
-NEW_HEADING = b"MayOS 0.5.2 | Installation and recovery"
 
 
 def digest(path: Path) -> str:
@@ -39,7 +38,7 @@ def cmd(*args, **kwargs):
 
 
 def create_payload(*, source_iso: Path, old_initramfs: Path, new_initramfs: Path,
-                   expected_live_elf: Path) -> dict:
+                   expected_live_elf: Path, version: str = VERSION, install_image=install) -> dict:
     source_iso = source_iso.resolve(strict=True)
     old_initramfs = old_initramfs.resolve(strict=True)
     expected_live_elf = expected_live_elf.resolve(strict=True)
@@ -59,16 +58,15 @@ def create_payload(*, source_iso: Path, old_initramfs: Path, new_initramfs: Path
         if any(not (data / part).is_file() for part in required):
             raise RuntimeError("Pinned installer initramfs missing mandatory components")
         disk = work / "new-installable-disk.img"
-        install(source_iso, digest(source_iso), disk)
+        install_image(source_iso, digest(source_iso), disk)
         slot = work / "installed-A.elf"
         cmd("mcopy", "-i", f"{disk}@@{ESP_START * SECTOR}",
             "::/slots/A.elf", str(slot))
         current_digest = digest(expected_live_elf)
         if digest(slot) != current_digest:
             raise AssertionError("FATAL: installed disk slot differs from live ISO MayKernel ELF")
-        if (b"MayOS Workstation 0.5.2 / MayShell" not in slot.read_bytes() or
-                b"MayOS Workstation 0.5.2-pre4 / MayShell" in slot.read_bytes()):
-            raise AssertionError("Compiled kernel does not advertise official v0.5.2")
+        if f"MayOS Workstation {version} / MayShell".encode() not in slot.read_bytes():
+            raise AssertionError(f"Compiled kernel does not advertise {version}")
         shutil.copyfile(disk, data / "disk.img")
         shutil.copyfile(slot, data / "update.elf")
         (data / "payload.sha256").write_text(
@@ -78,7 +76,7 @@ def create_payload(*, source_iso: Path, old_initramfs: Path, new_initramfs: Path
         original = (tree / "init").read_bytes()
         if original.count(OLD_HEADING) != 1:
             raise ValueError("Installer console version heading does not match pinned source")
-        (tree / "init").write_bytes(original.replace(OLD_HEADING, NEW_HEADING))
+        (tree / "init").write_bytes(original.replace(OLD_HEADING, f"MayOS {version} | Installation and recovery".encode()))
         (tree / "init").chmod(0o755)
         new_initramfs.parent.mkdir(parents=True, exist_ok=True)
         archive = work / "new.cpio"
@@ -98,7 +96,7 @@ def create_payload(*, source_iso: Path, old_initramfs: Path, new_initramfs: Path
         if not new_initramfs.stat().st_size:
             raise RuntimeError("Repacked installer initramfs is empty")
         return {
-            "version": VERSION,
+            "version": version,
             "installed_slot_sha256": current_digest,
             "disk_payload_sha256": digest(disk),
             "installer_initramfs_sha256": digest(new_initramfs),
