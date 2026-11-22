@@ -48,6 +48,8 @@ INPUT_FILES = {
     "network_backend_sha256": ROOT / "linux/network.h",
     "desktop_session_sha256": ROOT / "linux/desktop-session",
     "desktop_backend_sha256": ROOT / "linux/desktop.c",
+    "display_modes_policy_sha256": ROOT / "kernel/display_modes.h",
+    "framebuffer_geometry_sha256": ROOT / "kernel/framebuffer.h",
     "desktop_gui_sha256": ROOT / "kernel/gui.c",
     "task_manager_ui_sha256": ROOT / "rust/task_manager/view.rs",
     "task_manager_linux_sha256": ROOT / "rust/task_manager/linux.rs",
