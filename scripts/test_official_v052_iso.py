@@ -67,7 +67,7 @@ def take(vm, screenshots: Path, name: str):
     # A uniform serial/GRUB framebuffer compresses to far below 10 KiB.
     # Verify real PNG structure and full framebuffer dimensions instead.
     header = target.read_bytes()[:24]
-    assert header[:8] == b"\\x89PNG\\r\\n\\x1a\\n", name
+    assert header[:8] == b"\x89PNG\r\n\x1a\n", name
     assert len(header) >= 24, name
     width = int.from_bytes(header[16:20], "big")
     height = int.from_bytes(header[20:24], "big")
