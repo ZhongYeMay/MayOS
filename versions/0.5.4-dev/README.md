@@ -1,25 +1,49 @@
-# MayOS 0.5.3-dev · 自动显示模式开发版
+# MayOS 0.5.4-dev · Linux64-first persistent desktop
 
-**未发布的开发源码**。基于已验证的 MayOS v0.5.2，保留原来的黑灰色桌面、MayOS Live、双内核和安装器基础。GitHub 正式版本 `versions/0.5.2/` 保持只读，不随此开发目录修改。
+**Development source only.** The released v0.5.2 and previous v0.5.3-dev directories remain unchanged. This branch does not claim a new stable release.
 
-## 本阶段功能
+## What changed
 
-- GRUB 优先使用固件的 `gfxmode=auto`，不再固定优先 1280×720；启动后保留真实选中的 GOP/VBE 视频模式。
-- Linux64 从已连接 DRM 接口的 `modes` 列表读取优先显示模式，支持最宽或最高边不超过 4096 像素的全部兼容宽高比（含 4K UHD/DCI、16:10、4:3、21:9 和竖屏），仅在对应 framebuffer 驱动允许时切换；拒绝时回退原固件模式。
-- MayKernel64 从 GRUB/固件选择的视频模式读取实际宽高，通过相同比例缩放到物理 framebuffer；**没有声明已具备完整的原生 EDID/GOP 模式重新配置驱动**。
-- Fit/Fill 布局和触摸屏绝对坐标使用同一比例几何算法，避免超宽屏和竖屏点击错位。
+The Linux desktop previously kept files only in process RAM. This version supports opt-in persistence to a previously prepared, separate ext4 data volume. The existing desktop design is unchanged.
 
-**边界：** 当前桌面的逻辑画布仍是 1280×720；更高清晰度的原生 HiDPI 字体、真正的动态布局和显示器热插拔属于后续阶段。实体显卡、EDID、USB-C/DP/HDMI 兼容性尚未全面实测。不能宣称所有显示器已全部通过认证。
+- Default: RAM-only session, no probing or writing arbitrary drives.
+- Persistence requires an explicit Linux kernel parameter such as `mayos.persist=/dev/vda`, a real ext4 filesystem, and a root marker file `.mayos-profile-enabled` containing exactly `MayOS-Profile-v1` plus a newline.
+- `mayos.ram` or `mayos.live=1` always forces RAM-only even if a persistence parameter is present.
+- The init script first mounts the specifically selected device read-only, verifies its marker, then remounts it read/write. It never formats disks.
+- The desktop uses exclusively the marked mount directory, never raw disk I/O. Its two A/B snapshot files include CRC32 validation, atomic rename and file+directory fsync.
+- If the newest snapshot is corrupt, the previous valid snapshot is restored. If both are corrupt, persistent writes are refused to protect remaining evidence.
+- The existing limits remain: 48 file slots and <4096 bytes per file. It is not a full POSIX filesystem, package manager or app sandbox.
 
-## 验证
+## Safe QEMU demonstration on a disposable Linux-host image
+
+Run these commands **only in a temporary development folder**; never use a physical disk containing data.
 
 ```sh
-gcc -std=gnu11 -O2 -Wall -Wextra -Werror scripts/display_auto_test.c -o /tmp/display-auto-test
-/tmp/display-auto-test
-gcc -std=gnu11 -O2 -Wall -Wextra -Werror scripts/framebuffer_test.c -o /tmp/framebuffer-test
-/tmp/framebuffer-test
-make all
-python3 scripts/smoke.py
+mkdir -p /tmp/mayos-profile-seed
+printf 'MayOS-Profile-v1\n' > /tmp/mayos-profile-seed/.mayos-profile-enabled
+truncate -s 128M mayos-profile-test.img
+mkfs.ext4 -F -d /tmp/mayos-profile-seed mayos-profile-test.img
 ```
 
-本开发目录与所有历史版本目录平级，不嵌套进 `MayOS_0.3.0-pre1`。
+Attach `mayos-profile-test.img` as a separate virtio test disk:
+
+```sh
+qemu-system-x86_64 -m 1024 -vga std -cdrom build/mayos-dual.iso -boot d \
+  -drive file=mayos-profile-test.img,format=raw,if=virtio
+```
+
+In GRUB select **Linux64 desktop**, press `e`, append `mayos.persist=/dev/vda` to the Linux kernel line and boot. On success the serial log includes `MayOS Linux profile: explicit marked ext4 mounted for atomic desktop snapshots`. Save a text document and reboot using the same disk and the same explicit boot parameter. The serial log should report `MayOS Linux: persistent desktop profile restored` and the document must remain present.
+
+If no marker or volume is present, the desktop stays temporary in RAM. The boot argument is intentionally required on every boot; no automatic disk selection is implemented.
+
+## Local host tests
+
+```sh
+gcc -std=c11 -O2 -Wall -Wextra -Werror -DMAYOS_LINUX \
+  scripts/linux_profile_test.c linux/profile_persist.c -o /tmp/mayos-profile-test
+/tmp/mayos-profile-test --ram
+/tmp/mayos-profile-test --badmarker
+/tmp/mayos-profile-test --snapshot
+```
+
+Release limitations: full QEMU persistence across repeated real boots, random power loss, all physical storage, access control, browsers, software installation, and Linux hardware drivers still need additional verification.
