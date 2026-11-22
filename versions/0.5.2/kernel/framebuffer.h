@@ -29,6 +29,37 @@ static int surface_valid(const MaySurface *s, u64 capacity) {
 static u32 surface_channel(u32 value, u32 bits, u32 shift) {
     return ((value * ((1U << bits) - 1) + 127) / 255) << shift;
 }
+/* Shared presentation and pointer geometry for all aspect ratios, including
+ * letterboxing/cropping. Logical desktop remains 1280x720; physical mode is
+ * chosen by GOP/VBE (native) or connected DRM modes (Linux). */
+static inline void surface_layout(const MaySurface *s, int scale_mode,
+                                  u32 *dw, u32 *dh, i32 *left, i32 *top) {
+    if (scale_mode == 1) {
+        *dw = W; *dh = H;
+    } else if (scale_mode == 3) {
+        *dw = s->width; *dh = *dw * H / W;
+        if (*dh < s->height) { *dh = s->height; *dw = *dh * W / H; }
+    } else {
+        *dw = s->width; *dh = *dw * H / W;
+        if (*dh > s->height) { *dh = s->height; *dw = *dh * W / H; }
+    }
+    *left = ((i32)s->width - (i32)*dw) / 2;
+    *top = ((i32)s->height - (i32)*dh) / 2;
+}
+static inline int surface_screen_to_desktop(const MaySurface *s, int scale_mode,
+                                             u32 physical, int vertical) {
+    u32 dw, dh;
+    i32 left, top;
+    surface_layout(s, scale_mode, &dw, &dh, &left, &top);
+    i32 offset = vertical ? top : left;
+    u32 span = vertical ? dh : dw;
+    u32 logical = vertical ? H : W;
+    i32 translated = (i32)physical - offset;
+    if (translated <= 0) return 0;
+    if ((u32)translated >= span) return (int)logical - 1;
+    return (int)((u32)translated * logical / span);
+}
+
 static void surface_present(const MaySurface *s, const u32 *pixels, int scale_mode) {
     if ((scale_mode == 0 || scale_mode == 2) &&
         s->width == W && s->height == H && s->bpp == 32 &&
@@ -43,17 +74,8 @@ static void surface_present(const MaySurface *s, const u32 *pixels, int scale_mo
         return;
     }
     u32 dw, dh;
-    if (scale_mode == 1) {
-        dw = W; dh = H;
-    } else if (scale_mode == 3) {
-        dw = s->width; dh = dw * H / W;
-        if (dh < s->height) { dh = s->height; dw = dh * W / H; }
-    } else {
-        dw = s->width; dh = dw * H / W;
-        if (dh > s->height) { dh = s->height; dw = dh * W / H; }
-    }
-    i32 left = ((i32)s->width - (i32)dw) / 2;
-    i32 top = ((i32)s->height - (i32)dh) / 2;
+    i32 left, top;
+    surface_layout(s, scale_mode, &dw, &dh, &left, &top);
     u32 bytes = s->bpp / 8;
     static u32 xmap[16384], ymap[16384];
     for (u32 x = 0; x < s->width; x++) {
