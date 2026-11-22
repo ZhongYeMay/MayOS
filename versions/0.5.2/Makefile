@@ -177,6 +177,8 @@ build/update.o: kernel/update.h kernel/version.h kernel/sha256.h kernel/rust_bri
 build/sha256.o: kernel/sha256.h
 build/update_stream_integrity.o: kernel/update_stream_integrity.h kernel/sha256.h kernel/rust_bridge.h
 build/core.o: kernel/framebuffer.h kernel/boot64.S kernel/net.h kernel/security_tls.h
+build/core.o: kernel/display_modes.h
+build/gui.o: kernel/framebuffer.h
 build/net.o: kernel/net.h kernel/net_ipv4.h kernel/net_dhcp.h kernel/net_tcp.h kernel/net_tcp_retry.h kernel/io.h
 build/net_dhcp.o: kernel/net_dhcp.h
 build/net_tcp.o: kernel/net_tcp.h kernel/net_ipv4.h
