@@ -69,5 +69,8 @@
       "tag": "v0.3.0-pre1-source.1",
       "source_tree_sha": "9176de1f7787dd16195687e1bda3f4f783543270"
     }
+  ],
+  "development_snapshots": [
+    "0.5.3-dev"
   ]
 }
