@@ -1,7 +1,7 @@
 name: MayOS Linux64 persistent desktop safety and regression
 on:
   push:
-    branches: [feat/linux-persistent-profile-054-20261122]
+    branches: [feat/linux-persistence-crash-recovery-054-20261122]
   pull_request:
     paths:
       - 'versions/0.5.4-dev/**'
@@ -34,6 +34,24 @@ jobs:
         run: /tmp/mayos-linux-profile-test --badmarker
       - name: Atomic A/B snapshots and corruption power-loss recovery
         run: /tmp/mayos-linux-profile-test --snapshot
+      - name: Compile host-only crash/failure injection; never include hooks in MayOS binary
+        run: |
+          set -euxo pipefail
+          cd versions/0.5.4-dev
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -DMAYOS_LINUX -DMAYOS_PROFILE_TESTING \
+            scripts/linux_profile_fault_test.c linux/profile_persist.c \
+            -o /tmp/mayos-linux-profile-fault-test
+      - name: Simulate five process-crash boundaries and partial ENOSPC
+        run: |
+          set -euxo pipefail
+          for phase in temp_opened temp_written file_synced renamed directory_synced partial_enospc; do
+            /tmp/mayos-linux-profile-fault-test "$phase"
+          done
+      - name: Ensure production Linux64 build never contains fault injection
+        run: |
+          set -euxo pipefail
+          ! grep -q 'MAYOS_PROFILE_TESTING' versions/0.5.4-dev/scripts/linux.py
+          ! grep -q 'MAYOS_PROFILE_TESTING' versions/0.5.4-dev/Makefile
       - name: Confirm never autowrites to arbitrary block devices
         run: |
           grep -Fq 'mayos.persist=' versions/0.5.4-dev/linux/persistence-mount
