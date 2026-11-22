@@ -1,0 +1,80 @@
+name: MayOS automatic display detection through 4K
+on:
+  push:
+    branches: [feat/display-auto-native-4k-20261122]
+  pull_request:
+    paths:
+      - 'versions/0.5.3-dev/boot/grub/**'
+      - 'versions/0.5.3-dev/kernel/framebuffer.h'
+      - 'versions/0.5.3-dev/kernel/display_modes.h'
+      - 'versions/0.5.3-dev/linux/desktop.c'
+      - 'versions/0.5.3-dev/scripts/display_auto_test.c'
+      - 'versions/0.5.3-dev/scripts/framebuffer_test.c'
+      - '.github/workflows/display-auto-4k.yml'
+permissions:
+  contents: read
+jobs:
+  mode-policy-and-scaling:
+    name: C fixtures — EDID modes, 4K/ultrawide/portrait and pointer scaling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile host tests and Linux framebuffer desktop
+        run: |
+          set -euxo pipefail
+          cd versions/0.5.3-dev
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror \
+            scripts/display_auto_test.c -o /tmp/mayos-display-auto-test
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror \
+            scripts/framebuffer_test.c -o /tmp/mayos-framebuffer-test
+          gcc -std=gnu11 -Wall -Wextra -Werror -fsyntax-only \
+            -DMAYOS_LINUX -Ikernel linux/desktop.c
+      - name: Verify all aspect-ratio and physical-pointer fixtures
+        run: |
+          set -euxo pipefail
+          /tmp/mayos-display-auto-test
+          /tmp/mayos-framebuffer-test
+      - name: Confirm firmware auto comes first and no fixed-720p priority
+        run: |
+          set -euxo pipefail
+          cd versions/0.5.3-dev
+          grep -Fq 'set gfxmode=auto,' boot/grub/menu.cfg
+          ! grep -q '^set gfxmode=1280x720' boot/grub/menu.cfg
+          grep -Fq 'set gfxpayload=keep' boot/grub/dual.cfg.in
+          grep -Fq 'set gfxpayload=keep' boot/grub/grub.cfg
+          grep -Fq 'FBIOPUT_VSCREENINFO' linux/desktop.c
+  qemu-native-regression:
+    name: Build MayKernel ISO and QEMU boot with firmware auto mode
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure mirror
+        run: bash scripts/configure-ci-apt-mirror.sh
+      - name: Install QEMU and BIOS/UEFI GRUB ISO builders
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
+            build-essential gcc-multilib grub-common grub-pc-bin grub-efi-amd64-bin \
+            xorriso mtools qemu-system-x86 ovmf python3-pil \
+            fonts-noto-cjk fonts-dejavu-core
+      - name: Build real updated MayKernel preview ISO
+        run: make -C versions/0.5.3-dev all
+      - name: Boot actual QEMU desktop and inspect firmware framebuffer
+        run: |
+          set -euxo pipefail
+          cd versions/0.5.3-dev
+          python3 scripts/smoke.py
+      - name: Upload actual boot ISO and serial logs (not a claim of physical EDID support)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-display-auto-4k-QEMU-evidence
+          if-no-files-found: warn
+          path: |
+            versions/0.5.3-dev/build/mayos.iso
+            versions/0.5.3-dev/build/*smoke*.log
+            versions/0.5.3-dev/build/*qemu*.log
