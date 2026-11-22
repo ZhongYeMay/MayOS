@@ -59,6 +59,18 @@ static int broken;
 static int chosen_slot = -1;
 static uint64_t generation;
 
+/* Fault hooks are compiled into host-side tests ONLY. The production MayOS
+ * Linux64 binary cannot enable crash/ENOSPC injection via environment input. */
+#ifdef MAYOS_PROFILE_TESTING
+static void profile_test_crash(const char *stage) {
+    const char *requested = getenv("MAYOS_PROFILE_TEST_CRASH");
+    if (requested && strcmp(requested, stage) == 0) _exit(97);
+}
+#define PROFILE_TEST_CRASH(stage) profile_test_crash(stage)
+#else
+#define PROFILE_TEST_CRASH(stage) ((void)0)
+#endif
+
 static uint32_t crc_update(uint32_t crc, const void *bytes, size_t size) {
     const uint8_t *data = bytes;
     for (size_t i = 0; i < size; i++) {
@@ -87,6 +99,15 @@ static int exactly_read(int fd, void *buffer, size_t size) {
     return 1;
 }
 static int exactly_write(int fd, const void *buffer, size_t size) {
+#ifdef MAYOS_PROFILE_TESTING
+    const char *fault = getenv("MAYOS_PROFILE_TEST_ERROR");
+    if (fault && strcmp(fault, "partial_enospc") == 0) {
+        size_t count = size < 4096 ? size : 4096;
+        if (write(fd, buffer, count) != (ssize_t)count) return 0;
+        errno = ENOSPC;  /* Simulate a partially written full filesystem. */
+        return 0;
+    }
+#endif
     const uint8_t *at = buffer;
     while (size) {
         ssize_t count = write(fd, at, size);
@@ -218,7 +239,11 @@ int mayos_linux_profile_save(const File records[FS_MAX], const u8 prefs[32],
     int fd = openat(directory_fd, PROFILE_TEMP,
                     O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) return 0;
-    int ok = exactly_write(fd, &snapshot, sizeof(snapshot)) && fsync(fd) == 0;
+    PROFILE_TEST_CRASH("temp_opened");
+    int ok = exactly_write(fd, &snapshot, sizeof(snapshot));
+    PROFILE_TEST_CRASH("temp_written");
+    if (ok) ok = fsync(fd) == 0;
+    PROFILE_TEST_CRASH("file_synced");
     if (close(fd)) ok = 0;
     if (!ok) { unlinkat(directory_fd, PROFILE_TEMP, 0); return 0; }
     int next = chosen_slot == 0 ? 1 : 0;
@@ -226,7 +251,9 @@ int mayos_linux_profile_save(const File records[FS_MAX], const u8 prefs[32],
     if (renameat(directory_fd, PROFILE_TEMP, directory_fd, target)) {
         unlinkat(directory_fd, PROFILE_TEMP, 0); return 0;
     }
+    PROFILE_TEST_CRASH("renamed");
     if (fsync(directory_fd)) return 0;
+    PROFILE_TEST_CRASH("directory_synced");
     chosen_slot = next;
     generation++;
     return 1;
