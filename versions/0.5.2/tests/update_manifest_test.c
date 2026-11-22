@@ -25,7 +25,7 @@ int fs_find(int parent, const char *name) {
 
 static const char good[] =
     "name=MayOS\n"
-    "version=0.5.1-pre2\n"
+    "version=0.5.3-pre1\n"
     "architecture=x86_64\n"
     "kernel=MayKernel\n"
     "release_date=2026-11-18\n"
@@ -64,14 +64,14 @@ int main(void) {
     if (!expect(MAY_UPDATE_MISSING)) return 1;
     load(good);
     if (!expect(MAY_UPDATE_CANDIDATE)) return 2;
-    if (strcmp(may_update_info()->version, "0.5.1-pre2")) return 3;
+    if (strcmp(may_update_info()->version, "0.5.3-pre1")) return 3;
     if (may_update_info()->size_bytes != 1048576u) return 4;
 
     load(good);
-    if (!change("0.5.1-pre2", "0.5.0-pre1") ||
+    if (!change("0.5.3-pre1", "0.5.0-pre1") ||
         !expect(MAY_UPDATE_CURRENT)) return 5;
     load(good);
-    if (!change("0.5.1-pre2", "0.5.1-pre1") ||
+    if (!change("0.5.3-pre1", "0.5.1-pre1") ||
         !expect(MAY_UPDATE_CURRENT)) return 6;
 
     load(good);
