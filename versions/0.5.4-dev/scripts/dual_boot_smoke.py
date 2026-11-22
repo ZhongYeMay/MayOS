@@ -25,7 +25,10 @@ class BootVM:
     def __init__(self, *, iso: Path | None, disk: Path, tag: str, qemu: str,
                  memory: int, timeout: float, ovmf_code: Path | None = None,
                  ovmf_vars: Path | None = None, cpu: str = 'max',
-                 machine: str = 'pc', extra_args=()):
+                 machine: str = 'pc', extra_args=(),
+                 nic_model: str = 'e1000'):
+        if nic_model not in ('e1000', 'e1000e', 'virtio-net-pci'):
+            raise ValueError(f'Unsupported test NIC model: {nic_model}')
         self.timeout = timeout
         self.serial_path = BUILD / f'{tag}-serial.sock'
         self.qmp_path = BUILD / f'{tag}-qmp.sock'
@@ -45,7 +48,7 @@ class BootVM:
                 '-drive', f'file={disk},format=raw,if=ide,index=0',
                 '-serial', f'unix:{self.serial_path},server=on,wait=off',
                 '-qmp', f'unix:{self.qmp_path},server=on,wait=off',
-                '-nic', 'user,model=e1000', '-no-reboot', '-S']
+                '-nic', f'user,model={nic_model}', '-no-reboot', '-S']
         args.extend(extra_args)
         if iso is not None:
             args += ['-cdrom', str(iso)]
