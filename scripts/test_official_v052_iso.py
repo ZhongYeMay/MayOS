@@ -17,17 +17,6 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-STABLE = ROOT / "versions/0.5.2"
-sys.path.insert(0, str(STABLE / "scripts"))
-from dual_boot_smoke import BootVM  # noqa: E402
-from install_mayos import ESP_START, SECTOR  # noqa: E402
-
-VERSION = "0.5.2"
-FINAL = "MayOS-0.5.2-DualKernel-Live-Installer-x86_64.iso"
-SERIAL_INSTALLER = "Install/Recover MayOS 0.5.2 (serial console)"
-LIVE_MENU = "MayOS Live 0.5.2 - RAM only / no disk writes"
-LIVE_MARKER = "MayOS Live 0.5.2: RAM-only session; disk writes blocked"
-LIVE_FS_MARKER = "MayOS Live: session filesystem runs in RAM; disk writes disabled"
 REQUIRED = {
     "bios_maykernel": "PASS",
     "bios_linux": "PASS",
@@ -76,19 +65,32 @@ def take(vm, screenshots: Path, name: str):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--version", default="0.5.2")
     parser.add_argument("--iso", type=Path, required=True)
     parser.add_argument("--ovmf-code", type=Path, default=Path("/usr/share/OVMF/OVMF_CODE_4M.fd"))
     parser.add_argument("--ovmf-vars", type=Path, default=Path("/usr/share/OVMF/OVMF_VARS_4M.fd"))
     parser.add_argument("--qemu", default="qemu-system-x86_64")
     args = parser.parse_args()
+    version = args.version
+    source = ROOT / "versions" / version
+    if not (source / "VERSION").is_file() or (source / "VERSION").read_text().strip() != version:
+        parser.error("Unknown MayOS version")
+    sys.path.insert(0, str(source / "scripts"))
+    from dual_boot_smoke import BootVM
+    from install_mayos import ESP_START, SECTOR
+
+    serial_installer = f"Install/Recover MayOS {version} (serial console)"
+    live_menu = f"MayOS Live {version} - RAM only / no disk writes"
+    live_marker = f"MayOS Live {version}: RAM-only session; disk writes blocked"
+    live_fs_marker = "MayOS Live: session filesystem runs in RAM; disk writes disabled"
     # Cached ISO acceptance runs need the QEMU serial/QMP log directory even
     # when the kernel compiler itself was intentionally skipped.
-    (STABLE / "build").mkdir(parents=True, exist_ok=True)
+    (source / "build").mkdir(parents=True, exist_ok=True)
     iso = args.iso.resolve(strict=True)
-    if iso.name != FINAL:
+    if iso.name != f"MayOS-{version}-DualKernel-Live-Installer-x86_64.iso":
         parser.error("Wrong official release ISO filename")
     manifest = json.loads((iso.parent / (iso.stem + ".manifest.json")).read_text())
-    if manifest["release"] != VERSION or manifest["sha256"] != sha(iso):
+    if manifest["release"] != version or manifest["sha256"] != sha(iso):
         parser.error("Manifest does not authenticate the requested ISO")
     result = dict(REQUIRED)
     for key in result:
@@ -103,13 +105,13 @@ def main():
         vm = BootVM(disk=mayfs, tag="official-bios-maykernel", **opts)
         try:
             vm.wait("MayOS: CPU long mode active (64-bit)", timeout=95)
-            vm.wait("MayOS Workstation 0.5.2 / MayShell")
+            vm.wait(f"MayOS Workstation {version} / MayShell")
             vm.wait("MayOS: desktop ready", timeout=55)
-            take(vm, screens, "BIOS-MayKernel64-0.5.2")
+            take(vm, screens, f"BIOS-MayKernel64-{version}")
         finally:
             vm.stop()
         result["bios_maykernel"] = "PASS"
-        print("PASS: same ISO boots 0.5.2 MayKernel64 BIOS desktop", flush=True)
+        print(f"PASS: same ISO boots {version} MayKernel64 BIOS desktop", flush=True)
 
         vm = BootVM(disk=mayfs, tag="official-bios-linux64", **opts)
         try:
@@ -127,14 +129,14 @@ def main():
         before = sha(mayfs)
         vm = BootVM(disk=mayfs, tag="official-bios-live", **opts)
         try:
-            choose(vm, LIVE_MENU, 4)
-            vm.wait(LIVE_MARKER, timeout=85)
-            vm.wait(LIVE_FS_MARKER, timeout=85)
+            choose(vm, live_menu, 4)
+            vm.wait(live_marker, timeout=85)
+            vm.wait(live_fs_marker, timeout=85)
             vm.wait("MayOS: desktop ready", timeout=50)
             vm.key("f1")
             vm.keyboard_command("write live-ephemeral.txt session-not-persistent")
             vm.wait("live-ephemeral.txt", timeout=30)
-            take(vm, screens, "BIOS-MayOS-Live-0.5.2")
+            take(vm, screens, f"BIOS-MayOS-Live-{version}")
         finally:
             vm.stop()
         assert sha(mayfs) == before, "MayOS Live wrote to an attached disk!"
@@ -147,11 +149,11 @@ def main():
         before = sha(mayfs)
         vm = BootVM(disk=mayfs, tag="official-uefi-live", **efi_opts)
         try:
-            choose(vm, LIVE_MENU, 4)
-            vm.wait(LIVE_MARKER, timeout=100)
-            vm.wait(LIVE_FS_MARKER, timeout=55)
+            choose(vm, live_menu, 4)
+            vm.wait(live_marker, timeout=100)
+            vm.wait(live_fs_marker, timeout=55)
             vm.wait("MayOS: desktop ready", timeout=45)
-            take(vm, screens, "UEFI-MayOS-Live-0.5.2")
+            take(vm, screens, f"UEFI-MayOS-Live-{version}")
         finally:
             vm.stop()
         assert sha(mayfs) == before, "UEFI Live mode modified disk"
@@ -163,12 +165,12 @@ def main():
         before = sha(disk)
         vm = BootVM(disk=disk, tag="official-uefi-cancel", **efi_opts)
         try:
-            vm.wait(SERIAL_INSTALLER, timeout=55)
+            vm.wait(serial_installer, timeout=55)
             vm.key("end")
             vm.key("ret")
-            vm.wait("MayOS 0.5.2 | Installation and recovery", timeout=85)
+            vm.wait(f"MayOS {version} | Installation and recovery", timeout=85)
             vm.wait("Enter the target path", timeout=55)
-            take(vm, screens, "UEFI-Installer-0.5.2")
+            take(vm, screens, f"UEFI-Installer-{version}")
             vm.send_serial("cancel\n")
             vm.wait("Installation cancelled.", timeout=25)
         finally:
@@ -180,16 +182,16 @@ def main():
         shutil.copyfile(args.ovmf_vars, vars_path)
         vm = BootVM(disk=disk, tag="official-uefi-install", **efi_opts)
         try:
-            vm.wait(SERIAL_INSTALLER, timeout=55)
+            vm.wait(serial_installer, timeout=55)
             vm.key("end")
             vm.key("ret")
-            vm.wait("MayOS 0.5.2 | Installation and recovery", timeout=85)
+            vm.wait(f"MayOS {version} | Installation and recovery", timeout=85)
             vm.wait("Enter the target path", timeout=55)
             vm.send_serial("/dev/sda\n")
             vm.wait("To continue, type INSTALL /dev/sda", timeout=30)
             vm.send_serial("INSTALL /dev/sda\n")
             vm.wait("MayOS installation complete.", timeout=95)
-            take(vm, screens, "UEFI-Installer-Complete-0.5.2")
+            take(vm, screens, f"UEFI-Installer-Complete-{version}")
         finally:
             vm.stop()
         subprocess.run(["sfdisk", "--verify", str(disk)], check=True)
@@ -201,10 +203,10 @@ def main():
                         "::/slots/A.elf", str(installed_kernel)], check=True)
         expected_kernel = manifest["boot_modes"][0]["kernel_sha256"]
         if sha(installed_kernel) != expected_kernel:
-            raise AssertionError("Installed ELF not byte-identical to live 0.5.2 kernel")
+            raise AssertionError(f"Installed ELF not byte-identical to live {version} kernel")
         if manifest["boot_modes"][1]["kernel_sha256"] != expected_kernel:
-            raise AssertionError("Live mode not using same 0.5.2 ELF")
-        if b"MayOS Workstation 0.5.2 / MayShell" not in installed_kernel.read_bytes():
+            raise AssertionError(f"Live mode not using same {version} ELF")
+        if f"MayOS Workstation {version} / MayShell".encode() not in installed_kernel.read_bytes():
             raise AssertionError("Installer wrote kernel with incorrect version")
         result["uefi_installed_slot_exact_sha256"] = "PASS"
         print("PASS: installed A slot SHA-256 equals live AND normal desktop ELF", flush=True)
@@ -238,11 +240,11 @@ def main():
                 qemu.terminate()
             qemu.wait(timeout=10)
         result["uefi_iso_free_cold_boot"] = "PASS"
-        print("PASS: ISO removed, UEFI installed 0.5.2 reaches GPT+first boot setup", flush=True)
+        print(f"PASS: ISO removed, UEFI installed {version} reaches GPT+first boot setup", flush=True)
     assert result == REQUIRED, result
     result["iso_sha256"] = sha(iso)
-    result["release"] = VERSION
-    (iso.parent / "qemu-v052-official-acceptance.json").write_text(
+    result["release"] = version
+    (iso.parent / ("qemu-v052-official-acceptance.json" if version == "0.5.2" else f"qemu-{version}-acceptance.json")).write_text(
         json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2), flush=True)
 
