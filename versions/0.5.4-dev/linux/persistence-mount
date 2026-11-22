@@ -26,7 +26,7 @@ esac
     echo 'MayOS Linux profile: opt-in device unavailable; RAM mode' > /dev/ttyS0
     exit 0
 }
-if ! mount -t ext4 -o ro,nosuid,nodev,noexec "$device" /mnt/mayos-profile; then
+if ! mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$device" /mnt/mayos-profile; then
     echo 'MayOS Linux profile: cannot mount explicit ext4 target; RAM mode' > /dev/ttyS0
     exit 0
 fi
