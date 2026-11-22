@@ -142,7 +142,7 @@ def main():
             vm.key("f1")
             offset = len(vm.text)
             vm.keyboard_command("write Documents/persist-test.txt " + after_cut)
-            vm.wait("\\nOK\\n", offset=offset, timeout=35)
+            vm.wait("\nOK\n", offset=offset, timeout=35)
             vm.pump()
             vm.proc.kill()  # intentionally unclean: no poweroff command/QMP quit
             vm.proc.wait(timeout=10)
@@ -157,7 +157,7 @@ def main():
             vm.key("f1")
             offset = len(vm.text)
             vm.keyboard_command("cat Documents/persist-test.txt")
-            vm.wait("\\n" + after_cut + "\\n", offset=offset, timeout=35)
+            vm.wait("\n" + after_cut + "\n", offset=offset, timeout=35)
             qemu_host_screens(vm, "linux-persist-after-powercut",
                               BUILD / "linux-persist-after-powercut.png")
             vm.shutdown()
@@ -189,7 +189,7 @@ def main():
             vm.key("f1")
             offset = len(vm.text)
             vm.keyboard_command("write Documents/ram-only.txt keep-disk-unchanged")
-            vm.wait("\\nOK (RAM only; disk sync unavailable)\\n", offset=offset,
+            vm.wait("\nOK (RAM only; disk sync unavailable)\n", offset=offset,
                     timeout=35)
             vm.proc.kill()
             vm.proc.wait(timeout=10)
