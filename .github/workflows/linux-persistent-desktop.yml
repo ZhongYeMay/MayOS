@@ -1,0 +1,97 @@
+name: MayOS Linux64 persistent desktop safety and regression
+on:
+  push:
+    branches: [feat/linux-persistent-profile-054-20261122]
+  pull_request:
+    paths:
+      - 'versions/0.5.4-dev/**'
+      - '.github/workflows/linux-persistent-desktop.yml'
+permissions:
+  contents: read
+concurrency:
+  group: linux-persistent-profile-054-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  profile-security-and-recovery:
+    name: Atomic persistence, CRC recovery, no disk writes by default
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Linux profile code with strict warnings
+        run: |
+          set -euxo pipefail
+          cd versions/0.5.4-dev
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -DMAYOS_LINUX \
+            scripts/linux_profile_test.c linux/profile_persist.c -o /tmp/mayos-linux-profile-test
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -DMAYOS_LINUX \
+            -Ikernel -fsyntax-only kernel/fs.c linux/desktop.c linux/profile_persist.c
+          sh -n linux/persistence-mount linux/desktop-session linux/init
+          python3 -m py_compile scripts/linux.py scripts/inject_qemu_persist_menu.py scripts/linux_persistence_qemu_smoke.py
+      - name: Default RAM mode is fail-closed
+        run: /tmp/mayos-linux-profile-test --ram
+      - name: Unmarked folder cannot create a persistent snapshot
+        run: /tmp/mayos-linux-profile-test --badmarker
+      - name: Atomic A/B snapshots and corruption power-loss recovery
+        run: /tmp/mayos-linux-profile-test --snapshot
+      - name: Confirm never autowrites to arbitrary block devices
+        run: |
+          grep -Fq 'mayos.persist=' versions/0.5.4-dev/linux/persistence-mount
+          grep -Fq 'MayOS-Profile-v1' versions/0.5.4-dev/linux/persistence-mount
+          ! grep -E 'mkfs|fdisk|wipefs|parted' versions/0.5.4-dev/linux/persistence-mount
+  linux-source-and-qemu:
+    name: Real 0.5.4-dev Linux image & QEMU desktop smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure Linux build mirrors
+        run: bash scripts/configure-ci-apt-mirror.sh
+      - name: Install real x86_64 Linux builder and QEMU
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
+            build-essential gcc-multilib musl-tools linux-libc-dev \
+            grub-common grub-pc-bin grub-efi-amd64-bin xorriso mtools \
+            qemu-system-x86 ovmf ffmpeg python3-pil \
+            fonts-noto-cjk fonts-dejavu-core flex bison bc \
+            libelf-dev libssl-dev xz-utils busybox-static rsync \
+            libcurl4-openssl-dev pkg-config ca-certificates e2fsprogs
+      - name: Generate real MayOS font/icon/resource headers before Linux desktop compile
+        run: make -C versions/0.5.4-dev build/font.h build/cat_image.h build/material_icons.h
+      - name: Build Linux 7.3.1 with persistent backend and unchanged desktop design
+        run: make -C versions/0.5.4-dev linux LINUX_VERSION=7.3.1 LINUX_JOBS=4
+      - name: Compile real MayKernel + dual-kernel ISO for QEMU
+        run: |
+          make -C versions/0.5.4-dev all
+          make -C versions/0.5.4-dev dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+      - name: Boot actual Linux desktop with no opt-in data disk
+        run: |
+          cd versions/0.5.4-dev
+          python3 scripts/dual_boot_smoke.py --iso build/mayos-dual.iso
+      - name: Generate QEMU-only explicit marked ext4 boot option
+        run: |
+          python3 versions/0.5.4-dev/scripts/inject_qemu_persist_menu.py
+          rm -f versions/0.5.4-dev/build/mayos-dual.iso
+          make -C versions/0.5.4-dev dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+      - name: Boot Linux64 twice with a marked data disk and verify saved file restoration
+        run: |
+          cd versions/0.5.4-dev
+          python3 scripts/linux_persistence_qemu_smoke.py --iso build/mayos-dual.iso
+      - name: Preserve actual QEMU logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-Linux64-profile-persistence-054-test-evidence
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            versions/0.5.4-dev/build/mayos-dual.iso
+            versions/0.5.4-dev/build/test-dual*.log
+            versions/0.5.4-dev/build/*qemu*.log
+            versions/0.5.4-dev/build/dual-boot*.json
+            versions/0.5.4-dev/build/linux-persist*.png
+            versions/0.5.4-dev/build/linux-persist*.log
+            versions/0.5.4-dev/build/linux-persistence-qemu-results.json
