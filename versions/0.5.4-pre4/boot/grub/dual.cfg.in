@@ -1,0 +1,50 @@
+set default=mayos
+source /boot/grub/menu.cfg
+
+if cpuid -l; then
+menuentry "MayOS - custom x86_64 kernel" --id mayos {
+    set gfxpayload=keep
+    multiboot /boot/mayos.elf
+    if [ -f /boot/mayos-wallpaper.mwb ]; then
+      module /boot/mayos-wallpaper.mwb mayos-wallpaper
+    fi
+    # Loading Multiboot resets gfxpayload, so override only after that command.
+    set gfxpayload=keep
+    boot
+}
+
+menuentry "Linux @LINUX_VERSION@ - desktop (x86_64)" --id linux {
+    set gfxpayload=keep
+    linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 quiet rdinit=/init mayos.desktop=1 panic=10
+    initrd /boot/linux/initramfs.cpio.gz
+    boot
+}
+
+menuentry "Linux @LINUX_VERSION@ - rescue shell (x86_64)" --id linux-rescue {
+    # EFI has no legacy VGA text mode; Linux fbcon supplies the rescue console.
+    set gfxpayload=keep
+    linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=0 panic=10
+    initrd /boot/linux/initramfs.cpio.gz
+    boot
+}
+menuentry "Linux @LINUX_VERSION@ - compatibility rescue (x86_64)" --id linux-safe {
+    set gfxpayload=keep
+    linux /boot/linux/bzImage console=tty0 console=ttyS0,115200 rdinit=/init mayos.desktop=0 nomodeset noapic nolapic nosmp pci=nomsi panic=10
+    initrd /boot/linux/initramfs.cpio.gz
+    boot
+}
+menuentry "MayOS Live 0.5.4-pre4 - RAM only / no disk writes" --id mayos-live {
+    # Exact same current development ELF as the installed kernel, RAM-only runtime.
+    multiboot /boot/mayos.elf mayos.ram
+    if [ -f /boot/mayos-wallpaper.mwb ]; then
+      module /boot/mayos-wallpaper.mwb mayos-wallpaper
+    fi
+    set gfxpayload=keep
+    boot
+}
+else
+menuentry "MayOS requires an x86_64 CPU" {
+ echo "Both MayKernel and MayOS Linux require x86_64 long mode."
+ sleep 10
+}
+fi

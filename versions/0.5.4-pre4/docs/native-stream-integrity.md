@@ -1,0 +1,7 @@
+# Stage 6H — native HTTP stream integrity gate (diagnostic only)
+
+This module combines the existing Rust no_std exact-length budget with the existing freestanding MayKernel C SHA-256 code in one bounded, allocation-free interface. It requires HTTP 200, a Content-Length exactly matching the caller-provided signed size, and nonempty chunks up to 4096 bytes and at most 512KiB overall. Only after the exact end-of-stream does it compare all 32 SHA-256 digest bytes with the expected value. Truncation, overflow, extra bytes, wrong digest, and repeated finish are rejected.
+
+**Critical security boundary:** The caller-provided size and SHA-256 have NO trust until the exact manifest is checked against an owner-pinned production Ed25519 signing key. No trusted TLS transport, production CA roots, secure time, provisioned release signing key, safe partition installer, or bootloader A/B integration is provided by this change. Passing a digest check is NOT permission to install. This module does not connect to GitHub, download data, modify disks or alter the existing GUI design.
+
+The optional Rust+C kernel (MAYOS_RUST=1) exposes the offline shell diagnostic "tls digest-test". Host C tests cover 8KiB split streams, one-byte alteration, truncation, zero/overlarge chunks, duplicate bytes and bad pointers. An independent QEMU job runs the actual Rust ABI with native C SHA-256, saving framebuffer and serial evidence. The normal build keeps HTTPS and installation disabled.
