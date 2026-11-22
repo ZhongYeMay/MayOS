@@ -81,6 +81,9 @@ def main():
     parser.add_argument("--ovmf-vars", type=Path, default=Path("/usr/share/OVMF/OVMF_VARS_4M.fd"))
     parser.add_argument("--qemu", default="qemu-system-x86_64")
     args = parser.parse_args()
+    # Cached ISO acceptance runs need the QEMU serial/QMP log directory even
+    # when the kernel compiler itself was intentionally skipped.
+    (STABLE / "build").mkdir(parents=True, exist_ok=True)
     iso = args.iso.resolve(strict=True)
     if iso.name != FINAL:
         parser.error("Wrong official release ISO filename")
