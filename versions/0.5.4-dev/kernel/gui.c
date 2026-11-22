@@ -1251,7 +1251,8 @@ static void shell(void) {
         }
     } else if (!strcmp(c, "save")) {
 #ifdef MAYOS_LINUX
-        emit("RAM session: files are temporary; no disk is written.");
+        emit(fs_sync() ? "MayOS Linux: persistent desktop snapshot committed" :
+                         "MayOS Linux: RAM session or profile write unavailable");
 #else
         emit(fs_sync() ? "MayFS: synchronized to ATA disk" : "MayFS: disk unavailable");
 #endif
