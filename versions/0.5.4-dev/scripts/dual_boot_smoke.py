@@ -334,6 +334,92 @@ def main():
         vm.shot('test-dual-linux-splash')
         vm.wait('MayOS-Linux# ')
         vm.wait('MayOS: desktop ready')
+        vm.shell_check("test -x /usr/bin/mayos-wallpaper && "
+                       "grep -q '^::respawn:/bin/mayos-wallpaper-service
+        version_output = vm.shell_check(f'test "$(uname -r)" = "{release}" && uname -r', 'VERSION')
+        assert re.search(r'^' + re.escape(release) + r'\r?$', version_output, re.MULTILINE), version_output
+        vm.shell_check('test -r /proc/cpuinfo && test -d /sys/class && test -c /dev/console '
+                       '&& test -c /dev/ttyS0 && grep -q " proc " /proc/mounts '
+                       '&& grep -q " sysfs " /proc/mounts', 'MOUNTS')
+        vm.shell_check('mkdir -p /tmp/mayos-test && printf linux-works > /tmp/mayos-test/file '
+                       '&& test "$(cat /tmp/mayos-test/file)" = linux-works', 'FILES')
+        vm.shell_check('! grep -E "^/dev/(sd|hd|vd)" /proc/mounts', 'NO_DISK_MOUNTS')
+        vm.shell_check('test "$(cat /proc/1/comm)" = init', 'PID1_INIT')
+        vm.shell_check('test -r /run/mayos-desktop.pid '
+                       '&& test "$(cat /proc/$(cat /run/mayos-desktop.pid)/comm)" = mayos-desktop',
+                       'GUI_PROCESS')
+        # QEMU user-mode NAT supplies DHCP and DNS without outside Internet
+        # access. Verify the actual guest lease, route, and resolver.
+        vm.shell_check(
+            'n=0; while ! ip -4 addr show | grep -q "10.0.2."; do '
+            'n=$((n+1)); [ "$n" -lt 30 ] || exit 1; sleep 1; done; '
+            'ip route | grep -q default && grep -q "^nameserver" /etc/resolv.conf',
+            'NETWORK_DHCP_DNS')
+        vm.shot('test-dual-linux-about')
+        # PS/2 input targets the real Linux GUI, while the independent BusyBox
+        # serial shell above probes the Linux rootfs. The GUI has its own RAM
+        # file store; checking it through MayShell tests the actual interface.
+        gui_offset = len(vm.text)
+        vm.key('f1')
+        vm.keyboard_command('neofetch')
+        vm.wait(f'Kernel: Linux {release}', offset=gui_offset)
+        vm.keyboard_command('write linux-demo.txt linux-gui-works')
+        vm.keyboard_command('cat linux-demo.txt')
+        vm.wait('\nlinux-gui-works\n', offset=gui_offset)
+        # The RAM-only filesystem is verified by the Linux shell checks above
+        # and the GUI write/read round-trip. Do not require an optional status
+        # line that some GUI builds omit from their serial transcript.
+        vm.click(539, 674)  # Files in the centered native 16:9 dock
+        vm.click(479, 212)
+        vm.keyboard_command('linux-editor.txt')
+        time.sleep(.2)
+        vm.key('ret')
+        time.sleep(.2)
+        vm.keyboard_command('GUI-LINUX-EDITOR')
+        vm.key('ctrl-s')
+        vm.shot('test-dual-linux-editor')
+        editor_offset = len(vm.text)
+        vm.key('f1')
+        vm.keyboard_command('cat Documents/linux-editor.txt')
+        vm.wait('\nGUI-LINUX-EDITOR\n', offset=editor_offset)
+        vm.shot('test-dual-linux')
+        prompt_offset = len(vm.text)
+        vm.shell_check('printf %s "$$" > /tmp/mayos-test/serial-pid', 'SHELL_PID')
+        vm.wait('MayOS-Linux# ', offset=prompt_offset)
+        exit_offset = len(vm.text)
+        vm.send_serial('exit\n')
+        vm.wait('MayOS-Linux# ', offset=exit_offset, timeout=15)
+        vm.shell_check('test "$$" != "$(cat /tmp/mayos-test/serial-pid)" '
+                       '&& test -f /tmp/mayos-test/file', 'SHELL_RESPAWN')
+        vm.shutdown()
+        print(f'PASS: GRUB Linux selection boots {release}; native GUI/PS2, serial shell, proc/sys/dev, '
+              'GUI and Linux RAM files, init respawn and shutdown work', flush=True)
+    finally:
+        vm.stop()
+    after = hashlib.sha256(disk.read_bytes()).hexdigest()
+    assert before == after, 'Linux changed the attached MayFS disk'
+    assert entries(disk)['dual.txt'][3] == 'dual-boot-preserved'
+    print('PASS: Linux leaves the complete attached MayFS disk byte-for-byte unchanged', flush=True)
+    report = {'iso': iso.name, 'iso_sha256': hashlib.sha256(iso.read_bytes()).hexdigest(),
+              'tested_at_utc': datetime.now(timezone.utc).isoformat(),
+              'kernel_release': release,
+              'qemu': subprocess.check_output([args.qemu, '--version'], text=True).splitlines()[0],
+              'tests': ['grub_default_custom', 'custom_desktop', 'custom_allocator', 'custom_mayfs_write',
+                        'custom_mayfs_cold_boot', 'grub_linux_selection', 'linux_uname',
+                        'linux_mounts', 'linux_ram_files', 'linux_pid1_init',
+                        'linux_gui_process', 'linux_gui_ps2_keyboard', 'linux_gui_ram_files',
+                        'linux_gui_mouse', 'linux_gui_editor_ctrl_s',
+                        'linux_shell_respawn', 'linux_clean_shutdown',
+                        'mayfs_unchanged_by_linux'],
+              'mayfs_sha256_before_linux': before, 'mayfs_sha256_after_linux': after}
+    (BUILD / 'dual-boot-test-results.json').write_text(json.dumps(report, indent=2) + '\n')
+    print('All dual-boot tests passed.', flush=True)
+
+
+if __name__ == '__main__':
+    main()
+ /etc/inittab && "
+                       "test -d /run/mayos-wallpaper", "BING_WALLPAPER_SERVICE")
         version_output = vm.shell_check(f'test "$(uname -r)" = "{release}" && uname -r', 'VERSION')
         assert re.search(r'^' + re.escape(release) + r'\r?$', version_output, re.MULTILINE), version_output
         vm.shell_check('test -r /proc/cpuinfo && test -d /sys/class && test -c /dev/console '
