@@ -43,8 +43,16 @@ def create_ext4(folder: Path, name: str, enabled: bool) -> Path:
         if os.geteuid() != 0:
             chown.insert(0, "sudo")
         subprocess.run(chown, check=True)
-    subprocess.run(["mkfs.ext4", "-F", "-q", "-d", str(seed), str(disk)],
-                   check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        # Copy original root-owned marker into an isolated ext4 disk image.
+        subprocess.run(["mkfs.ext4", "-F", "-q", "-d", str(seed), str(disk)],
+                       check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    finally:
+        # Restore runner ownership so TemporaryDirectory can clean up; the
+        # ext4 image has already recorded the guest root UID/GID.
+        if enabled and os.geteuid() != 0:
+            subprocess.run(["sudo", "chown", "-R",
+                            f"{os.getuid()}:{os.getgid()}", str(seed)], check=True)
     return disk
 
 
@@ -71,7 +79,8 @@ def boot(iso: Path, disk: Path, label: str) -> BootVM:
 
 def qemu_host_screens(vm: BootVM, label: str, target: Path):
     src = vm.shot(label)
-    shutil.copyfile(src, target)
+    if src.resolve() != target.resolve():
+        shutil.copyfile(src, target)
     assert target.is_file() and target.stat().st_size > 15000
 
 
