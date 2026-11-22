@@ -33,13 +33,13 @@ def create_ext4(folder: Path, name: str, enabled: bool) -> Path:
     with disk.open("xb") as target:
         target.truncate(128 * 1024 * 1024)
     seed = folder / (name + ".seed")
-    seed.mkdir(mode=0o700)
+    seed.mkdir(mode=0o755)
     if enabled:
         marker = seed / ".mayos-profile-enabled"
         marker.write_text("MayOS-Profile-v1\n")
         marker.chmod(0o644)
         # Guest's UID=0 must own the marker; GitHub runners are nonroot.
-        chown = ["chown", "0:0", str(marker)]
+        chown = ["chown", "0:0", str(seed), str(marker)]
         if os.geteuid() != 0:
             chown.insert(0, "sudo")
         subprocess.run(chown, check=True)
@@ -89,6 +89,7 @@ def main():
         marked_disk = create_ext4(folder, "marked-profile.img", True)
         empty = create_ext4(folder, "unmarked-profile.img", False)
         empty_hash = sha(empty)
+        marked_hash = sha(marked_disk)
 
         vm = boot(iso, marked_disk, "linux-persist-first-boot")
         try:
@@ -102,7 +103,7 @@ def main():
             vm.shutdown()
         finally:
             vm.stop()
-        assert sha(marked_disk) != empty_hash
+        assert sha(marked_disk) != marked_hash, "Marked profile disk was not written"
         results["first_boot_saved"] = "PASS"
         print("PASS: marked ext4 mounted; GUI saved a real desktop file", flush=True)
 
