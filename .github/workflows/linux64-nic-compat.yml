@@ -37,7 +37,7 @@ jobs:
             qemu-system-x86 ovmf python3-pil python3-h2 \
             fonts-noto-cjk fonts-dejavu-core flex bison bc \
             libelf-dev libssl-dev xz-utils busybox-static rsync \
-            libcurl4-openssl-dev pkg-config ca-certificates openssl
+            libcurl4-openssl-dev libjpeg-dev pkg-config ca-certificates openssl
       - name: Run static Python and DHCP contract checks
         run: |
           python3 -m py_compile versions/0.5.4-dev/scripts/linux.py \
