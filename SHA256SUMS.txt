@@ -1,0 +1,1 @@
+9a699b6c37fa88f4464eaa26ce5e683aa7941f0982a94f886113c81aa4ea03c6  MayOS-0.5.4-pre6-MayKernel64-x86_64.iso
