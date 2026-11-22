@@ -3,7 +3,7 @@
   "release": "0.5.4-pre1",
   "status": "prerelease",
   "artifact": "MayOS-0.5.4-pre1-DualKernel-Live-Installer-x86_64.iso",
-  "sha256": "2a8b2478e82355f2bbbf079b3b885425ace114c0a2f612aaf8fc97e8ee1c1cbc",
+  "sha256": "ce03775b6e30097a9fe1859906a1297f2fbc44d9ae49d95a4b1dc3587cb451ca",
   "source_commit": "dd7dd396ed30206d1eb1215bd947844532528a5f",
   "firmware": [
     "BIOS",
@@ -42,15 +42,15 @@
   "installer": {
     "source_installer": "0.5.2-pre2",
     "source_installer_iso_sha256": "c46ee45ded237f0c5823f94e498dad89700f7c54c0d80ba4137e5be3bf572a1a",
-    "installer_payload_sha256": "1acd9f4c5104cf4a7383cd6c5d5d24332c855f4ddef3ea6f93da2492e456474c",
-    "installer_initramfs_sha256": "fc3598c5252f91e1036c0b8850fe9347bcfc3b286e3634ede7d257e188cb2f00",
+    "installer_payload_sha256": "03e7eb5fbad02515b707f2bdb55aee6bce680c956c7260c519252333d9006148",
+    "installer_initramfs_sha256": "dc960eacd88c0014e6fbefb96f9ac4c443cfe09b27833493dfc13593e3ca8b5d",
     "installed_mayos_version": "0.5.4-pre1"
   },
   "linux": {
     "version": "7.3.1",
     "source_directory": "versions/0.5.4-pre1",
     "bzImage_sha256": "595da6894997412abbb906d1846a9d50b82a977212f95e75497836f336665962",
-    "initramfs_sha256": "2511d84de4b462c87d90efd94f21315520f7d2b09536cae772771dcce48cc81e"
+    "initramfs_sha256": "f8cf3558b30b12b529bca15f3fc018ddc1aecc9a1b4985b2fb9369bf762c32f6"
   },
   "physical_hardware_validation": "not established; QEMU verification only"
 }
