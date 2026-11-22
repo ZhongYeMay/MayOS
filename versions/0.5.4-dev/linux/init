@@ -13,6 +13,8 @@ mkdir -p /dev/pts /dev/shm /run /tmp
 mount -t devpts devpts /dev/pts || rescue 'mount /dev/pts'
 mount -t tmpfs -o mode=1777,size=64m tmpfs /tmp || rescue 'mount /tmp'
 mount -t tmpfs -o mode=0755,size=8m tmpfs /run || rescue 'mount /run'
+# No autoformat or disk scanning. Invalid/missing opt-in volume stays RAM-only.
+/bin/mayos-persistence
 hostname MayOS-Linux
 for terminal in /dev/tty1 /dev/ttyS0; do
     {
@@ -20,7 +22,8 @@ for terminal in /dev/tty1 /dev/ttyS0; do
         printf 'Linux %s (%s)\n' "$(uname -r)" "$(uname -m)"
         printf 'Live RAM environment. Desktop: tty1; Linux shell: ttyS0.\n'
         printf 'Use mayos.desktop=0 for a text session. MayFS disks are not mounted.\n'
-        printf 'RAM files disappear after shutdown.\n'
+        printf 'RAM is default. Opt-in marked ext4: mayos.persist=/dev/vdb.\n'
+        printf 'Live boot and unmarked disks are never written.\n'
         printf 'Network: DHCP on the first Ethernet device; status in /run/mayos-udhcpc.pid.\n'
         printf 'Commands: ip addr | ip route | nslookup example.com | ping -c 3 1.1.1.1\n'
         printf 'System: uname -a | free -m | ls / | reboot -f | poweroff -f\n\n'
