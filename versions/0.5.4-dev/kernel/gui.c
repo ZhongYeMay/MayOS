@@ -1883,7 +1883,13 @@ static void personalization(int x, int y, int width) {
     button(x, y + 33, 142, pointer_label("鼠标指针", "Mouse pointer"), !desktop_options);
     button(x + 154, y + 33, 142, pointer_label("桌面", "Desktop"), desktop_options);
     if (desktop_options) {
-        text(x, y + 81, pointer_label("桌面背景", "Background"), ink);
+#ifdef MAYOS_LINUX
+        text(x, y + 81, platform_wallpaper_bitmap()
+             ? pointer_label("桌面背景 · Bing 每日已缓存", "Background · Bing Daily cached")
+             : pointer_label("桌面背景 · 等待 Bing / 内置后备", "Background · Bing pending / fallback"), ink);
+#else
+        text(x, y + 81, pointer_label("桌面背景 · Bing 网络功能待支持", "Background · Bing requires HTTPS"), ink);
+#endif
 #ifdef MAYOS_LINUX
         const char *styles[] = {pointer_label("Bing 每日", "Bing Daily"), pointer_label("纯色背景", "Solid"),
                                 pointer_label("网格背景", "Grid")};
@@ -1893,13 +1899,6 @@ static void personalization(int x, int y, int width) {
 #endif
         for (int i = 0; i < 3; i++)
             button(x + i * 154, y + 108, 142, styles[i], desktop_style == i);
-#ifdef MAYOS_LINUX
-        text(x, y + 139, platform_wallpaper_bitmap()
-             ? pointer_label("Bing 图片已缓存 · 自动按日检查", "Bing image cached · daily refresh")
-             : pointer_label("等待 Bing 图片 · 暂用内置壁纸", "Awaiting Bing image · built-in fallback"), muted);
-#else
-        text(x, y + 139, pointer_label("Bing 自动更新需要可信 HTTPS 支持", "Bing updates require trusted HTTPS"), muted);
-#endif
         text(x, y + 158, pointer_label("桌面版本标识", "Desktop version label"), ink);
         button(x, y + 186, 142, pointer_label("显示", "Show"), show_brand);
         button(x + 154, y + 186, 142, pointer_label("隐藏", "Hide"), !show_brand);
