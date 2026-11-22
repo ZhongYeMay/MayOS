@@ -1,9 +1,9 @@
 #ifndef MAYOS_VERSION_H
 #define MAYOS_VERSION_H
 
-/* One source of truth for the development branch (not a published release). */
+/* Official 0.5.2 source, built from the validated 0.5.2-pre4 baseline. */
 #ifndef MAYOS_VERSION
-#define MAYOS_VERSION "0.5.2-pre4"
+#define MAYOS_VERSION "0.5.2"
 #endif
 
 #endif /* MAYOS_VERSION_H */
