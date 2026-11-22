@@ -554,11 +554,9 @@ static int text_face(int x, int y, const char *s, u32 color, enum MayLocale loca
 static int text(int x, int y, const char *s, u32 color) {
     return text_face(x, y, s, color, display_language);
 }
-#ifndef MAYOS_LINUX
 static void center_text(int x, int width, int y, const char *s, u32 color) {
     text(x + (width - text_width(s)) / 2, y, s, color);
 }
-#endif
 
 #ifdef MAYOS_TASK_MANAGER
 void may_task_text(int x, int y, const char *label, u32 color) {
@@ -2626,7 +2624,7 @@ static void explorer_draw(Window *w) {
     }
     text(x + 70, y + w->h - 22, "↑ ↓ 滚动响应 · 点击收藏栏打开 · 会话历史最多 8 项", muted);
 #else
-    text(x + 100, y + 383, "Orange / MayKernel 网络栈尚未实现", accent);
+    text(x + 100, y + 383, "Orange / MayKernel 预览版未启用网页传输", accent);
     text(x + 100, y + 417, "请选择 Linux 启动项使用 HTTP 文本预览。", muted);
 #endif
 }
