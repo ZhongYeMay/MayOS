@@ -39,6 +39,8 @@ VERSION_RE = re.compile(r"[1-9][0-9]*\.[0-9]+(?:\.[0-9]+)?\Z")
 INPUT_FILES = {
     "modern_network_builder_sha256": ROOT / "scripts/modern_network.py",
     "modern_network_source_sha256": ROOT / "linux/fetch.c",
+    "wallpaper_worker_sha256": ROOT / "linux/wallpaper.c",
+    "wallpaper_service_sha256": ROOT / "linux/wallpaper-service",
     "config_sha256": ROOT / "linux/kernel.config",
     "init_sha256": ROOT / "linux/init",
     "inittab_sha256": ROOT / "linux/inittab",
@@ -95,7 +97,7 @@ REQUIRED_CONFIG = (
 REQUIRED_APPLETS = {
     "sh", "init", "cttyhack", "mount", "umount", "mkdir", "hostname",
     "uname", "sync", "reboot", "poweroff", "cat", "ls", "free",
-    "ip", "ifconfig", "udhcpc", "mv", "ping", "nslookup", "sleep",
+    "ip", "ifconfig", "udhcpc", "mv", "cp", "wc", "ping", "nslookup", "sleep",
 }
 
 
@@ -384,6 +386,7 @@ def build_initramfs(busybox: Path, fastfetch: Path, version: str) -> dict:
                                  ("etc/profile", "profile", 0o644),
                                  ("bin/mayos-session", "desktop-session", 0o755),
                                  ("bin/mayos-network", "network-start", 0o755),
+                                 ("bin/mayos-wallpaper-service", "wallpaper-service", 0o755),
                                  ("bin/mayos-persistence", "persistence-mount", 0o755),
                                  ("bin/mayos-dhcp", "dhcp-hook", 0o755),
                                  ("usr/share/doc/mayos/linux-readme.txt", "README.md", 0o644)):
