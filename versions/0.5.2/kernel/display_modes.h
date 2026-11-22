@@ -11,10 +11,10 @@ typedef struct {
     unsigned width, height;
 } MayDisplayMode;
 
-static int may_display_supported(unsigned width, unsigned height) {
+static inline int may_display_supported(unsigned width, unsigned height) {
     return width >= 640 && height >= 480 && width <= 4096 && height <= 4096;
 }
-static int may_display_parse(const char *line, MayDisplayMode *out) {
+static inline int may_display_parse(const char *line, MayDisplayMode *out) {
     if (!line || !out) return 0;
     unsigned width = 0, height = 0;
     const char *at = line;
@@ -35,7 +35,7 @@ static int may_display_parse(const char *line, MayDisplayMode *out) {
     out->height = height;
     return 1;
 }
-static int may_display_first_4k(const char *list, MayDisplayMode *out) {
+static inline int may_display_first_4k(const char *list, MayDisplayMode *out) {
     if (!list || !out) return 0;
     /* Single-connector mode list is ordered by the GPU/EDID driver. */
     const char *line = list;
