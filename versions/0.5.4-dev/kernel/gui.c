@@ -1675,7 +1675,9 @@ static void save_editor(void) {
     int ok = fs_sync();
     editor_changed = disk_ready && !ok;
 #ifdef MAYOS_LINUX
-    notify("已保存到本次 RAM 桌面会话");
+    notify(ok ? "已写入 Linux 持久化快照"
+              : disk_ready ? "持久化写入失败：修改仍留在 RAM"
+                           : "已保存到当前 RAM 会话；重启后丢失");
 #else
     notify(ok           ? "已保存到 MayFS 磁盘"
            : disk_ready ? "保存失败：修改保留在内存中"
