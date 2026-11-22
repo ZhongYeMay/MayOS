@@ -89,6 +89,15 @@ jobs:
         run: |
           cd versions/0.5.4-dev
           python3 scripts/dual_boot_smoke.py --iso build/mayos-dual.iso
+      - name: Preserve safe standard dual-kernel preview BEFORE adding CI-only disk argument
+        run: |
+          set -euxo pipefail
+          cd versions/0.5.4-dev/build
+          cp mayos-dual.iso MayOS-0.5.4-dev-Linux64-DualKernel-preview.iso
+          sha256sum MayOS-0.5.4-dev-Linux64-DualKernel-preview.iso > SHA256SUMS-preview.txt
+          xorriso -osirrox on             -indev MayOS-0.5.4-dev-Linux64-DualKernel-preview.iso             -extract /boot/grub/grub.cfg /tmp/mayos-clean-grub.cfg
+          ! grep -q 'mayos-linux-persistent-qemu-test' /tmp/mayos-clean-grub.cfg
+          ! grep -q 'mayos.persist=/dev/sda' /tmp/mayos-clean-grub.cfg
       - name: Generate QEMU-only explicit marked ext4 boot option
         run: |
           python3 versions/0.5.4-dev/scripts/inject_qemu_persist_menu.py
@@ -98,6 +107,12 @@ jobs:
         run: |
           cd versions/0.5.4-dev
           python3 scripts/linux_persistence_qemu_smoke.py --iso build/mayos-dual.iso
+      - name: Ensure clean preview was not replaced by CI-only media
+        run: |
+          cd versions/0.5.4-dev/build
+          sha256sum -c SHA256SUMS-preview.txt
+          xorriso -osirrox on -indev MayOS-0.5.4-dev-Linux64-DualKernel-preview.iso             -extract /boot/grub/grub.cfg /tmp/mayos-clean-grub-final.cfg
+          ! grep -q 'mayos-linux-persistent-qemu-test' /tmp/mayos-clean-grub-final.cfg
       - name: Preserve actual QEMU logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -106,7 +121,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
           path: |
-            versions/0.5.4-dev/build/mayos-dual.iso
+            versions/0.5.4-dev/build/MayOS-0.5.4-dev-Linux64-DualKernel-preview.iso
+            versions/0.5.4-dev/build/SHA256SUMS-preview.txt
             versions/0.5.4-dev/build/test-dual*.log
             versions/0.5.4-dev/build/*qemu*.log
             versions/0.5.4-dev/build/dual-boot*.json
