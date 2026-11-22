@@ -2,7 +2,8 @@
 
 所有已经发布的 MayOS 版本都保存在 **`versions/<版本号>/`** 中，且保留发布标签对应的原始 Git tree，不把不同版本的源码混合到同一个目录。
 
-- `versions/0.5.0-pre2-dev/`：**正在开发**的 main 开发源码；不是正式 Release，也不宣称实体机日用。
+- `versions/0.5.2/`：**GitHub 已发布的正式版 v0.5.2 源码**，包含同版本 Live 和离线安装器构建工作流；QEMU 8 项通过，实体机兼容性尚未广泛验证。
+- `versions/0.5.0-pre2-dev/`：保留的更早开发源码快照；不是 v0.5.2 的源码。
 - `versions/0.5.0-pre2/`：来自 `v0.5.0-pre2` 标签的原始源码。
 - `versions/0.5.0-pre1/`、`versions/0.4.1-pre2/` 等：各自标签对应的原始源码。
 - `versions/catalog.json`：每份已发布源码的标签名与原始 Git tree SHA，用 `python3 scripts/verify_version_layout.py` 校验。

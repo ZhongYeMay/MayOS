@@ -8,7 +8,9 @@ import os
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
-CURRENT = "0.5.1-pre1"
+CURRENT = "0.5.1-pre1"  # historical release regression checks
+OFFICIAL = "0.5.2"
+OFFICIAL_ISO = "MayOS-0.5.2-DualKernel-Live-Installer-x86_64.iso"
 MULTILINGUAL = "0.5.2-pre1"
 CJK_PREVIEW = "0.5.2-pre2"
 HARDWARE_PREVIEW = "0.5.2-pre3"
@@ -62,16 +64,16 @@ for page in ROOT.glob("*.html"):
 assert {"index.html", "demos.html", "download.html", "requirements.html", "deployment.html"} <= set(docs)
 assert 'href="deployment.html"' in docs["download.html"][1]
 assert 'id="latest-dual-installer"' in docs["download.html"][1]
-assert 'v0.5.2-pre4-dual-installer-test1' in docs['download.html'][1]
-assert 'v0.5.2-pre4-dual-installer-test1' in docs['deployment.html'][1]
-assert 'MayOS-0.5.2-pre4-DualKernel-Installer-x86_64.iso' in docs['deployment.html'][1]
+assert f'/releases/download/v{OFFICIAL}/{OFFICIAL_ISO}' in docs['download.html'][1]
+assert f'/releases/download/v{OFFICIAL}/{OFFICIAL_ISO}' in docs['deployment.html'][1]
+assert OFFICIAL_ISO in docs['deployment.html'][1]
 assert 'download.html#latest-dual-installer' in docs['index.html'][1]
-assert "0.5.2-pre4" in docs["deployment.html"][1]
-assert "0.5.2-pre2" in docs["deployment.html"][1]
+assert "MayOS Live 0.5.2" in docs["deployment.html"][1]
+assert "安装版本" in docs["deployment.html"][1] or "安装" in docs["deployment.html"][1]
 assert "QEMU" in docs["deployment.html"][1]
 assert "Secure Boot" in docs["deployment.html"][1]
 
-for key in ("x86_64", "512 MiB", "80 MiB", "96 MiB", "Secure Boot", "0.5.1", "UEFI x64"):
+for key in ("x86_64", "512 MiB", "80 MiB", "96 MiB", "Secure Boot", "0.5.2", "UEFI x64", "Live"):
     assert key in docs["requirements.html"][1], ("hardware requirements missing", key)
 for page in ("index.html", "download.html"):
     assert 'href="requirements.html"' in docs[page][1], ("missing hardware navigation", page)
@@ -82,6 +84,12 @@ assert "0.5.0-pre1-dev" in docs["index.html"][1], "development UI preview missin
 assert 'id="design-preview"' in docs["index.html"][1], "preview anchor missing"
 assert "不是 QEMU 实测画面" in docs["index.html"][1], "design preview must not be passed off as QEMU"
 assert "0.4.1-pre2" in docs["download.html"][1], "historic release download not retained"
+assert "MayOS Live" in docs["index.html"][1], "official Live hero missing"
+assert f'/releases/tag/v{OFFICIAL}' in docs["changelog.html"][1], "official notes missing"
+assert 'href="requirements.html#live"' in docs["index.html"][1], "Live requirements link missing"
+assert 'id="live"' in docs["requirements.html"][1], "Live section missing"
+assert 'a394e27c608e09d5dd1848b288cf540541319841b022e9da60448e3a2a4bba91' in docs["download.html"][1], "published official SHA missing"
+
 assert f"MayOS-{CURRENT}-Installer-x86_64.iso" in docs["download.html"][1]
 assert f"/download/v{CURRENT}/SHA256SUMS.txt" in docs["download.html"][1]
 assert "installer-preview" in docs["demos.html"][0].ids
@@ -157,7 +165,9 @@ assert history["repository"] == "ZhongYeMay/MayOS"
 assert len(history["releases"]) >= 10
 tags = [r["tag"] for r in history["releases"]]
 assert len(tags) == len(set(tags)), "duplicate release tag in snapshot"
-assert tags[0] == f"v{POINTER_PREVIEW}", "latest preview missing from the top of the history snapshot"
+assert tags[0] == f"v{OFFICIAL}", "official v0.5.2 release missing from history snapshot"
+assert history["releases"][0]["prerelease"] is False
+assert history["releases"][0]["assets_count"] == 4
 assert f"v{HARDWARE_PREVIEW}" in tags, "hardware preview missing from the history snapshot"
 assert f"v{CJK_PREVIEW}" in tags, "input method preview missing from the history snapshot"
 assert f"v{MULTILINGUAL}" in tags, "display-language preview missing from the history snapshot"

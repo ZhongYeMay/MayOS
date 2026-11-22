@@ -4,11 +4,22 @@
 
 MayOS 是一个不断迭代的系统开发项目。最新版源码提供自研 x86_64 64 位 MayKernel 桌面、Linux x86_64 用户态图形桌面、BusyBox 救援终端，以及共享的文件管理器、设置、终端与编辑器。
 
+## 最新正式版 · MayOS v0.5.2
+
+[下载已发布的正式双内核 + MayOS Live + 安装器 ISO](https://github.com/ZhongYeMay/MayOS/releases/tag/v0.5.2) · [官网部署指南](https://zhongyemay.github.io/MayOS/deployment.html)
+
+- 自研 **MayKernel64 0.5.2**；独立的 **MayOS Live 0.5.2** 使用 RAM-only 会话，不向物理磁盘写入。
+- **Linux64** 使用 Linux 7.3.1，并从 MayOS 0.5.2 源码构建桌面。
+- 图形 / 串口 **安装器安装的版本就是 0.5.2**；安装后内核与 Live、普通 MayKernel 的 ELF SHA-256 完全一致。
+- BIOS/UEFI 启动、Live 不写盘、空白盘安装、冷启动等 **8 项 QEMU 验收通过**。尚未验证所有实体电脑/USB 引导兼容性，禁止在有重要数据的硬盘上进行安装实验。
+- 官方发行源码：[`versions/0.5.2/`](versions/0.5.2/README.md)，各历史版本仍独立保留。Mission Center 真正移植尚未完成。
+
 ## 各版本独立源码目录
 
 GitHub 默认分支将每个版本的源码放在根目录下的 [`versions/`](versions/README.md) 中，**不再把多个版本集中存放在 `MayOS_0.3.0-pre1` 目录**：
 
-- [当前主分支开发源码 `0.5.0-pre2-dev`](versions/0.5.0-pre2-dev/README.md)
+- [已发布 `0.5.2` 正式版源码](versions/0.5.2/README.md)
+- [较旧的独立 `0.5.0-pre2-dev` 开发快照](versions/0.5.0-pre2-dev/README.md)
 - [已发布 `0.5.0-pre2` 源码](versions/0.5.0-pre2/README.md)
 - [已发布 `0.5.0-pre1` 源码](versions/0.5.0-pre1/README.md)
 - [其他历史版本与校验清单](versions/catalog.json)
@@ -27,9 +38,9 @@ GitHub 默认分支将每个版本的源码放在根目录下的 [`versions/`](v
 - [许可与第三方组件](MayOS_0.3.0-pre1/docs/third-party/dual-boot.md)
 - [GitHub Releases](https://github.com/ZhongYeMay/MayOS/releases)
 
-## 当前开发版本（尚未发布）
+## 发行状态
 
-**MayOS `0.5.0-pre1-dev`**（MayKernel x86_64 / Linux x86_64）。系统“关于”与 MayShell `neofetch` 使用同一份版本常量；下一次拟发布的测试版为 `0.5.0-pre1`，但只有通过完整验收并创建 Release 后才能使用正式发布标记。现有 `0.4.1-pre2` 官网和已发布附件不变。
+当前 GitHub 正式版为 **MayOS v0.5.2**（QEMU 8/8 验收）。正式版标签表示此版本已发布，**不代表物理电脑已完成日用化认证**。后面的阶段性开发记录保留为历史，不应被视为最新版本说明。
 
 ## 2026-11-14 日用化第一阶段（开发分支）
 

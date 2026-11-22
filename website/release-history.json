@@ -2,9 +2,18 @@
   "schema_version": 1,
   "repository": "ZhongYeMay/MayOS",
   "source": "https://github.com/ZhongYeMay/MayOS/releases",
-  "snapshot_date": "2026-11-21",
+  "snapshot_date": "2026-11-22",
   "description": "Published GitHub Releases, including prereleases and source-only previews. Unreleased branches are not releases.",
   "releases": [
+    {
+      "tag": "v0.5.2",
+      "name": "MayOS v0.5.2 Official — Live + DualKernel + Installer",
+      "published_at": "2026-11-22T02:16:04Z",
+      "prerelease": false,
+      "body": "MayOS v0.5.2 — official x86_64 BIOS/UEFI release.\n\nOne ISO includes:\n- MayKernel64 desktop: v0.5.2\n- MayOS Live: v0.5.2, RAM-only, disk writes disabled\n- Linux64 MayOS desktop/rescue: v0.5.2, Linux kernel 7.3.1\n- Offline graphical and serial installer: installs EXACTLY v0.5.2\n\nThe Live, normal desktop, and installed MayKernel have byte-identical\nELF SHA-256. No version-label-only substitution.\n\n8 real QEMU tests passed: BIOS MayKernel; BIOS Linux desktop; BIOS\nLive with byte-for-byte unchanged disk; UEFI Live unchanged disk;\nUEFI installer cancel unchanged disk; real blank disk installation;\ninstalled slot exact kernel SHA; ISO-free UEFI disk cold boot.\n\nPhysical computer/USB boot and real-device installation compatibility\nare NOT yet broadly verified. Disable Secure Boot; first test on\ndisposable QEMU disks. Mission Center re-development is separate.\n",
+      "url": "https://github.com/ZhongYeMay/MayOS/releases/tag/v0.5.2",
+      "assets_count": 4
+    },
     {
       "tag": "v0.5.2-pre4",
       "name": "MayOS 0.5.2-pre4 — Windows 鼠标指针",
