@@ -3,7 +3,7 @@
 
 /* Official 0.5.2 source, built from the validated 0.5.2-pre4 baseline. */
 #ifndef MAYOS_VERSION
-#define MAYOS_VERSION "0.5.3-dev"
+#define MAYOS_VERSION "0.5.4-dev"
 #endif
 
 #endif /* MAYOS_VERSION_H */
