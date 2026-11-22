@@ -1780,12 +1780,20 @@ static void desktop_wallpaper(void) {
     if (desktop_style == 0) {
         const u16 *daily = platform_wallpaper_bitmap();
         if (daily) {
-            for (int i = 0; i < W * H; i++) {
-                u32 px = daily[i];
-                pixels[i] = (((px >> 11) & 31u) * 255u / 31u << 16) |
-                            (((px >> 5) & 63u) * 255u / 63u << 8) |
-                            ((px & 31u) * 255u / 31u);
+            /* Convert only when the backing mmap is swapped. Normal desktop
+               redraw uses one scanline-safe bulk copy, not 921600 shifts. */
+            static const u16 *last_bitmap;
+            static u32 daily_rgb[W * H];
+            if (last_bitmap != daily) {
+                for (int i = 0; i < W * H; i++) {
+                    u32 px = daily[i];
+                    daily_rgb[i] = (((px >> 11) & 31u) * 255u / 31u << 16) |
+                                   (((px >> 5) & 63u) * 255u / 63u << 8) |
+                                   ((px & 31u) * 255u / 31u);
+                }
+                last_bitmap = daily;
             }
+            memcpy(pixels, daily_rgb, sizeof(daily_rgb));
             return;
         }
         for (int y = 0; y < H; y++)
