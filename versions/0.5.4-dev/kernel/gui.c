@@ -1122,10 +1122,13 @@ static void pwd(void) {
 }
 static int sync_notice(void) {
     int ok = fs_sync();
-#ifndef MAYOS_LINUX
-    if (!ok)
+    if (!ok) {
+#ifdef MAYOS_LINUX
+        notify("Linux RAM 模式：修改未写入磁盘，重启后丢失");
+#else
         notify("磁盘不可写：修改仅保存在内存中");
 #endif
+    }
     return ok;
 }
 static void shell(void) {
@@ -1164,7 +1167,7 @@ static void shell(void) {
         emit("mv <path> <new-name>  rm <path>  save  memtest  memstress");
         emit("theme light|dark  net status|dhcp|resolve DOMAIN|qemu-probe|udp-probe|dns-probe|tcp-probe|tcp-loss-probe");
         emit("tls status|check <host> (native MayKernel HTTPS security check)");
-        emit("hardware  lspci  reboot  shutdown");
+        emit("hardware  storage  lspci  reboot  shutdown");
 #ifdef MAYOS_TASK_MANAGER
         emit("taskmgr  (F2 opens MayOS Task Manager)");
 #endif
@@ -1455,6 +1458,14 @@ static void shell(void) {
         emit("Trusted CA roots: not installed");
         emit("X.509 chain + hostname validation: not implemented");
         emit("No HTTPS, no GitHub download, no system installation");
+#endif
+    } else if (!strcmp(c, "storage")) {
+#ifdef MAYOS_LINUX
+        emit(disk_ready
+             ? "Linux desktop storage: marked ext4 A/B persistence enabled"
+             : "Linux desktop storage: RAM only; files disappear after restart");
+#else
+        emit(disk_ready ? "MayKernel: writable MayFS" : "MayKernel: RAM fallback");
 #endif
     } else if (!strcmp(c, "hardware")) {
 #ifdef MAYOS_LINUX
