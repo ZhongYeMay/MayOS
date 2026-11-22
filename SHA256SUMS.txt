@@ -1,0 +1,1 @@
+9bc713a2908cc0071d5afbec06147c6789c3e76dd32e699f8fc4d1c26bf1502a  MayOS-0.5.3-pre1-DualKernel-Live-Installer-x86_64.iso
