@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory() as folder:
                     tag=f"test-modern-network-{args.nic}",
                     qemu="qemu-system-x86_64", memory=512, timeout=60,
                     nic_model=args.nic)
-        vm.wait("custom kernel", timeout=30)
+        vm.wait("custom x86_64 kernel", timeout=20)
         vm.key("down"); vm.key("ret")
         vm.wait("MayOS-Linux# ", timeout=120)
         vm.wait("MayOS: desktop ready", timeout=120)
