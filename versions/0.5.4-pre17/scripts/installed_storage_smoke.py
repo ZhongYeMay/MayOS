@@ -49,7 +49,8 @@ def case(root, topology, installer, firmware, variables, qemu, two_installs, tar
     decoy_digest = digest(decoy)
 
     def start(stage, media, *, peer_disk=peer, prefer_peer=bool(target_index)):
-        tag = f"installed-{topology}-{target_index}-{stage}"
+        label = "ns" if topology == "namespaces" else topology
+        tag = f"installed-{label}-{target_index}-{stage}"
         priorities = (2, 1) if prefer_peer else (1, 2)
         if topology == "namespaces":
             devices = [
