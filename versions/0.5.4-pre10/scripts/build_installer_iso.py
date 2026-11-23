@@ -127,7 +127,10 @@ def main():
         shutil.copyfile(args.kernel, boot / "installer-linux")
         stage_menu(boot / "grub")
         (boot / "grub/grub.cfg").write_text(
-            "source /boot/grub/menu.cfg\n"
+            "serial --unit=0 --speed=115200\n"
+            "terminal_input console serial\nterminal_output console serial\n"
+            "set menu_color_normal=light-gray/black\n"
+            "set menu_color_highlight=black/light-gray\n"
             "set timeout=8\nset default=0\n"
             "menuentry 'Install MayOS' {\n"
             "  insmod all_video\n"

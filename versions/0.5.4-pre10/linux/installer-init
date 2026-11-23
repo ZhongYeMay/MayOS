@@ -17,7 +17,7 @@ else
     fi
 fi
 echo
-echo "MayOS 0.5.1 | Installation and recovery"
+echo "MayOS | Installation and recovery"
 echo "Install MayKernel to an empty target disk (at least 80 MiB)."
 echo "The installer runs offline. Other disks stay outside the installation."
 
