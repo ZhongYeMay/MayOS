@@ -224,7 +224,9 @@ Run the QEMU installed-storage regression with `--same-nvme` for two PCI
 NVMe controllers, `--shared-nvme` for NSIDs 1 and 7 under the same
 controller, `--same-sata` for two SATA ports on one AHCI controller, or
 `--with-two-installs` for SATA and NVMe together. These tests cover cold
-boots, decoy-disk checksums, and cloned GPT identifiers.
+boots, decoy-disk checksums, and cloned GPT identifiers. The shared
+namespace test uses the `virt-firmware` Python package to select the
+second namespace's EFI partition through UEFI BootNext.
 
 ```sh
 python3 scripts/installed_storage_smoke.py \

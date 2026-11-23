@@ -37,6 +37,26 @@ TOPOLOGY = {
 }
 
 
+def boot_esp_once(vars_path, disk):
+    # OVMF bootindex orders the controller but can still start its first
+    # namespace. Select the target ESP through a standard UEFI BootNext entry.
+    from virt.firmware.efi.devpath import DevicePath, DevicePathElem
+    from virt.firmware.varstore.edk2 import Edk2VarStore
+
+    layout = json.loads(subprocess.check_output(["sfdisk", "--json", str(disk)]))["partitiontable"]
+    esp = next(entry for entry in layout["partitions"]
+               if entry["type"].lower() == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b")
+    partition = DevicePathElem()
+    partition.set_gpt(1, esp["start"], esp["size"], esp["uuid"])
+    loader = DevicePathElem()
+    loader.set_filepath(r"\EFI\BOOT\BOOTX64.EFI")
+    path = DevicePath(bytes(partition) + bytes(loader))
+    store = Edk2VarStore(str(vars_path))
+    entries = store.get_varlist()
+    entries.set_boot_next(entries.add_boot_entry("MayOS storage regression", path))
+    store.write_varstore(str(vars_path), entries)
+
+
 def case(root, topology, installer, firmware, variables, qemu, two_installs, target_index=0):
     targets = TOPOLOGY[topology]
     first = root / "first.img"
@@ -69,6 +89,8 @@ def case(root, topology, installer, firmware, variables, qemu, two_installs, tar
                 devices += ["-device", f"{spec},bootindex={priorities[i]}"]
         vars_path = root / f"{stage}.fd"
         shutil.copyfile(variables, vars_path)
+        if topology == "namespaces" and media is None and prefer_peer:
+            boot_esp_once(vars_path, peer_disk)
         wrapper = root / f"launch-{stage}"
         wrapper.write_text(f"""#!/usr/bin/env python3
 import os
@@ -205,6 +227,11 @@ def main():
     if not qemu:
         parser.error("qemu-system-x86_64 is required")
     topology = args.topology or "mixed"
+    if topology == "namespaces":
+        try:
+            from virt.firmware.varstore import edk2
+        except ImportError:
+            parser.error("--shared-nvme requires the virt-firmware Python package")
     for index in (0,) if args.topology else (0, 1):
         with tempfile.TemporaryDirectory(prefix=f"mayos-installed-{topology}-") as folder:
             case(Path(folder), topology, args.installer.resolve(), args.ovmf_code.resolve(),
