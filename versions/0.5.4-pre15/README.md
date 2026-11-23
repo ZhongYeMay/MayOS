@@ -204,10 +204,11 @@ input controller rather than infer compatibility from the computer brand.
 ## Installed systems with SATA and NVMe present
 
 Each new installation generates independent UUIDs for the disk, EFI
-system partition and MayFS partition. GRUB reads the UUID of the EFI system
-partition it booted from. MayKernel checks for that partition in a valid GPT,
-then mounts the MayFS on the same disk. If the identity is missing, invalid
-or duplicated across probed backends, the session uses RAM. The kernel still
+system partition and MayFS partition. The installer also writes a unique
+FAT32 volume ID and the expected EFI partition UUID into the local GRUB
+loader. GRUB finds and verifies that partition, then passes its UUID to
+MayKernel. MayKernel checks the GPT and mounts the MayFS on the same disk. GRUB stops if it cannot verify the EFI partition. MayKernel uses RAM
+if its selector cannot identify one disk. The kernel still
 supports the older disk GUID selector. Upgrade and rollback retain partition
 identities.
 

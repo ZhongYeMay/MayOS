@@ -105,6 +105,56 @@ static void verify_layout(int disk, uint64_t sectors) {
             fail("Additional GPT partitions are outside this upgrade layout.");
 }
 
+static void patch_efi_identity(unsigned char *image, const unsigned char *ids) {
+    const unsigned max_bytes = 131072u * SECTOR;
+    unsigned char *esp = image + 2048u * SECTOR;
+    unsigned reserved = (unsigned)esp[14] | (unsigned)esp[15] << 8;
+    unsigned backup_lba = (unsigned)esp[50] | (unsigned)esp[51] << 8;
+    if (esp[11] != 0 || esp[12] != 2 || esp[66] != 0x29 || !backup_lba ||
+        backup_lba >= reserved || reserved >= 131072u)
+        fail("Installation image has an invalid FAT32 boot sector.");
+    unsigned char *backup = esp + backup_lba * SECTOR;
+    if (backup[66] != 0x29 || get32(esp + 67) != get32(backup + 67))
+        fail("FAT32 primary and backup identities do not match.");
+
+    static const char marker[] = "# MAYOS_RELOCATABLE_EFI_CONFIG_V1\n";
+    const size_t marker_size = sizeof marker - 1;
+    unsigned char *found = memmem(esp, max_bytes, marker, marker_size);
+    if (!found || memmem(found + marker_size, (size_t)(esp + max_bytes - found) - marker_size,
+                         marker, marker_size))
+        fail("Installation image has no unique EFI identity record.");
+
+    static const char volume_prefix[] = "set mayos_volume=";
+    static const char esp_prefix[] = "\nset mayos_esp_expected=";
+    const size_t prefix_size = sizeof volume_prefix - 1, second_size = sizeof esp_prefix - 1;
+    const size_t record_size = prefix_size + 9 + second_size + 36 + 1;
+    if ((size_t)(found - esp) < record_size) fail("EFI loader identity record is truncated.");
+    unsigned char *record = found - record_size;
+    unsigned char *volume_field = record + prefix_size;
+    unsigned char *esp_field = volume_field + 9 + second_size;
+    if (memcmp(record, volume_prefix, prefix_size) ||
+        memcmp(volume_field + 9, esp_prefix, second_size) || esp_field[36] != '\n')
+        fail("EFI loader identity record has an invalid format.");
+
+    uint32_t serial = get32(ids);
+    if (!serial) serial = get32(ids + 4) | 1u;
+    put32(esp + 67, serial);
+    put32(backup + 67, serial);
+    char volume[10], uuid[37];
+    static const unsigned char order[] = {3, 2, 1, 0, 5, 4, 7, 6, 8, 9, 10, 11, 12, 13, 14, 15};
+    const unsigned char *partition = ids + GPT_GUID_BYTES;
+    snprintf(volume, sizeof volume, "%04X-%04X", serial >> 16, serial & 0xffffu);
+    size_t offset = 0;
+    for (unsigned i = 0; i < sizeof order; i++) {
+        if (i == 4 || i == 6 || i == 8 || i == 10) uuid[offset++] = '-';
+        int count = snprintf(uuid + offset, sizeof uuid - offset, "%02x", partition[order[i]]);
+        if (count != 2) fail("Could not format the EFI partition identity.");
+        offset += 2;
+    }
+    memcpy(volume_field, volume, sizeof volume - 1);
+    memcpy(esp_field, uuid, sizeof uuid - 1);
+}
+
 int main(int argc, char **argv) {
     int check = argc == 4 && !strcmp(argv[3], "check");
     if (argc != 3 && !check) fail("Expected a target device and its sysfs device ID.");
@@ -168,6 +218,7 @@ int main(int argc, char **argv) {
         random_bytes += (size_t)received;
     }
     install_gpt_identity(image, backup, guid);
+    patch_efi_identity(image, guid);
 
     puts("Writing and verifying the installed MayOS disk...");
     size_t body_end = size == TEMPLATE_SIZE ? TEMPLATE_SIZE - GPT_TAIL_SIZE : TEMPLATE_SIZE;

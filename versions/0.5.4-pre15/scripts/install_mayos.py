@@ -144,9 +144,9 @@ def install(iso, expected, output, imported=None):
         disk = root / "disk.img"
         with disk.open("xb") as handle:
             handle.truncate(DISK_BYTES)
-        disk_id = str(uuid.uuid4())
+        disk_id, esp_id = str(uuid.uuid4()), str(uuid.uuid4())
         layout = (f"label: gpt\nlabel-id: {disk_id}\nunit: sectors\n\n"
-                  f"start={ESP_START}, size={ESP_BLOCKS}, type={ESP}, name=MayOS-BOOT\n"
+                  f"start={ESP_START}, size={ESP_BLOCKS}, type={ESP}, uuid={esp_id}, name=MayOS-BOOT\n"
                   f"start={DATA_START}, size={DATA_BLOCKS}, type={MAYFS}, name=MayFS\n")
         command("sfdisk", str(disk), input=layout, text=True)
         command("sfdisk", "--verify", str(disk))
@@ -157,15 +157,25 @@ def install(iso, expected, output, imported=None):
         loader = root / "BOOTX64.EFI"
         config = root / "grub.cfg"
         config.write_text(
-            "insmod part_gpt\ninsmod fat\ninsmod regexp\n"
-            "if regexp --set=1:root '^\\(([^)]+)\\)' \"$cmdpath\"; then\n"
-            "  configfile ($root)/mayos-grub.cfg\n"
+            f"set mayos_volume={volume_id}\n"
+            f"set mayos_esp_expected={esp_id}\n"
+            "# MAYOS_RELOCATABLE_EFI_CONFIG_V1\n"
+            "insmod part_gpt\ninsmod fat\ninsmod search_fs_uuid\ninsmod probe\n"
+            'if search --no-floppy --fs-uuid --set=root "$mayos_volume"; then\n'
+            "  if probe --part-uuid --set=mayos_esp ($root); then\n"
+            '    if [ "$mayos_esp" = "$mayos_esp_expected" ]; then\n'
+            "      configfile ($root)/mayos-grub.cfg\n"
+            "    fi\n"
+            "  fi\n"
             "fi\n"
-            "search --no-floppy --file --set=root /mayos-grub.cfg\n"
-            "configfile ($root)/mayos-grub.cfg\n")
+            'echo "MayOS could not locate the installed EFI system partition"\n')
         command("grub-mkstandalone", "-O", "x86_64-efi", "--fonts=unicode",
-                "--locales=", "--themes=", "--compress=xz", "-o", str(loader),
+                "--locales=", "--themes=", "--compress=no", "--core-compress=none", "-o", str(loader),
                 f"boot/grub/grub.cfg={config}")
+        marker = (f"set mayos_volume={volume_id}\nset mayos_esp_expected={esp_id}\n"
+                  "# MAYOS_RELOCATABLE_EFI_CONFIG_V1\n").encode()
+        if loader.read_bytes().count(marker) != 1:
+            raise ValueError("EFI loader must contain exactly one patchable identity record")
         command("grub-file", "--is-x86_64-efi", str(loader))
         command("mformat", "-C", "-F", "-T", str(ESP_BLOCKS), "-N", "0x" + serial,
                 "-v", "MAYOSBOOT", "-i", str(fat), "::")
@@ -253,6 +263,11 @@ def clone_installed(source, root):
     command("mcopy", "-i", fat, "::/mayos-slot.json", str(state))
     metadata = json.loads(state.read_text())
     volume = metadata["volume"]
+    with disk.open("rb") as stream:
+        stream.seek(ESP_START * SECTOR + 67)
+        serial = int.from_bytes(stream.read(4), "little")
+    if serial:
+        volume = f"{serial >> 16:04X}-{serial & 0xffff:04X}"
     env = root / "read-active.env"
     command("mcopy", "-i", fat, "::/mayos-active.env", str(env))
     active = command("grub-editenv", str(env), "list", capture_output=True,
