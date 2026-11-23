@@ -1,0 +1,22 @@
+[package]
+name = "maykernel_policy"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["staticlib"]
+
+[features]
+default = []
+release-signature = ["dep:ed25519-dalek"]
+roughtime = ["dep:ed25519-dalek", "dep:sha2"]
+# Diagnostics only: a synthetic, unsigned boot-trial record on marked QEMU disks.
+ab-disk-diagnostic = []
+
+[dependencies]
+# RustCrypto, supports no_std. Exact direct version; Cargo.lock pins transitive crates.
+ed25519-dalek = { version = "=2.2.0", default-features = false, optional = true }
+sha2 = { version = "=0.10.9", default-features = false, features = ["force-soft"], optional = true }

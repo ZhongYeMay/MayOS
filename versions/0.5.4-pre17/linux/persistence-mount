@@ -1,0 +1,54 @@
+#!/bin/sh
+# Opt-in ext4 only. Never scan, format or auto-mount any disk.
+set -u
+mkdir -p /mnt/mayos-profile
+device=
+live=0
+for token in $(cat /proc/cmdline); do
+    case "$token" in
+        mayos.ram|mayos.live=1) live=1 ;;
+        mayos.persist=*) device=${token#mayos.persist=} ;;
+    esac
+done
+[ "$live" = 0 ] || {
+    echo 'MayOS Linux profile: Live boot; persistence disabled' > /dev/ttyS0
+    exit 0
+}
+[ -n "$device" ] || {
+    echo 'MayOS Linux profile: RAM session (no opt-in storage device)' > /dev/ttyS0
+    exit 0
+}
+case "$device" in
+    /dev/sd[a-z]|/dev/sd[a-z][1-9]|/dev/vd[a-z]|/dev/vd[a-z][1-9]|/dev/nvme[0-9]n[0-9]|/dev/nvme[0-9]n[0-9]p[1-9]) ;;
+    *) echo 'MayOS Linux profile: rejected unsupported target name' > /dev/ttyS0; exit 0 ;;
+esac
+[ -b "$device" ] || {
+    echo 'MayOS Linux profile: opt-in device unavailable; RAM mode' > /dev/ttyS0
+    exit 0
+}
+if ! mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$device" /mnt/mayos-profile; then
+    echo 'MayOS Linux profile: cannot mount explicit ext4 target; RAM mode' > /dev/ttyS0
+    exit 0
+fi
+marker=/mnt/mayos-profile/.mayos-profile-enabled
+owner_mode=$(stat -c '%u:%a' /mnt/mayos-profile)
+case "$owner_mode" in
+    0:*[2367]?|0:*[2367]) valid_directory=0 ;;
+    0:*) valid_directory=1 ;;
+    *) valid_directory=0 ;;
+esac
+if [ "$valid_directory" != 1 ] || [ ! -f "$marker" ] || [ -L "$marker" ] ||
+   [ "$(stat -c '%u:%s' "$marker")" != '0:17' ] ||
+   ! printf 'MayOS-Profile-v1\n' | cmp -s - "$marker"; then
+    echo 'MayOS Linux profile: explicit marker missing; will not write' > /dev/ttyS0
+    umount /mnt/mayos-profile
+    exit 0
+fi
+if ! mount -o remount,rw,nosuid,nodev,noexec /mnt/mayos-profile; then
+    echo 'MayOS Linux profile: could not remount read/write; RAM mode' > /dev/ttyS0
+    umount /mnt/mayos-profile
+    exit 0
+fi
+printf 'MAYOS_PROFILE_DIR=/mnt/mayos-profile\nexport MAYOS_PROFILE_DIR\n' > /run/mayos-profile-env
+chmod 0600 /run/mayos-profile-env
+echo 'MayOS Linux profile: explicit marked ext4 mounted for atomic desktop snapshots' > /dev/ttyS0
