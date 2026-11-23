@@ -1,0 +1,2 @@
+b17c2c25684aad2748348654fce1e93e04b22ffdcd9d803e32aa70fe09ee585b  MayOS-0.5.4-pre10-MayKernel64-x86_64.iso
+dbf965d66673f8a28b9bb99528859bc69e0cb486d0334b5c12328d2cb40cbce1  MayOS-0.5.4-pre10-Installer-x86_64.iso
