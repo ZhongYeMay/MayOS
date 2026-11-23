@@ -28,7 +28,7 @@ int platform_fastfetch(char *destination, int capacity);
 void platform_idle(void);
 #else
 static inline const char *platform_kernel(void) { return "MayKernel x86_64 (custom)"; }
-static inline void platform_idle(void) { __asm__ volatile("hlt"); }
+void platform_idle(void); /* also accounts real CPU idle cycles */
 #endif
 void *memset(void *, int, u32);
 void *memcpy(void *, const void *, u32);

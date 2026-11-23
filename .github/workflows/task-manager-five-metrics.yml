@@ -1,0 +1,118 @@
+name: MayOS dual-kernel five-metric Task Manager - real QEMU proof
+on:
+  push:
+    branches: [feat/dual-kernel-five-metric-task-manager-20261121]
+  pull_request:
+    paths:
+      - 'versions/0.5.0-pre2-dev/**'
+      - '.github/workflows/task-manager-five-metrics.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  collector-abi:
+    name: Real /proc CPU RAM DISK NET + freestanding compile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile both kernels' collector and native callers as real C
+        run: |
+          set -euxo pipefail
+          cd versions/0.5.0-pre2-dev
+          gcc -std=gnu11 -Wall -Wextra -Werror -ffreestanding -m64 -mno-red-zone \
+            -Ikernel -fsyntax-only kernel/procfs.c kernel/core.c kernel/fs.c kernel/e1000.c
+          gcc -std=gnu11 -Wall -Wextra -Werror -DMAYOS_LINUX \
+            -Ikernel -fsyntax-only kernel/procfs.c linux/desktop.c
+      - name: Run real host /proc CPU RAM disk net collector
+        run: |
+          set -euxo pipefail
+          cd versions/0.5.0-pre2-dev
+          gcc -std=gnu11 -Wall -Wextra -Werror -DMAYOS_LINUX -Ikernel \
+            tests/task_manager_host.c kernel/procfs.c -o /tmp/mayos-task-host
+          /tmp/mayos-task-host
+      - name: Assert Rust and C snapshot ABI and GPU truthfulness
+        run: |
+          set -euxo pipefail
+          cd versions/0.5.0-pre2-dev
+          rustc --edition=2021 --test rust/procfs.rs -o /tmp/mayos-task-rust
+          /tmp/mayos-task-rust
+          python3 -m py_compile scripts/task_manager_smoke.py scripts/record_feature_tour.py
+  real-qemu-and-video:
+    name: Boot both kernels, screenshot, record both H.264 videos
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure CI package mirror
+        run: bash scripts/configure-ci-apt-mirror.sh
+      - name: Install real QEMU FFmpeg GRUB and Linux builders
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
+            build-essential gcc-multilib grub-common grub-pc-bin grub-efi-amd64-bin \
+            xorriso mtools qemu-system-x86 ovmf ffmpeg python3-pil \
+            fonts-noto-cjk fonts-dejavu-core musl-tools flex bison bc \
+            libelf-dev libssl-dev xz-utils busybox-static rsync \
+            libcurl4-openssl-dev pkg-config ca-certificates
+      - name: Build real MayKernel ISO and run native GUI regression
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          make all
+          make test
+      - name: Build real dual-kernel ISO Linux 7.3.1 and MayKernel
+        working-directory: MayOS_0.3.0-pre1
+        run: make dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+      - name: Verify both native Task Managers under real QEMU; save screenshots
+        working-directory: MayOS_0.3.0-pre1
+        run: python3 scripts/task_manager_smoke.py --iso build/mayos-dual.iso
+      - name: Record MayKernel64 live framebuffer video
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          mkdir -p build/recordings
+          python3 scripts/record_feature_tour.py --kernel custom \
+            --iso build/mayos-dual.iso --source-commit "$GITHUB_SHA" \
+            --output build/recordings/MayKernel64-TaskManager-All-Functions.mp4
+      - name: Record Linux64 live framebuffer video
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          python3 scripts/record_feature_tour.py --kernel linux \
+            --iso build/mayos-dual.iso --source-commit "$GITHUB_SHA" \
+            --output build/recordings/Linux64-TaskManager-All-Functions.mp4
+      - name: Validate MP4 frames and source hashes; concatenate the real footage
+        working-directory: MayOS_0.3.0-pre1
+        run: |
+          set -euo pipefail
+          cd build/recordings
+          for kernel in MayKernel64 Linux64; do
+            test -s "$kernel-TaskManager-All-Functions.mp4"
+            test -s "$kernel-TaskManager-All-Functions.json"
+            ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height \
+              -of default=noprint_wrappers=1 "$kernel-TaskManager-All-Functions.mp4" |
+              grep -q 'codec_name=h264'
+          done
+          ffmpeg -hide_banner -loglevel error -y \
+            -i MayKernel64-TaskManager-All-Functions.mp4 \
+            -i Linux64-TaskManager-All-Functions.mp4 \
+            -filter_complex '[0:v][1:v]concat=n=2:v=1:a=0[v]' \
+            -map '[v]' -c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p \
+            -movflags +faststart MayOS-dual-TaskManager-All-Functions.mp4
+          test -s MayOS-dual-TaskManager-All-Functions.mp4
+          sha256sum *.mp4 > SHA256SUMS.txt
+      - name: Preserve real QEMU full-size MP4 PNG and serial traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-dual-task-manager-actual-QEMU
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            MayOS_0.3.0-pre1/build/recordings/*.mp4
+            MayOS_0.3.0-pre1/build/recordings/*.json
+            MayOS_0.3.0-pre1/build/recordings/SHA256SUMS.txt
+            MayOS_0.3.0-pre1/build/task-manager-*.png
+            MayOS_0.3.0-pre1/build/test-task-manager-*.log
+            MayOS_0.3.0-pre1/build/record-*.log

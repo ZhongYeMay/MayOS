@@ -95,7 +95,20 @@ def record(args):
         vm.key("esc")
         actions.append("cat_easter_egg")
 
+        # New real dual-kernel Task Manager: sample live CPU/GPU/disk/RAM/NET.
+        # QEMU framebuffer frames are recorded unmodified via QMP.
+        vm.key("f2")
+        vm.wait("MayOS: Task Manager opened / CPU GPU DISK RAM NET", timeout=25)
+        vm.hold(4.5)
+        actions += ["TaskManager_CPU_real", "TaskManager_GPU_hardware_or_framebuffer",
+                    "TaskManager_DISK_real", "TaskManager_RAM_real",
+                    "TaskManager_NET_real"]
+        vm.key("f1")
+        vm.command("perf")
+        vm.wait("MayOS: performance snapshot", timeout=25)
         vm.hold(1.5)
+        vm.key("f2")
+        vm.hold(2.5)
         vm.finish_recording()
     finally:
         vm.close()

@@ -1,4 +1,5 @@
 #include "core.h"
+#include "procfs.h"
 #include "io.h"
 #include "framebuffer.h"
 #include "pci.h"
@@ -92,11 +93,29 @@ static MaySurface display;
 static int display_scale_mode;
 static u8 pages[32768];
 static u32 page_count;
+static u32 allocator_used_pages;
+/* HLT interval is measured with the real TSC. This estimates CPU busy
+ * residency in the single-task MayKernel; it is not per-process accounting. */
+static u64 may_idle_tsc(void) {
+    u32 low, high;
+    __asm__ volatile("rdtsc" : "=a"(low), "=d"(high));
+    return ((u64)high << 32) | low;
+}
+void platform_idle(void) {
+    u64 before = may_idle_tsc();
+    __asm__ volatile("hlt");
+    u64 after = may_idle_tsc();
+    mayperf_note_idle_cycles(after - before);
+}
+u32 mayperf_managed_pages(void) { return free_pages + allocator_used_pages; }
+u32 mayperf_used_pages(void) { return allocator_used_pages; }
+
 extern char kernel_end;
 void *page_alloc(void) {
     for (u32 i = 0; i < page_count; i++)
         if (!pages[i]) {
             pages[i] = 1;
+            allocator_used_pages++;
             free_pages--;
             void *p = (void *)(uptr)((u64)i * 4096);
             memset(p, 0, 4096);
@@ -112,6 +131,7 @@ void page_free(void *p) {
     u32 i = (u32)page;
     if (i < page_count && pages[i] == 1) {
         pages[i] = 0;
+        allocator_used_pages--;
         free_pages++;
     }
 }
@@ -271,6 +291,7 @@ static void memory_init(const u8 *m, u32 flags) {
     }
     u32 reserved = (u32)(((uptr)&kernel_end + 4095) / 4096);
     free_pages = 0;
+    allocator_used_pages = 0;
     for (u32 i = 0; i < page_count; i++) {
         if (i < reserved)
             pages[i] = 2;
@@ -500,6 +521,10 @@ int input_poll(int *mx, int *my, int *buttons, int *key) {
             }
             if (v == 59) {
                 *key = 0x105;
+                return 1;
+            }
+            if (v == 60) { /* F2: Task Manager */
+                *key = 0x107;
                 return 1;
             }
             if (v == 42 || v == 54) {
