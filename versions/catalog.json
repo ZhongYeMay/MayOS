@@ -5,6 +5,11 @@
   "legacy_symlink": "MayOS_0.3.0-pre1",
   "released": [
     {
+      "directory": "0.5.4-pre15",
+      "tag": "v0.5.4-pre15",
+      "source_tree_sha": "b59d0e3636f085fd65f4f49988c1e66ff56f2c60"
+    },
+    {
       "directory": "0.5.4-pre14",
       "tag": "v0.5.4-pre14",
       "source_tree_sha": "0da391816159803b0ead4e5312af4d36bb8cfa88"
