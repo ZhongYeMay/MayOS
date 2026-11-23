@@ -1,0 +1,2 @@
+e37ec4a3db1d6b28e3e754f1aa4e67c18c20d263d00b317c6da4d1b541814a2b  MayOS-0.5.4-pre13-MayKernel64-x86_64.iso
+8d4ce63dfa08121a18346fac3aaa277d782529df1dd30ccca648177ccc2122a3  MayOS-0.5.4-pre13-Installer-x86_64.iso
