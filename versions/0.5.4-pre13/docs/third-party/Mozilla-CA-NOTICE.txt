@@ -1,0 +1,9 @@
+MayKernel64 trust anchors are generated from the Mozilla CA Root Certificate
+Store (snapshot dated November 5, 2026), extracted by the curl project.
+The Mozilla certificate data is available under the Mozilla Public License,
+version 2.0. See MPL-2.0.txt.
+
+Bundle: https://curl.se/docs/caextract.html
+Mozilla source: https://github.com/mozilla-firefox/firefox/blob/release/security/nss/lib/ckfw/builtins/certdata.txt
+MayOS corresponding source: https://github.com/ZhongYeMay/MayOS/tree/v0.5.4-pre13/versions/0.5.4-pre10
+The input PEM, its pinned SHA-256 and generator are included in that source.
