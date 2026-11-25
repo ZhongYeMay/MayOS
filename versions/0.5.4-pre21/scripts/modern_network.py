@@ -33,8 +33,15 @@ def runtime(root: Path, output: Path):
         linked = subprocess.check_output(["ldd", str(executable)], text=True)
         if "not found" in linked:
             raise RuntimeError(f"Missing runtime dependency for {executable.name}")
-        for path in re.findall(r"(?<!\S)(/[^\s]+)", linked):
-            files[path.lstrip("/")] = Path(path)
+        for row in linked.splitlines():
+            dependency = re.fullmatch(r"\s*([A-Za-z0-9_.+-]+) => (/\S+) \(0x[0-9a-f]+\)", row)
+            loader = re.fullmatch(r"\s*(/\S+) \(0x[0-9a-f]+\)", row)
+            if dependency:
+                name, path = dependency.groups()
+                files[f"lib/x86_64-linux-gnu/{name}"] = Path(path)
+            elif loader:
+                path = loader[1]
+                files[path.lstrip("/")] = Path(path)
     # Include Debian/Ubuntu packaging copyright texts for all linked libraries.
     packages = set()
     for file in list(files.values()):
