@@ -2,6 +2,7 @@
 """Install onto disposable QEMU disks and cold-boot with both present."""
 import argparse
 import json
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -14,9 +15,9 @@ from live_upgrade import digest
 MIB = 1024 * 1024
 
 
-def blank(path):
+def blank(path, size):
     with path.open("xb") as image:
-        image.truncate(DISK_BYTES + 16 * MIB)
+        image.truncate(size)
 
 
 def complete_setup(vm):
@@ -30,10 +31,10 @@ def complete_setup(vm):
 
 
 TOPOLOGY = {
-    "mixed": (("AHCI", "/dev/sda"), ("NVMe", "/dev/nvme0n1")),
-    "sata": (("AHCI", "/dev/sda"), ("AHCI", "/dev/sdb")),
-    "nvme": (("NVMe", "/dev/nvme0n1"), ("NVMe", "/dev/nvme1n1")),
-    "namespaces": (("NVMe", "/dev/nvme0n1"), ("NVMe", "/dev/nvme0n2")),
+    "mixed": ("AHCI", "NVMe"),
+    "sata": ("AHCI", "AHCI"),
+    "nvme": ("NVMe", "NVMe"),
+    "namespaces": ("NVMe", "NVMe"),
 }
 
 
@@ -62,9 +63,12 @@ def case(root, topology, installer, firmware, variables, qemu, two_installs, tar
     first = root / "first.img"
     peer = root / "peer.img"
     disks = (first, peer)
-    for disk in disks:
-        blank(disk)
-    mode, device = targets[target_index]
+    # The installer's Linux kernel can probe NVMe namespaces in either order.
+    # Give each blank disk a distinct size to identify it in the serial menu.
+    disk_sizes = (DISK_BYTES + 16 * MIB, DISK_BYTES + 32 * MIB)
+    for disk, size in zip(disks, disk_sizes):
+        blank(disk, size)
+    mode = targets[target_index]
     target, decoy = disks[target_index], disks[1 - target_index]
     decoy_digest = digest(decoy)
 
@@ -81,7 +85,7 @@ def case(root, topology, installer, firmware, variables, qemu, two_installs, tar
         else:
             ports = ["ide.0", "ide.2"]
             devices = []
-            for i, ((backend, _), drive) in enumerate(zip(targets, ("first-test", "peer-test"))):
+            for i, (backend, drive) in enumerate(zip(targets, ("first-test", "peer-test"))):
                 if backend == "AHCI":
                     spec = f"ide-hd,bus={ports[i]},drive={drive}"
                 else:
@@ -111,12 +115,17 @@ os.execv({qemu!r}, [{qemu!r}, *args])
         return BootVM(iso=media, disk=first, tag=tag, qemu=str(wrapper), memory=512,
                       timeout=65, machine="q35", ovmf_code=firmware, ovmf_vars=vars_path)
 
-    def install_to(stage, destination):
+    def install_to(stage, index):
         vm = start(stage, installer)
         try:
             vm.wait("Install MayOS (serial console)")
             vm.send_serial("\x1b[B\r")
             vm.wait("Enter the target path")
+            size_mib = disk_sizes[index] // MIB
+            paths = re.findall(rf"^(/dev/\S+)\s+{size_mib} MiB\b", vm.text, re.MULTILINE)
+            if len(paths) != 1:
+                raise RuntimeError(f"Expected one {size_mib} MiB disk in installer; see {vm.log}")
+            destination = paths[0]
             vm.send_serial(destination + "\n")
             vm.wait(f"To continue, type INSTALL {destination}")
             vm.send_serial(f"INSTALL {destination}\n")
@@ -124,7 +133,7 @@ os.execv({qemu!r}, [{qemu!r}, *args])
         finally:
             vm.stop()
 
-    install_to("install", device)
+    install_to("install", target_index)
     assert digest(decoy) == decoy_digest
     print(f"PASS: installed to {mode} while the other disk remained byte-identical", flush=True)
 
@@ -169,8 +178,8 @@ os.execv({qemu!r}, [{qemu!r}, *args])
 
         if two_installs:
             before = digest(first)
-            peer_mode, peer_device = targets[1]
-            install_to("install-second", peer_device)
+            peer_mode = targets[1]
+            install_to("install-second", 1)
             assert digest(first) == before
 
             def identities(disk):
