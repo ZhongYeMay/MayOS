@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "version": "7.3.1",
+  "kernel_release": "7.3.1",
+  "architecture": "x86_64",
+  "source": {
+    "url": "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.3.1.tar.xz",
+    "sha256": "fa595aad93734f829c963c2a90ef7c3673224fd7fdae7b49406e397cde2de231",
+    "archive": "downloads/linux-7.3.1.tar.xz",
+    "checksum_url": "https://cdn.kernel.org/pub/linux/kernel/v7.x/sha256sums.asc",
+    "checksum_verification": "SHA-256 against official HTTPS checksum list; PGP not verified"
+  },
+  "artifacts": {
+    "bzImage": {
+      "path": "bzImage",
+      "sha256": "bfa8fde4a064de1b5bed13045e989c57848be8905b05d5589bcd8f6d5e0dd853"
+    },
+    "initramfs": {
+      "path": "initramfs.cpio.gz",
+      "sha256": "0ed6f518311279e88c25eae01a9e1a5ff0900e97e9518c222a8ff8179ea9801c"
+    },
+    "config": {
+      "path": "kernel.config",
+      "sha256": "a619b0991ab08d69f6bd118df1f22d2d6412e4f32262b69d307bea38e2c7d7b4"
+    },
+    "desktop": {
+      "path": "mayos-desktop",
+      "sha256": "841a8c0f7c4f1541d33503d4c5311b2bd7c2d20623932b95b984f97059038d2b"
+    },
+    "fastfetch": {
+      "path": "fastfetch",
+      "sha256": "db09ea85b6aa7a354ba0f09c2ecc0d8edbb1435a4658e95f82ab991878d4b500"
+    }
+  },
+  "busybox": {
+    "version": "BusyBox v1.36.1 (Ubuntu 1:1.36.1-6ubuntu3.1) multi-call binary.",
+    "sha256": "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14",
+    "path": "busybox",
+    "license": "GPL-2.0-only",
+    "corresponding_source_required": true
+  },
+  "fastfetch": {
+    "source": "user-provided static binary",
+    "version": "user-specified",
+    "sha256": "db09ea85b6aa7a354ba0f09c2ecc0d8edbb1435a4658e95f82ab991878d4b500",
+    "interpreter": "/lib/ld-musl-x86_64.so.1",
+    "needed": [
+      "libc.musl-x86_64.so.1"
+    ],
+    "loader_sha256": "63156e1e91a604abbc98a9c354783bb6c7ba2f35955a81f825abb7d9518f48e5"
+  },
+  "inputs": {
+    "bing_wallpaper_worker_sha256": "8998f6ab4166e504f2df8749dad14f33f2cdf641791f8af6ec7a7d427faea620",
+    "wallpaper_format_sha256": "ef6dd85f2aeef4f6adff1cd6e9bbe94ea34fb38f799367ac55a89ee93041c1dc",
+    "modern_network_builder_sha256": "3caf46f6fb0ec8dcda9532f21cf21e27372734daef9d033a4058834a3a2fb72b",
+    "modern_network_source_sha256": "8a3a32be48d741a2509e9836b20a8e5efed01177580989ad05b42d9131ff17df",
+    "config_sha256": "bf1d13a093eed4bcc7e934368415d5802ad2ba63f83ba47787794fc81c933449",
+    "init_sha256": "8e066edf92e9b0ce241f07c8ab27ee2cbf30115df2df68c0bea98aee5ed4b79b",
+    "inittab_sha256": "4fa3df1164c78452bda88a79705e7a2a32137750eb06cd0f814de91bba28f1b7",
+    "profile_sha256": "dd643ad7ca1f0f9c6a96b455fe4ec8048d1cfeae8f12a776ce7eb41939017733",
+    "network_start_sha256": "07322d556404c4c40f68a7f6870eac4551912655521f0701c1890ecdc3c25b7b",
+    "dhcp_hook_sha256": "8bd53021117cf093750b0541b7377c4180b6f17ceffcf6130ef4d859db85ed15",
+    "network_backend_sha256": "e9a08b523daa835cf6ea676d1138f3187fb274d0fd5cc55314d088d20a16bdb4",
+    "desktop_session_sha256": "26eee7c7665b9bffc99f3e4b16f6abceb2a2c18a6f5a861defdc5c29b9f55ff7",
+    "desktop_backend_sha256": "70b18375401791753afac644b513a545f4753b6295f9823ffdd122fb672706e5",
+    "display_kms_sha256": "f18973cacdf5ce7d638153f81788d6e5af01fdc7dffef815ef6f99cc3febbe88",
+    "display_modes_policy_sha256": "46e07fa0f5ff9ddc9fa6fbdeaefb278cc2991eeaca0f176f2cd42edc442773a1",
+    "framebuffer_geometry_sha256": "4ffbefc72600c41489a5aa1ff80da2504573ee8744465d4265559776732e45dc",
+    "desktop_gui_sha256": "c58184add50e6455ee1e03eb189274d95cdb3ce83b60e3790f42f5ac5e59bc1b",
+    "release_feed_sha256": "b3c66f4c33196b2da6bc0899fed9477f80389ee784dbe162bcb7099a463b124d",
+    "task_manager_ui_sha256": "f4bbcb1a1dff114c7a354b0b59781f96ef36a8caf8b6f044d6d43b199002b777",
+    "task_manager_linux_sha256": "003947c07b37c6bedc1a9ae18f80f07a68e238d40a1fd6369052016fb660b9bf",
+    "task_manager_crate_sha256": "dce0f18c77f6dd341c0a2f9cb85892f5a10264cb86eb22584606efd7c7e0afd8",
+    "task_manager_header_sha256": "1c6f084688d9c78e753888ac68e541737d9b571605fcd082baf04aaa0c7c1bd2",
+    "desktop_vfs_header_sha256": "66e90899de96e60d1ec400e5f0d1ab77d3e284bc01d86ef23faa8ce0d9443d50",
+    "boot_art_generator_sha256": "b855165b1f1a71e2c79b61673668b547208f6e4aba56d1f1fabf9fa7433970b3",
+    "boot_brand_sha256": "546f14c080ca9c5a949ff08fd25f0de2c53b148f2f0bfad090c163cb1171c7f6",
+    "explorer_history_sha256": "54bb7cc2ae9ad3a6bbde092145ed57d8808923e6915f6afd6df9d7ea55d2095a",
+    "desktop_fs_sha256": "079fb28448cf1954207e1b3cc6ab70dd35cbef0d1bcfee67a2c0749762f92c4a",
+    "profile_persistence_c_sha256": "8e9124c63c0bae397f118721c2f097133673a95730cccefac86ae01e53bce7bf",
+    "profile_persistence_header_sha256": "4ab79627aad72c5552e4334e266a29de5c482b7b412aec8cae2fe97df91f8033",
+    "profile_mount_script_sha256": "da01ed29c0a119e034de114a151158ad6211404280f27e1a551d6e73f177f27f",
+    "desktop_cursor_sha256": "b42ae6ba3885fe2025e213edc4e3f19b0c74d6cbd77383692f977b6cdbd68be0",
+    "desktop_cursor_header_sha256": "6da75dc40b36d536b253a20e497f91dce0be9f17b52a76e89b2e4d8aa78b4abb",
+    "desktop_cursor_inflate_sha256": "8591c7c2ad3e5e28347d7129379ead0bf331a024b060699ffdebc1610b1538db",
+    "desktop_core_header_sha256": "e1f216836e811b915f5498d2a1ab10ea240581dc322412276a4b55a5427c94be",
+    "framebuffer_adapter_sha256": "4ffbefc72600c41489a5aa1ff80da2504573ee8744465d4265559776732e45dc",
+    "font_core_source_sha256": "b8c041c702dd47956ab6e32735aaf17ff75deb0f6e0176762d11e3c986280149",
+    "font_installer_source_sha256": "cf38dc5e5d81159354c9ec7f9e48ccdeb83fec28af385c2805eb28995e1f0805",
+    "design_palette_sha256": "526596948b584ae2ee470892387ff91121b925be8bc53f72e90eac97dc493528",
+    "system_pointer_sha256": "3bfc7dffb690e623b568284213439a010568f0d2e71f0b7c5b9bb0d31622ae62",
+    "font_generator_sha256": "4a473f318e236ab375c8ff4d6fed68638cbb825ed1f76173882093e3b97f3aee",
+    "ime_header_sha256": "4c7543d4345e4ae94b0aa088416824084cd78c6a52c95d8c9c6f01083e6ab2fe",
+    "utf8_header_sha256": "99eac31c836bd169ef73957b13fc12a155de60f91e3745dd387e2349474164f3",
+    "ime_generator_sha256": "4580eec96fbde73a6245ba18d60bdca38954caf8ed865f9de0e2793220aa90a4",
+    "ime_mandarin_sha256": "d775d94d17dbbe6905f8596b1152ac5a46c489ff756c6d4f2372eea666322307",
+    "ime_phrases_sha256": "1a1b90482733cd341e278aeafca52c7d484828e9378b3cf988650b28d58113de",
+    "locale_catalog_sha256": "6eb978836d15e046bf4230ad57f81557dc0b950cc6b1d7a1c5ed0b8b6a43e9aa",
+    "locale_strings_sha256": "076603765095aa83289d37c3c8ca61b8f96cb083548875f397371ebdc9495894",
+    "photo_generator_sha256": "a66b4223b00305d1bcad84ac3da684b60f3bda163a1555112d29d413c7a35ca2",
+    "photo_sha256": "b57b61dc6f23b6aa299530cdd4dc6c186d882592afeb07575e26abd0ff8f996a",
+    "tenshi_artwork_sha256": "20d53b9e0f887d06b6405deb33186759e9d5d3ee68a199b42aa93d09d8da267a",
+    "linux_readme_sha256": "f5d849b6ffdb7156d1ec154786893e197cf0d5ede3be5fd5c88c04b6954b1a07",
+    "fastfetch_license_sha256": "f30fab2451411172d78522346e91eae63ef1ea11c3487bc9acd0a68acd8c9571",
+    "builder_sha256": "7767e7e38eab5feaa2ed8d32d5195fc65a0a04de770736b82f58d0de97a6bd20",
+    "license:docs/third-party/BearSSL-LICENSE.txt": "771bf18c8633ea69ec9b07d2e604c4b99b7bef41b0f5ce6385d24df4448f61ca",
+    "license:docs/third-party/DejaVu-copyright.txt": "63d3ba759d12804c5b31a9d5940d855c1820d1f5999e6b0872eb1c7ff045fbc9",
+    "license:docs/third-party/Fastfetch-MIT.txt": "f30fab2451411172d78522346e91eae63ef1ea11c3487bc9acd0a68acd8c9571",
+    "license:docs/third-party/Fluent-System-Icons-MIT.txt": "69bc45dc42b9acb96a69823adbc6ae538374e3c0bde169b855b32c48eaaef52f",
+    "license:docs/third-party/MPL-2.0.txt": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85",
+    "license:docs/third-party/Mozilla-CA-NOTICE.txt": "b2d46bdb69ed1637d841b1fe28026248ed0c56351de5b2954fc34069a7cf2710",
+    "license:docs/third-party/Noto-CJK-copyright.txt": "849f4ea9c214fa4ac3593b770c699f387534b11ce671264c1b10d85bdcb5997b",
+    "license:docs/third-party/Unicode-IME.txt": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96",
+    "license:docs/third-party/dual-boot-licenses/BusyBox-GPL-2.0.txt": "bbfc9843646d483c334664f651c208b9839626891d8f17604db2146962f43548",
+    "license:docs/third-party/dual-boot-licenses/GRUB-GPL-3.0.txt": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+    "license:docs/third-party/dual-boot-licenses/busybox-static-packaging-copyright.txt": "336d995e819d3a7a3fdbf3f5041c07094f75ee849acb3bb742b7503d45786329",
+    "license:docs/third-party/dual-boot-licenses/grub-common-packaging-copyright.txt": "bd3b5f8b4b6f3592bb1b597c6fb4557516db1a3a51a8c0ade5eb1e0dd09a7e1e",
+    "license:docs/third-party/dual-boot-licenses/musl-COPYRIGHT.txt": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+    "license:docs/third-party/dual-boot-licenses/musl-packaging-copyright.txt": "dd775ee077963e377a0ab31e1db27229442d5cfd18f183c2df1e6a552522f585",
+    "license:docs/third-party/jsmn-LICENSE.txt": "3c7021a930b82f9bc3773bf93802bdf5f92f352d6eda6fca9db85f9f00ccbc45",
+    "license:docs/third-party/stb-image-LICENSE.txt": "eb36e45c704dd0b59730115523e089b051852625b4db0a6fe76c991900af20e7"
+  },
+  "desktop": {
+    "process": "mayos-desktop",
+    "linkage": "static musl",
+    "display": "Linux fbdev and single-display DRM/KMS",
+    "input": "Linux evdev",
+    "filesystem": "process RAM; no block-device writes",
+    "compiler": "gcc (Debian 14.2.0-19) 14.2.0"
+  },
+  "kernel_build_timestamp": "1970-01-01 00:00:00 +0000 (fixed for reproducibility)",
+  "built_at": "2026-11-25T17:29:10.738794+00:00"
+}

@@ -1,0 +1,3 @@
+8b942cdb6007e3fd3aa5bb0956c2076814a658cf306ed10996b730410f46a8fa  MayOS-0.5.4-pre21-DualKernel-Live-x86_64.iso
+ca81ef2060647eacf38947de78295e3edbbae7bad87d6d3d7439531eb00726c1  MayOS-0.5.4-pre21-Installer-x86_64.iso
+69be7610254e0bf0616788197e0fbd9808bdbeb4b63f861d16b51680d2eaf7cd  MayOS-0.5.4-pre21-MayKernel64-x86_64.iso
