@@ -4,19 +4,27 @@ import argparse
 from pathlib import Path
 import shutil
 import tempfile
+import time
 
 from dual_boot_smoke import BUILD, BootVM
 from smoke import entries
 
 
+def press(vm, key):
+    vm.key(key)
+    # Give the emulated desktop time to render and drain the input queue.
+    time.sleep(0.12)
+
+
 def menu(vm, offset, row=None):
     vm.click(56, 16)  # The MayOS system menu is always first.
+    time.sleep(0.15)
     for _ in range(offset):
-        vm.key("right")
+        press(vm, "right")
     if row is not None:
         for _ in range(row + 1):
-            vm.key("down")
-        vm.key("ret")
+            press(vm, "down")
+        press(vm, "ret")
 
 
 def application(vm, name, action):
@@ -28,7 +36,7 @@ def application(vm, name, action):
 def type_text(vm, text):
     keys = {".": "dot", "-": "minus"}
     for character in text:
-        vm.key(keys.get(character, character))
+        press(vm, keys.get(character, character))
 
 
 def exercise(vm, *, linux=False):
@@ -39,27 +47,27 @@ def exercise(vm, *, linux=False):
 
     menu(vm, 0)
     screenshot("desktop")
-    vm.key("esc")
+    press(vm, "esc")
 
     application(vm, "files", lambda: menu(vm, 1, 1))
     menu(vm, 2)
     screenshot("files")
-    vm.key("down")
-    vm.key("ret")
+    press(vm, "down")
+    press(vm, "ret")
     type_text(vm, "menu.txt")
-    vm.key("ret")
+    press(vm, "ret")
     application(vm, "editor", lambda: menu(vm, 2, 2))
     type_text(vm, "saved-from-top-menu")
     menu(vm, 1, 1)  # Closing a window with unsaved edits must leave it open.
     menu(vm, 2, 0)
     menu(vm, 3)
     screenshot("editor")
-    vm.key("esc")
+    press(vm, "esc")
 
-    application(vm, "terminal", lambda: vm.key("f1"))
+    application(vm, "terminal", lambda: press(vm, "f1"))
     menu(vm, 2)
     screenshot("terminal")
-    vm.key("esc")
+    press(vm, "esc")
     application(vm, "editor", lambda: menu(vm, 1, 0))
     application(vm, "files", lambda: menu(vm, 1, 1))
     application(vm, "desktop", lambda: vm.click(1140, 504))
@@ -67,21 +75,21 @@ def exercise(vm, *, linux=False):
     application(vm, "settings", lambda: menu(vm, 0, 2))
     menu(vm, 2)
     screenshot("settings")
-    vm.key("down")
-    vm.key("down")
-    vm.key("ret")
+    press(vm, "down")
+    press(vm, "down")
+    press(vm, "ret")
     screenshot("display")
 
     menu(vm, 0, 0)
     type_text(vm, "explorer")
-    application(vm, "explorer", lambda: vm.key("ret"))
+    application(vm, "explorer", lambda: press(vm, "ret"))
     menu(vm, 2)
     screenshot("explorer")
-    vm.key("esc")
-    application(vm, "task-manager", lambda: vm.key("f2"))
+    press(vm, "esc")
+    application(vm, "task-manager", lambda: press(vm, "f2"))
     menu(vm, 1)
     screenshot("task")
-    vm.key("esc")
+    press(vm, "esc")
 
 
 def main():
