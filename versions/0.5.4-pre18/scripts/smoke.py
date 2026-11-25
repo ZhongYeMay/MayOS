@@ -99,7 +99,7 @@ def main():
         vm.cmd('mv persist.txt saved.txt');vm.wait('Renamed')
         vm.cmd('touch delete.txt');vm.cmd('rm delete.txt');vm.wait('Moved to Trash')
         # Use the actual emulated mouse, GUI modal, editor and Ctrl-S.
-        vm.click(539,674);vm.shot('files')
+        vm.click(581,674);vm.shot('files')
         vm.click(479,212);vm.type('gui.txt\n');time.sleep(.3);vm.key('ret');time.sleep(.2)
         vm.type('GUI-PERSIST');vm.key('ctrl-s');time.sleep(.4);vm.shot('editor')
         data=entries(disk)
