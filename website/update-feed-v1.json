@@ -7,6 +7,34 @@
   "notice": "Source metadata only; verified ISO files are bootable previews, not self-installing packages. Never overwrite a live boot disk.",
   "items": [
     {
+      "tag": "v0.5.4-pre22",
+      "name": "MayOS 0.5.4-pre22",
+      "variant": "dual",
+      "arch": "x86_64",
+      "kernel": "MayKernel + Linux 7.3.1",
+      "bytes": 47177728,
+      "sha256": "b7d329dfc0f8e8be48d8f8f8590a05f9b49d8af7a811526465f18fb9b1f9ffdd",
+      "published_at": "2026-11-25T17:44:18Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-pre22-DualKernel-Live-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/b7fd74ad296316eb03987bbdc5c2b28d3e481f48/MayOS-0.5.4-pre22-DualKernel-Live-x86_64.iso",
+      "notes": "Task Manager memory totals, display precision and kernel accounting."
+    },
+    {
+      "tag": "v0.5.4-pre22",
+      "name": "MayOS 0.5.4-pre22",
+      "variant": "maykernel",
+      "arch": "x86_64",
+      "kernel": "MayKernel x86_64",
+      "bytes": 26390528,
+      "sha256": "62c8bac2944b01ed187813e34f3cf153002e99f789279eae65df5f18d33dfaf8",
+      "published_at": "2026-11-25T17:44:18Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-pre22-MayKernel64-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/b7fd74ad296316eb03987bbdc5c2b28d3e481f48/MayOS-0.5.4-pre22-MayKernel64-x86_64.iso",
+      "notes": "Correct physical memory accounting and enlarge the MayKernel page pool."
+    },
+    {
       "tag": "v0.5.4-pre21",
       "name": "MayOS 0.5.4-pre21",
       "variant": "dual",
