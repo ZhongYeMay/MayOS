@@ -7,6 +7,7 @@ on:
       - ".github/workflows/website-pages.yml"
   workflow_dispatch:
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -56,5 +57,19 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: website
+      - name: Wait for the Pages artifact to reach the Actions API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in {1..12}; do
+            artifact=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+              --jq '.artifacts[] | select(.name == "github-pages" and .expired == false) | .id') || artifact=
+            if [[ -n "$artifact" ]]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "The Pages artifact did not become visible to the Actions API." >&2
+          exit 1
       - id: deployment
         uses: actions/deploy-pages@v4
