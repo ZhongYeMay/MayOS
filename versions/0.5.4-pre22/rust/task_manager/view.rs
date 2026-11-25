@@ -581,8 +581,12 @@ fn memory_size(kib: u64) -> Text {
     if scale == 1 {
         let _ = write!(value, "{kib} {unit}");
     } else {
-        let tenth = kib % scale * 10 / scale;
-        let _ = write!(value, "{}.{tenth} {unit}", kib / scale);
+        let tenths = kib / scale * 10 + (kib % scale * 10 + scale / 2) / scale;
+        if unit == "MiB" && tenths == 10240 {
+            let _ = value.write_str("1.0 GiB");
+        } else {
+            let _ = write!(value, "{}.{} {unit}", tenths / 10, tenths % 10);
+        }
     }
     value
 }
@@ -1052,4 +1056,22 @@ fn change_device(state: &mut State, key: i32) {
 #[no_mangle]
 pub extern "C" fn may_task_key(key: i32, _: i32) {
     change_device(unsafe { &mut *addr_of_mut!(STATE) }, key);
+}
+
+#[cfg(test)]
+mod memory_display_tests {
+    use super::*;
+
+    #[test]
+    fn rounds_display_units_without_losing_a_gibibyte_at_the_boundary() {
+        for (kib, expected) in [
+            (103, "103 KiB"),
+            (523692, "511.4 MiB"),
+            (1_048_575, "1.0 GiB"),
+            (5_242_364, "5.0 GiB"),
+        ] {
+            let text = memory_size(kib);
+            assert_eq!(core::str::from_utf8(&text.0[..text.1]).unwrap(), expected);
+        }
+    }
 }
