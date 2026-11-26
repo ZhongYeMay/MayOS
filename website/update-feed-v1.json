@@ -7,6 +7,34 @@
   "notice": "Source metadata only; verified ISO files are bootable previews, not self-installing packages. Never overwrite a live boot disk.",
   "items": [
     {
+      "tag": "v0.5.4-pre25",
+      "name": "MayOS 0.5.4-pre25",
+      "variant": "dual",
+      "arch": "x86_64",
+      "kernel": "MayKernel + Linux 7.3.1",
+      "bytes": 47509504,
+      "sha256": "2705306e1a809c5f4fa0084a884bef6a8da22f7e112fabbc6d246aa57f39414e",
+      "published_at": "2026-11-26T17:21:34Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-pre25-DualKernel-Live-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/5c67c90d59db677dce258c8c1a447fb1b972bbcf/MayOS-0.5.4-pre25-DualKernel-Live-x86_64.iso",
+      "notes": "MayKernel Live detects supported drives and reports whether MayFS is running in RAM."
+    },
+    {
+      "tag": "v0.5.4-pre25",
+      "name": "MayOS 0.5.4-pre25",
+      "variant": "maykernel",
+      "arch": "x86_64",
+      "kernel": "MayKernel x86_64",
+      "bytes": 26394624,
+      "sha256": "5159d4b06fc4225e35f92c7dc52e29594a15e70bf3c6151524d8fb0e7b9c601c",
+      "published_at": "2026-11-26T17:21:34Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-pre25-MayKernel64-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/5c67c90d59db677dce258c8c1a447fb1b972bbcf/MayOS-0.5.4-pre25-MayKernel64-x86_64.iso",
+      "notes": "MayKernel separates disk detection from persistent MayFS mounting."
+    },
+    {
       "tag": "v0.5.4-pre24",
       "name": "MayOS 0.5.4-pre24",
       "variant": "dual",
