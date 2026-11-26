@@ -1,0 +1,761 @@
+#include "core.h"
+#include "memory_map.h"
+#include "cursor.h"
+#include "wallpaper.h"
+#ifdef MAYOS_USE_BEARSSL
+#include "bing_wallpaper.h"
+#endif
+#include "io.h"
+#include "framebuffer.h"
+#include "procfs.h"
+#include "task_manager.h"
+#include "version.h"
+#include "net.h"
+#include "security_tls.h"
+#include "pci.h"
+#include "xhci.h"
+#include "e1000.h"
+#include "hda.h"
+#include "acpi.h"
+void *memset(void *p, int v, u32 n) {
+    u8 *d = p;
+    while (n--)
+        *d++ = v;
+    return p;
+}
+void *memcpy(void *p, const void *s, u32 n) {
+    u8 *d = p;
+    const u8 *b = s;
+    while (n--)
+        *d++ = *b++;
+    return p;
+}
+u32 strlen(const char *s) {
+    u32 n = 0;
+    while (s[n])
+        n++;
+    return n;
+}
+int strcmp(const char *a, const char *b) {
+    while (*a && *a == *b)
+        a++, b++;
+    return (u8)*a - (u8)*b;
+}
+void copy(char *d, const char *s, int n) {
+    int i = 0;
+    for (; i < n - 1 && s[i]; i++)
+        d[i] = s[i];
+    d[i] = 0;
+}
+void number(char *b, u32 n) {
+    char t[12];
+    int i = 0, j = 0;
+    do {
+        t[i++] = '0' + n % 10;
+        n /= 10;
+    } while (n);
+    while (i)
+        b[j++] = t[--i];
+    b[j] = 0;
+}
+void serial(const char *s) {
+    for (const char *byte = s; *byte; byte++) {
+        for (int i = 0; i < 100000 && !(inb(0x3fd) & 32); i++)
+            ;
+        outb(0x3f8, *byte);
+    }
+    boot_splash_log(s);
+}
+/* A fatal CPU exception must leave a serial diagnosis, not silently triple-fault.
+ * This is not process isolation or exception recovery. */
+static void serial_hex64(u64 value) {
+    static const char digits[] = "0123456789abcdef";
+    char out[19];
+    out[0] = '0';
+    out[1] = 'x';
+    for (int i = 0; i < 16; i++)
+        out[i + 2] = digits[(value >> ((15 - i) * 4)) & 15];
+    out[18] = 0;
+    serial(out);
+}
+void kernel_exception(u64 vector, u64 error, u64 rip) {
+    char number_buf[12];
+    serial("MayOS: FATAL EXCEPTION vector=");
+    number(number_buf, (u32)vector);
+    serial(number_buf);
+    serial(" error=");
+    serial_hex64(error);
+    serial(" rip=");
+    serial_hex64(rip);
+    if (vector == 14) {
+        u64 fault_address;
+        __asm__ volatile("mov %%cr2, %0" : "=r"(fault_address));
+        serial(" cr2=");
+        serial_hex64(fault_address);
+    }
+    serial("\n");
+    for (;;)
+        __asm__ volatile("cli; hlt");
+}
+volatile u32 ticks;
+u32 memory_mb, free_pages;
+char cpu_name[64];
+static MaySurface display;
+static int display_scale_mode;
+enum { PAGE_FREE, PAGE_ALLOCATED, PAGE_RESERVED };
+/* One pair of bits per frame. The existing DMA drivers require low addresses. */
+static u8 pages[MAY_DMA32_PAGES / 4];
+static u32 page_count, allocation_hint, dma32_pages;
+static u64 detected_pages;
+#ifdef MAYOS_PROCFS
+static u32 managed_pages;
+volatile u64 may_proc_ticks, may_proc_idle_ticks;
+volatile int may_proc_waiting;
+static u64 proc_frames;
+
+void platform_idle(void) {
+    may_proc_waiting = 1;
+    __asm__ volatile("hlt" ::: "memory");
+    may_proc_waiting = 0;
+}
+
+void mayos_proc_snapshot(MayProcSnapshot *snapshot) {
+    do {
+        snapshot->total_ticks = may_proc_ticks;
+        snapshot->idle_ticks = may_proc_idle_ticks;
+    } while (snapshot->total_ticks != may_proc_ticks);
+    snapshot->frames = proc_frames;
+    snapshot->managed_pages = managed_pages;
+    snapshot->free_pages = free_pages;
+    snapshot->firmware_mb = memory_mb;
+    snapshot->detected_pages = detected_pages;
+    snapshot->dma32_pages = dma32_pages;
+    copy(snapshot->cpu, cpu_name, sizeof(snapshot->cpu));
+    copy(snapshot->version, MAYOS_VERSION, sizeof(snapshot->version));
+    may_proc_io(snapshot);
+    const MayNetInfo *net = may_net_info();
+    snapshot->net_present = net->present != 0;
+    snapshot->rx_bytes = net->bytes_rx;
+    snapshot->tx_bytes = net->bytes_tx;
+    snapshot->rx_packets = net->packets_rx;
+    snapshot->tx_packets = net->packets_tx;
+    snapshot->rx_errors = net->rx_errors;
+}
+#endif
+extern char kernel_end;
+static unsigned page_state(u32 index) {
+    return (pages[index / 4] >> ((index % 4) * 2)) & 3u;
+}
+
+static void set_page_state(u32 index, unsigned state) {
+    unsigned shift = (index % 4) * 2;
+    pages[index / 4] = (u8)((pages[index / 4] & ~(3u << shift)) | (state << shift));
+}
+
+void *page_alloc(void) {
+    if (!free_pages) return 0;
+    for (u32 i = allocation_hint; i < page_count; i++) {
+        if (page_state(i) != PAGE_FREE) continue;
+        set_page_state(i, PAGE_ALLOCATED);
+        allocation_hint = i + 1;
+        free_pages--;
+        void *p = (void *)(uptr)((u64)i * MAY_PAGE_BYTES);
+        memset(p, 0, MAY_PAGE_BYTES);
+        return p;
+    }
+    return 0;
+}
+
+void page_free(void *p) {
+    if (!p || ((uptr)p & (MAY_PAGE_BYTES - 1))) return;
+    uptr page = (uptr)p / MAY_PAGE_BYTES;
+    if (page < page_count && page_state((u32)page) == PAGE_ALLOCATED) {
+        set_page_state((u32)page, PAGE_FREE);
+        if (page < allocation_hint) allocation_hint = (u32)page;
+        free_pages++;
+    }
+}
+/* Bounded destructive-to-test-pages allocator stress, not a whole-RAM
+ * exhaustion test. Every allocated page is returned before exiting.
+ * No firmware-reserved or persistent disk memory is modified. */
+int page_stress_test(void) {
+    u32 initial = free_pages;
+    int ok = 1;
+    for (u32 round = 0; round < 16; round++) {
+        u32 *slots[128] = {0};
+        u32 *replacement[64] = {0};
+        for (u32 i = 0; i < 128; i++) {
+            slots[i] = page_alloc();
+            if (!slots[i]) { ok = 0; break; }
+            /* Allocator guarantees zero-filled fresh pages. */
+            if (slots[i][0] || slots[i][127] ||
+                slots[i][511] || slots[i][1023]) { ok = 0; break; }
+            slots[i][0] = 0x51000000u + (round << 8) + i;
+            slots[i][127] = 0xabcdef01u ^ (i + round);
+            slots[i][511] = ~slots[i][0];
+            slots[i][1023] = ~slots[i][127];
+        }
+        if (ok) {
+            for (u32 i = 0; i < 128; i++) {
+                if (slots[i][0] != 0x51000000u + (round << 8) + i ||
+                    slots[i][127] != (0xabcdef01u ^ (i + round)) ||
+                    slots[i][511] != ~slots[i][0] ||
+                    slots[i][1023] != ~slots[i][127])
+                    ok = 0;
+            }
+        }
+        /* Free alternating pages to force reuse under fragmentation. */
+        if (ok) {
+            for (u32 i = 1; i < 128; i += 2) {
+                page_free(slots[i]);
+                slots[i] = 0;
+            }
+            for (u32 i = 0; i < 64; i++) {
+                replacement[i] = page_alloc();
+                if (!replacement[i]) { ok = 0; break; }
+                if (replacement[i][0] || replacement[i][1023])
+                    ok = 0;
+                for (u32 j = 0; j < 128; j += 2)
+                    if (replacement[i] == slots[j])
+                        ok = 0;
+                for (u32 j = 0; j < i; j++)
+                    if (replacement[i] == replacement[j])
+                        ok = 0;
+                replacement[i][0] = 0xface0000u + i;
+                replacement[i][1023] = ~replacement[i][0];
+                if (!ok) break;
+            }
+            for (u32 i = 0; i < 128; i += 2)
+                if (slots[i] && (slots[i][0] != 0x51000000u + (round << 8) + i ||
+                                  slots[i][1023] != ~(0xabcdef01u ^ (i + round))))
+                    ok = 0;
+            for (u32 i = 0; i < 64; i++)
+                if (replacement[i] &&
+                    (replacement[i][0] != 0xface0000u + i ||
+                     replacement[i][1023] != ~(0xface0000u + i)))
+                    ok = 0;
+        }
+        /* Invalid unaligned pointer must not release an allocation. */
+        for (u32 i = 0; i < 128; i++) {
+            if (slots[i]) {
+                u32 before = free_pages;
+                page_free((void *)((uptr)slots[i] + 1));
+                if (free_pages != before) ok = 0;
+                break;
+            }
+        }
+        for (u32 i = 0; i < 128; i++)
+            if (slots[i]) {
+                void *p = slots[i];
+                page_free(p);
+                /* A double free must not increment free_pages twice. */
+                u32 before = free_pages;
+                page_free(p);
+                if (free_pages != before) ok = 0;
+            }
+        for (u32 i = 0; i < 64; i++)
+            if (replacement[i]) page_free(replacement[i]);
+        if (free_pages != initial) ok = 0;
+        if (!ok) break;
+    }
+    serial(ok ? "MayOS: memstress PASS (16 rounds, 128 pages, fragmentation, free guards)\n"
+              : "MayOS: memstress FAIL\n");
+    return ok;
+}
+
+static void memory_add_run(u64 first, u64 end) {
+    if (first >= MAY_DMA32_PAGES) return;
+    if (end > MAY_DMA32_PAGES) end = MAY_DMA32_PAGES;
+    dma32_pages += (u32)(end - first);
+    if (end > page_count) page_count = (u32)end;
+    for (u32 i = (u32)first; i < end; i++) set_page_state(i, PAGE_FREE);
+}
+
+static void memory_reserve(u64 base, u64 size) {
+    MayMemoryRange range = may_memory_range(base, size, 0);
+    if (range.end > page_count) range.end = page_count;
+    for (u32 i = (u32)(range.first < range.end ? range.first : range.end); i < range.end; i++) {
+        if (page_state(i) != PAGE_FREE) continue;
+        set_page_state(i, PAGE_RESERVED);
+        free_pages--;
+    }
+}
+
+static void memory_init(const u8 *m, u32 flags) {
+    static MayMemoryRange ranges[MAY_MEMORY_RANGES];
+    u32 count = 0;
+    memset(pages, 0xaa, sizeof(pages));
+    if (flags & (1u << 6)) {
+        u32 length = *(const u32 *)(m + 44), address = *(const u32 *)(m + 48);
+        const u8 *map = (const u8 *)(uptr)address;
+        int valid = address && length >= 24 && length <= 65536 && (u64)address + length <= (1ULL << 32);
+        for (u32 offset = 0; valid && offset < length;) {
+            if (length - offset < 24 || count == MAY_MEMORY_RANGES) { valid = 0; break; }
+            const u8 *entry = map + offset;
+            u32 size = *(const u32 *)entry;
+            if (size < 20 || size > length - offset - 4) { valid = 0; break; }
+            ranges[count++] = may_memory_range(*(const u64 *)(entry + 4),
+                *(const u64 *)(entry + 12), *(const u32 *)(entry + 20) == 1);
+            offset += size + 4;
+        }
+        if (!valid) count = 0;
+        serial(valid ? "MayOS: using Multiboot memory map\n" : "MayOS: invalid or unsupported memory map\n");
+    } else if (flags & 1u) {
+        /* The legacy fields describe conventional RAM and one contiguous high range. */
+        ranges[count++] = may_memory_range(0, (u64)*(const u32 *)(m + 4) * 1024, 1);
+        ranges[count++] = may_memory_range(1u << 20, (u64)*(const u32 *)(m + 8) * 1024, 1);
+        serial("MayOS: using legacy contiguous memory range\n");
+    }
+    detected_pages = may_memory_walk(ranges, count, memory_add_run);
+    memory_mb = (u32)(detected_pages / 256);
+    free_pages = dma32_pages;
+    memory_reserve(0, (uptr)&kernel_end);
+    memory_reserve((uptr)display.data, (u64)display.pitch * display.height);
+#ifdef MAYOS_PROCFS
+    managed_pages = free_pages;
+#endif
+    char value[12];
+    serial("MayOS: available memory MiB=");
+    number(value, memory_mb);
+    serial(value);
+    serial("; free managed pages=");
+    number(value, free_pages);
+    serial(value);
+    serial("\n");
+}
+/* Native 64-bit IDT gates: 16 bytes with a full 64-bit handler offset. */
+struct Gate {
+    u16 low, cs;
+    u8 ist, attr;
+    u16 middle;
+    u32 high, zero;
+} __attribute__((packed));
+static struct Gate idt[256];
+extern void timer_stub(void);
+extern void (*const mayos_exception_stubs[32])(void);
+void timer_interrupt(void) {
+    ticks++;
+    outb(0x20, 0x20);
+}
+static void timer_init(void) {
+    for (u32 vector = 0; vector < 32; vector++) {
+        uptr handler = (uptr)mayos_exception_stubs[vector];
+        idt[vector] = (struct Gate){(u16)handler, 8, 0, 0x8e,
+            (u16)(handler >> 16), (u32)(handler >> 32), 0};
+    }
+    uptr a = (uptr)timer_stub;
+    idt[32] = (struct Gate){(u16)a, 8, 0, 0x8e, (u16)(a >> 16), (u32)(a >> 32), 0};
+    struct {
+        u16 limit;
+        u64 base;
+    } __attribute__((packed)) p = {sizeof(idt) - 1, (uptr)idt};
+    __asm__ volatile("lidt %0" ::"m"(p));
+    outb(0x20, 0x11);
+    outb(0xa0, 0x11);
+    outb(0x21, 32);
+    outb(0xa1, 40);
+    outb(0x21, 4);
+    outb(0xa1, 2);
+    outb(0x21, 1);
+    outb(0xa1, 1);
+    outb(0x21, 0xfe);
+    outb(0xa1, 0xff);
+    outb(0x43, 0x36);
+    outb(0x40, 11932 & 255);
+    outb(0x40, 11932 >> 8);
+    __asm__ volatile("sti");
+}
+static int wait_write(void) {
+    for (u32 i = 0; i < 100000; i++)
+        if (!(inb(0x64) & 2))
+            return 1;
+    return 0;
+}
+static int wait_read(void) {
+    for (u32 i = 0; i < 100000; i++)
+        if (inb(0x64) & 1)
+            return 1;
+    return 0;
+}
+static void mouse_cmd(u8 v) {
+    wait_write();
+    outb(0x64, 0xd4);
+    wait_write();
+    outb(0x60, v);
+    if (wait_read())
+        inb(0x60);
+}
+static int ps2_available;
+static int ram_only;
+static u8 boot_disk_id[16];
+static enum MayBootDiskSelector boot_disk_status;
+static u8 imported_pointer[MAY_CURSOR_FILE_MAX];
+static u32 imported_pointer_size;
+static u8 import_pack[MAYOS_IMPORT_BYTES];
+static u32 import_pack_size;
+const u8 *platform_import_pack(u32 *size) {
+    *size = import_pack_size;
+    return import_pack_size ? import_pack : 0;
+}
+static u8 imported_wallpaper[MAY_WALLPAPER_FILE_BYTES];
+static int wallpaper_available;
+
+int platform_wallpaper_poll(u32 *pixels, char date[9], int active) {
+    if (active && wallpaper_available && !date[0]) {
+        memcpy(pixels, imported_wallpaper + MAY_WALLPAPER_HEADER_BYTES, MAY_WALLPAPER_IMAGE_BYTES);
+        memcpy(date, imported_wallpaper + 8, 8);
+        date[8] = 0;
+        return 1;
+    }
+#ifdef MAYOS_USE_BEARSSL
+    return may_bing_wallpaper_poll(pixels, date, active);
+#else
+    return 0;
+#endif
+}
+
+const u8 *platform_pointer_asset(u32 *size) {
+    *size = imported_pointer_size;
+    return imported_pointer_size ? imported_pointer : 0;
+}
+
+static int module_tag_matches(const char *name, const char *tag) {
+    for (; *tag; name++, tag++) if (*name != *tag) return 0;
+    return *name == 0;
+}
+
+static void load_desktop_modules(const u8 *info, u32 flags) {
+    if (!(flags & (1u << 3))) return;
+    u32 count = *(const u32 *)(info + 20), address = *(const u32 *)(info + 24);
+    if (!address || !count || count > 32 || address > 0xffffffffu - count * 16u) return;
+    const u32 *modules = (const u32 *)(uptr)address;
+    for (u32 i = 0; i < count; i++, modules += 4) {
+        u32 first = modules[0], last = modules[1], tag_address = modules[2];
+        if (!first || last <= first || !tag_address || tag_address > 0xffffffffu - 17) continue;
+        const char *name = (const char *)(uptr)tag_address;
+        const u8 *bytes = (const u8 *)(uptr)first;
+        u32 size = last - first;
+        if (!imported_pointer_size && size <= sizeof(imported_pointer) && module_tag_matches(name, "mayos-pointer")) {
+            imported_pointer_size = size;
+            memcpy(imported_pointer, bytes, size);
+            serial("MayOS: pointer asset loaded from boot media\n");
+        } else if (!import_pack_size && size <= sizeof(import_pack) &&
+                   module_tag_matches(name, "mayos-import")) {
+            memcpy(import_pack, bytes, size);
+            import_pack_size = size;
+        } else if (!wallpaper_available && size == sizeof(imported_wallpaper) &&
+                   module_tag_matches(name, "mayos-wallpaper")) {
+            int match = 0;
+            while (match < 8 && bytes[match] == (u8)MAY_WALLPAPER_MAGIC[match]) match++;
+            if (match == 8 && wallpaper_date_valid((const char *)bytes + 8)) {
+                memcpy(imported_wallpaper, bytes, size);
+                wallpaper_available = 1;
+                serial("MayOS: daily wallpaper snapshot loaded from boot media\n");
+            }
+        }
+    }
+}
+int platform_ram_only(void) { return ram_only; }
+
+static int boot_hex(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+enum MayBootDiskSelector platform_boot_disk(u8 disk_id[16]) {
+    if (boot_disk_status > MAY_BOOT_DISK_LEGACY) memcpy(disk_id, boot_disk_id, sizeof boot_disk_id);
+    return boot_disk_status;
+}
+
+static int boot_prefix(const char *token, u32 length, const char *prefix) {
+    u32 size = strlen(prefix);
+    if (length < size) return 0;
+    for (u32 i = 0; i < size; i++)
+        if (token[i] != prefix[i]) return 0;
+    return 1;
+}
+
+static int boot_guid(const char *token, u32 length, int dashed) {
+    static const u8 guid_order[] = {3, 2, 1, 0, 5, 4, 7, 6, 8, 9, 10, 11, 12, 13, 14, 15};
+    if (length != (dashed ? 36u : 32u)) return 0;
+    unsigned offset = 0;
+    for (unsigned i = 0; i < sizeof boot_disk_id; i++) {
+        if (dashed && (i == 4 || i == 6 || i == 8 || i == 10) && token[offset++] != '-') return 0;
+        int high = boot_hex(token[offset++]);
+        int low = boot_hex(token[offset++]);
+        if (high < 0 || low < 0) return 0;
+        boot_disk_id[dashed ? guid_order[i] : i] = (u8)((high << 4) | low);
+    }
+    return 1;
+}
+
+static void read_boot_options(const u8 *info, u32 flags) {
+    if (!(flags & (1u << 2))) return;
+    uptr address = *(const u32 *)(info + 16);
+    if (!address) return;
+    const char *line = (const char *)address;
+    const char disk[] = "mayos.disk=", esp[] = "mayos.esp=", ram[] = "mayos.ram";
+    int disk_seen = 0, esp_seen = 0;
+    for (u32 begin = 0, at = 0; at < 256; at++) {
+        char ch = line[at];
+        if (ch && ch != ' ' && ch != '\t' && at != 255) continue;
+        const char *token = line + begin;
+        u32 length = at - begin;
+        int truncated = at == 255 && ch && ch != ' ' && ch != '\t';
+        if (length == sizeof ram - 1 && boot_prefix(token, length, ram) && !truncated)
+            ram_only = 1;
+        if (boot_prefix(token, length, esp)) {
+            boot_disk_status = !esp_seen && !truncated &&
+                boot_guid(token + sizeof esp - 1, length - (sizeof esp - 1), 1)
+                ? MAY_BOOT_ESP_GUID : MAY_BOOT_DISK_INVALID;
+            esp_seen = 1;
+        } else if (!esp_seen && boot_prefix(token, length, disk)) {
+            boot_disk_status = !disk_seen && !truncated &&
+                boot_guid(token + sizeof disk - 1, length - (sizeof disk - 1), 0)
+                ? MAY_BOOT_DISK_GUID : MAY_BOOT_DISK_INVALID;
+            disk_seen = 1;
+        }
+        if (!ch) return;
+        begin = at + 1;
+    }
+}
+static void ps2_init(void) {
+    wait_write();
+    outb(0x64, 0xa8);
+    wait_write();
+    outb(0x64, 0xae);
+    wait_write();
+    outb(0x64, 0x20);
+    u8 cfg = wait_read() ? inb(0x60) : 0x40;
+    cfg = (cfg | 0x40) & ~0x33;
+    wait_write();
+    outb(0x64, 0x60);
+    wait_write();
+    outb(0x60, cfg);
+    mouse_cmd(0xf6);
+    mouse_cmd(0xf4);
+}
+void hardware_init(u32 magic, u32 info) {
+    outb(0x3fb, 0x80);
+    outb(0x3f8, 1);
+    outb(0x3f9, 0);
+    outb(0x3fb, 3);
+    outb(0x3fa, 0xc7);
+    serial("MayOS: entering custom x86_64 kernel\n");
+    serial("MayOS: CPU long mode active (64-bit)\n");
+    if (magic != 0x2badb002) {
+        serial("Invalid multiboot magic\n");
+        for (;;)
+            __asm__("hlt");
+    }
+    u8 *m = (u8 *)(uptr)info;
+    u32 flags = *(u32 *)m;
+    if (!(flags & (1 << 12)) ||
+        m[109] != 1) {
+        serial("Unsupported framebuffer: firmware RGB mode required\n");
+        for (;;)
+            __asm__("hlt");
+    }
+    u64 framebuffer_address = *(u64 *)(m + 88);
+    display = (MaySurface){.width=*(u32 *)(m + 100), .height=*(u32 *)(m + 104),
+        .pitch=*(u32 *)(m + 96), .bpp=m[108], .red=m[112], .red_bits=m[113],
+        .green=m[114], .green_bits=m[115], .blue=m[116], .blue_bits=m[117]};
+    if (framebuffer_address >= (64ULL << 30) ||
+        !surface_valid(&display, (64ULL << 30) - framebuffer_address)) {
+        serial("Unsupported framebuffer: layout, pitch, size or 32-bit address range\n");
+        for (;;)
+            __asm__("hlt");
+    }
+    display.data = (u8 *)(uptr)framebuffer_address;
+    char display_number[12];
+    serial("MayOS: firmware framebuffer "); number(display_number, display.width); serial(display_number); serial("x");
+    number(display_number, display.height); serial(display_number); serial("x"); number(display_number, display.bpp); serial(display_number); serial("\n");
+    boot_splash_begin("MayKernel64");
+    read_boot_options(m, flags);
+    if (ram_only)
+        serial("MayOS Live " MAYOS_VERSION ": RAM-only session; disk writes blocked\n");
+    load_desktop_modules(m, flags);
+    memory_init(m, flags);
+    u32 a, b, c, d;
+    a = 0x80000000U;
+    __asm__ volatile("cpuid" : "+a"(a), "=b"(b), "=c"(c), "=d"(d));
+    if (a < 0x80000004U) copy(cpu_name, "Generic x86 (CPUID)", sizeof(cpu_name));
+    else for (u32 i = 0; i < 3; i++) {
+        a = 0x80000002 + i;
+        __asm__ volatile("cpuid" : "+a"(a), "=b"(b), "=c"(c), "=d"(d));
+        memcpy(cpu_name + i * 16, &a, 4);
+        memcpy(cpu_name + i * 16 + 4, &b, 4);
+        memcpy(cpu_name + i * 16 + 8, &c, 4);
+        memcpy(cpu_name + i * 16 + 12, &d, 4);
+    }
+    cpu_name[48] = 0;
+    timer_init();
+    boot_splash_step(2, "Probing devices");
+    acpi_init();
+    ps2_available = acpi_has_8042() && inb(0x64) != 0xff;
+    if (ps2_available) ps2_init();
+    else serial("MayOS: legacy PS/2 controller absent\n");
+    pci_init();
+    xhci_init();
+    hda_init();
+    may_tls_security_init();
+    may_net_init();
+#ifdef MAYOS_EXCEPTION_SELFTEST
+    serial("MayOS: intentional invalid-opcode exception self-test\n");
+    __asm__ volatile("ud2");
+#endif
+    serial(ps2_available ? "MayOS: framebuffer, memory, PIT and PS/2 ready\n"
+                         : "MayOS: framebuffer, memory and PIT ready\n");
+    boot_splash_step(3, "Opening MayFS");
+}
+void present(u32 *p) {
+    surface_present(&display, p, display_scale_mode);
+#ifdef MAYOS_PROCFS
+    proc_frames++;
+#endif
+}
+int platform_display_has_modes(void) { return 0; }
+int platform_display_cycle(int direction) { (void)direction; return 0; }
+int platform_display_finish(int keep) { (void)keep; return 0; }
+
+void display_set_scale_mode(int mode) {
+    if (mode >= 0 && mode <= 3) display_scale_mode = mode;
+}
+void display_get_info(MayDisplayInfo *info) {
+    info->width = display.width; info->height = display.height; info->bpp = display.bpp;
+    info->refresh_hz = 0; info->refresh_known = 0; info->scale_mode = display_scale_mode;
+    u32 horizontal = display.width * 100 / W;
+    u32 vertical = display.height * 100 / H;
+    info->scale_percent = horizontal < vertical ? horizontal : vertical;
+    if (display_scale_mode == 1) info->scale_percent = 100;
+    if (display_scale_mode == 3)
+        info->scale_percent = horizontal > vertical ? horizontal : vertical;
+}
+void poweroff(void) {
+    serial("MayOS: power off\n");
+    outw(0x604, 0x2000);
+    outw(0xb004, 0x2000);
+}
+void reboot(void) {
+    wait_write();
+    outb(0x64, 0xfe);
+}
+static const char normal[] =
+    "\0\0331234567890-=\b\tqwertyuiop[]\n\0asdfghjkl;'`\0\\zxcvbnm,./\0*\0 ";
+static const char shifted[] =
+    "\0\033!@#$%^&*()_+\b\tQWERTYUIOP{}\n\0ASDFGHJKL:\"~\0|ZXCVBNM<>?\0*\0 ";
+int input_poll(int *mx, int *my, int *buttons, int *key) {
+    static u8 packet[3], n = 0;
+    static int shift = 0, ext = 0, ctrl = 0;
+    static int ps2_buttons;
+    XhciInput usb;
+    xhci_poll(&usb);
+    *key = usb.key;
+    int changed = usb.changed;
+    *mx += usb.dx;
+    *my += usb.dy;
+    if (*mx < 0) *mx = 0;
+    if (*mx >= W) *mx = W - 1;
+    if (*my < 0) *my = 0;
+    if (*my >= H) *my = H - 1;
+    int previous_buttons = *buttons;
+    *buttons = ps2_buttons | usb.buttons;
+    if (*key || *buttons != previous_buttons) return 1;
+    for (int k = 0; ps2_available && k < 128 && (inb(0x64) & 1); k++) {
+        u8 status = inb(0x64), v = inb(0x60);
+        if (status & 32) {
+            if (!n && !(v & 8))
+                continue;
+            packet[n++] = v;
+            if (n == 3) {
+                n = 0;
+                if (!(packet[0] & 0xc0)) {
+                    int dx = (int)packet[1] - ((packet[0] & 16) ? 256 : 0),
+                        dy = (int)packet[2] - ((packet[0] & 32) ? 256 : 0);
+                    *mx += dx;
+                    *my -= dy;
+                    if (*mx < 0)
+                        *mx = 0;
+                    if (*mx >= W)
+                        *mx = W - 1;
+                    if (*my < 0)
+                        *my = 0;
+                    if (*my >= H)
+                        *my = H - 1;
+                    ps2_buttons = packet[0] & 7;
+                    *buttons = ps2_buttons | usb.buttons;
+                    changed = 1;
+                    /* Deliver each button transition before reading the next packet. */
+                    if (*buttons != previous_buttons) return 1;
+                }
+            }
+        } else {
+            if (v == 0xe0) {
+                ext = 1;
+                continue;
+            }
+            if (v == 29) {
+                ctrl |= ext ? 2 : 1;
+                ext = 0;
+                continue;
+            }
+            if (v == 157) {
+                ctrl &= ~(ext ? 2 : 1);
+                ext = 0;
+                continue;
+            }
+            if (v == 59) {
+                *key = 0x105;
+                return 1;
+            }
+            if (v == 60) {
+                *key = MAYOS_KEY_TASK_MANAGER;
+                return 1;
+            }
+            if (v == 61) {
+                *key = MAYOS_KEY_IME;
+                return 1;
+            }
+            if (v == 42 || v == 54) {
+                shift |= v == 42 ? 1 : 2;
+                continue;
+            }
+            if (v == 170 || v == 182) {
+                shift &= ~(v == 170 ? 1 : 2);
+                continue;
+            }
+            if (v & 128) {
+                ext = 0;
+                continue;
+            }
+            if (ext) {
+                ext = 0;
+                if (v == 72)
+                    *key = 0x101;
+                if (v == 80)
+                    *key = 0x102;
+                if (v == 75)
+                    *key = MAYOS_KEY_LEFT;
+                if (v == 77)
+                    *key = MAYOS_KEY_RIGHT;
+                if (v == 71) *key = MAYOS_KEY_HOME;
+                if (v == 79) *key = MAYOS_KEY_END;
+                if (shift && (*key == 0x101 || *key == 0x102 || *key == MAYOS_KEY_LEFT ||
+                              *key == MAYOS_KEY_RIGHT || *key == MAYOS_KEY_HOME || *key == MAYOS_KEY_END))
+                    *key |= MAYOS_KEY_EXTEND;
+                if (v == 83)
+                    *key = 0x103;
+                if (v == 91 || v == 92)
+                    *key = MAYOS_KEY_LAUNCHER;
+            } else if (v < sizeof(normal) - 1) {
+                *key = shift ? shifted[v] : normal[v];
+                if (ctrl) *key = may_control_key(*key, shift);
+            }
+            if (*key)
+                return 1;
+        }
+    }
+    return changed;
+}
