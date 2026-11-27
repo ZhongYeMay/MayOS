@@ -71,9 +71,9 @@ static int download_media(const char *url, const char *expected, const char *siz
         puts("@FAILED Invalid release media metadata");
         return 1;
     }
-    const char *destination = kernel ? "/run/mayos-update.elf" : "/tmp/MayOS-update.iso";
-    char temporary[32];
-    snprintf(temporary, sizeof(temporary), "%s/.mayos-update-XXXXXX", kernel ? "/run" : "/tmp");
+    const char *destination = kernel ? "/tmp/mayos-online-update/update.elf" : "/tmp/MayOS-update.iso";
+    char temporary[64];
+    snprintf(temporary, sizeof(temporary), "%s/.mayos-update-XXXXXX", kernel ? "/tmp/mayos-online-update" : "/tmp");
     int fd = mkstemp(temporary);
     if (fd < 0) {
         puts("@FAILED Could not allocate update storage");
@@ -85,6 +85,7 @@ static int download_media(const char *url, const char *expected, const char *siz
     Media media = {file, ctx, bytes, 0, -1};
     unsigned char digest[32];
     unsigned digest_size = 0;
+    const char *failure = "Could not initialize the update download";
     int ok = file && curl && ctx && EVP_DigestInit_ex(ctx, EVP_sha256(), NULL) == 1 &&
         curl_easy_setopt(curl, CURLOPT_URL, url) == CURLE_OK &&
         curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "https") == CURLE_OK &&
@@ -97,9 +98,13 @@ static int download_media(const char *url, const char *expected, const char *siz
         curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L) == CURLE_OK &&
         curl_easy_setopt(curl, CURLOPT_MAXFILESIZE_LARGE, (curl_off_t)bytes) == CURLE_OK &&
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_media) == CURLE_OK &&
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &media) == CURLE_OK &&
-        curl_easy_perform(curl) == CURLE_OK && media.received == bytes &&
-        EVP_DigestFinal_ex(ctx, digest, &digest_size) == 1 && digest_size == 32;
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &media) == CURLE_OK;
+    if (ok) {
+        CURLcode result = curl_easy_perform(curl);
+        failure = result == CURLE_OK ? "Downloaded length or hash was invalid" : curl_easy_strerror(result);
+        ok = result == CURLE_OK && media.received == bytes &&
+            EVP_DigestFinal_ex(ctx, digest, &digest_size) == 1 && digest_size == 32;
+    }
     if (ok) {
         char computed[65];
         for (int i = 0; i < 32; i++) snprintf(computed + i * 2, 3, "%02x", digest[i]);
@@ -108,12 +113,15 @@ static int download_media(const char *url, const char *expected, const char *siz
     if (file) {
         if (fclose(file)) ok = 0;
     } else close(fd);
-    if (ok && link(temporary, destination)) ok = 0;
+    if (ok && link(temporary, destination)) {
+        failure = "Could not publish the verified update file";
+        ok = 0;
+    }
     unlink(temporary);
     if (curl) curl_easy_cleanup(curl);
     EVP_MD_CTX_free(ctx);
     if (ok && !kernel) puts("@SAVED /tmp/MayOS-update.iso");
-    if (!ok) puts("@FAILED Download, integrity or storage check failed");
+    if (!ok) printf("@FAILED %s\n", failure);
     return ok ? 0 : 1;
 }
 

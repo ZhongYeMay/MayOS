@@ -2523,6 +2523,9 @@ static void settings(Window *w) {
         ui_card(cx, cy + 29, cw, 103, 18, bg);
         reference_text(cx + 18, cy + 42, "MayOS " MAYOS_VERSION, ink, 1);
         text(cx + 18, cy + 88, platform_kernel(), muted);
+#ifdef MAYOS_LINUX
+        cy -= 12;
+#endif
         button(cx, cy + 149, 200,
                remote_loading ? pointer_label("检查中…", "Checking…") :
                pointer_label("从 GitHub 检查", "Check GitHub"), !remote_loading);
@@ -4347,6 +4350,9 @@ static void left_click(void) {
                     locale_apply();
                 }
             } else if (settings_tab == SETTINGS_UPDATES) {
+#ifdef MAYOS_LINUX
+                ry += 12;
+#endif
                 if (!remote_loading && inside(rx, ry, 264, 202, 200, 34)) {
 #ifdef MAYOS_LINUX
                     if (media_state != 1 && media_state != 3) {

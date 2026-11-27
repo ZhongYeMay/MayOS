@@ -12,8 +12,10 @@ if [ "$mode" = download-install ]; then
     mkdir /run/mayos-online-update 2>/dev/null || fail 'Another download is running'
     trap 'rmdir /run/mayos-online-update' EXIT
     "$0" check "$disk" "$digest" "" "" "$version" || exit 1
+    umask 077
+    mkdir /tmp/mayos-online-update || fail 'Could not reserve temporary update space'
+    trap 'rm -f /tmp/mayos-online-update/update.elf; rmdir /tmp/mayos-online-update /run/mayos-online-update' EXIT
     /usr/bin/mayos-fetch --kernel "$4" "$digest" "$5" || exit 1
-    trap 'rm -f /run/mayos-update.elf; rmdir /run/mayos-online-update' EXIT
     "$0" stage "$disk" "$digest" "" "" "$version"
     exit
 fi
@@ -106,7 +108,7 @@ awk -v current="$installed" -v candidate="${version#v}" 'BEGIN {
 }' || fail 'Selected update is not newer than the installed MayKernel'
 [ "$mode" = stage ] || exit 0
 
-source=/run/mayos-update.elf
+source=/tmp/mayos-online-update/update.elf
 case "$digest" in ''|*[!0-9a-f]*) fail 'Invalid SHA-256' ;; esac
 [ "${#digest}" = 64 ] || fail 'Invalid SHA-256'
 printf '%s  %s\n' "$digest" "$source" | sha256sum -c - >/dev/null ||

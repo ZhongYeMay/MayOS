@@ -164,7 +164,12 @@ int platform_media_poll(int *percent) {
                     media_percent = (int)value;
                 } else if (!strcmp(media_line, "@STAGED")) media_state = 4;
                 else if (!strncmp(media_line, "@SAVED ", 7)) media_state = 2;
-                else if (!strncmp(media_line, "@FAILED ", 8)) media_state = -1;
+                else if (!strncmp(media_line, "@FAILED ", 8)) {
+                    serial("MayOS update: ");
+                    serial(media_line + 8);
+                    serial("\n");
+                    media_state = -1;
+                }
                 media_length = 0;
             } else if (media_length < (int)sizeof(media_line) - 1) media_line[media_length++] = c;
         }
