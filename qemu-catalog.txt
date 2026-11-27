@@ -1,0 +1,3 @@
+MAYOS_UPDATE_FEED_V1
+v0.5.4-pre32|maykernel-install|MayOS 0.5.4-pre32|5482128|bda84a3ea34a7968f1d456521fd4484731223161444963a913439c6d41af989c|2026-11-27|x86_64|MayKernel x86_64|https://raw.githubusercontent.com/ZhongYeMay/MayOS/d8e72731f871801f461219e1840a91c799195374/MayOS-0.5.4-pre32-MayKernel64-x86_64.elf|Install and verify an update in the spare boot slot.
+MAYOS_UPDATE_FEED_END
