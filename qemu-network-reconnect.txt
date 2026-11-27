@@ -1,0 +1,4 @@
+PASS: no adapter no-adapter
+PASS: e1000 waiting-ipv4
+PASS: e1000 ipv4-assigned
+PASS: rtl8139 ipv4-assigned
