@@ -1,0 +1,64 @@
+#ifndef MAYOS_NET_H
+#define MAYOS_NET_H
+#include "core.h"
+#include "net_dhcp.h"
+
+/* MayKernel PCI Ethernet preview using polled RTL8139 or E1000/E1000e. */
+typedef struct {
+    u8 mac[6];
+    u16 io_base; /* RTL8139 I/O BAR, zero for the E1000/E1000e backend. */
+    u32 packets_rx;
+    u32 packets_tx;
+    u64 bytes_rx;
+    u64 bytes_tx;
+    u32 rx_errors;
+    int present;
+    int gateway_arp_reply;
+    int ipv4_udp_reply;
+    int dns_fixture_reply;
+    int dns_native_reply;
+    int dns_native_timeout;
+    u8 dns_native_address[4];
+    int tcp_fixture_connected;
+    int tcp_fixture_reply;
+    int tcp_fixture_closed;
+    int tcp_fixture_timeout;
+    u32 tcp_fixture_retries;
+    u32 tcp_fixture_bytes;
+    u8 dns_fixture_address[4];
+} MayNetInfo;
+
+void may_net_init(void);
+void may_net_poll(void);
+const MayNetInfo *may_net_info(void);
+enum MayNetState {
+    MAY_NET_ABSENT, MAY_NET_LINK_DOWN, MAY_NET_WAIT_IPV4, MAY_NET_IPV4_ASSIGNED
+};
+enum MayNetState may_net_state(void);
+/* QEMU SLIRP diagnostic ONLY: static 10.0.2.15 -> 10.0.2.2 ARP probe.
+ * Never infer public Internet, TCP, DHCP, or HTTPS from this result. */
+int may_net_qemu_arp_probe(void);
+/* QEMU-only deterministic transport checks. Require prior gateway ARP.
+ * UDP fixture: host port 10053. DNS fixture: same host, synthetic A record.
+ * These prove packet handling, not public DNS connectivity or DHCP. */
+int may_net_qemu_udp_probe(void);
+int may_net_qemu_dns_fixture(void);
+/* Send an actual DNS A lookup to DHCP's DNS server. This transport offers
+ * no authenticity (DNS is untrusted); results must never authorize updates. */
+int may_net_dns_lookup(const char *hostname);
+int may_net_dns_result(const char *hostname, u8 address[4]);
+/* One bounded DHCP-routed UDP request and response. Payload is copied. */
+#define MAY_UDP_EXCHANGE_MAX 1232u
+int may_net_udp_start(const u8 address[4], u16 port, const u8 *data, u16 length);
+/* 0 pending, -1 timed out, positive is the length of the stored reply. */
+int may_net_udp_read(u8 *reply, unsigned capacity);
+/* Start a DHCP lease exchange over the active Ethernet driver. Initial
+ * negotiation only: no renewal/rebinding, do not persist lease across boots. */
+int may_net_qemu_tcp_http_probe(void);
+/* Diagnostic only: deliberately drops initial guest SYN, then retransmits. */
+int may_net_qemu_tcp_loss_probe(void);
+int may_net_dhcp_start(void);
+const MayDhcpClient *may_net_dhcp_info(void);
+const char *may_net_format_ipv4(const u8 ip[4]);
+
+#endif
