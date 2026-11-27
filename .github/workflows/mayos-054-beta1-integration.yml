@@ -1,21 +1,21 @@
-name: MayOS 0.5.5-pre1 candidate dual-kernel integration
+name: MayOS 0.5.4-beta.1 candidate dual-kernel integration
 on:
   push:
     branches:
-      - develop/0.5.5-pre1
+      - develop/0.5.4-beta.1
   pull_request:
     paths:
-      - 'versions/0.5.5-pre1-dev/**'
-      - '.github/workflows/mayos-055-pre1-integration.yml'
+      - 'versions/0.5.4-beta.1-dev/**'
+      - '.github/workflows/mayos-054-beta1-pre1-integration.yml'
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: mayos-055-candidate-${{ github.ref }}
+  group: mayos-054-beta1-candidate-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   source-and-safety:
-    name: 0.5.5-pre1 version, wallpaper decoder and storage safety
+    name: 0.5.4-beta.1 version, wallpaper decoder and storage safety
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -24,37 +24,37 @@ jobs:
           persist-credentials: false
       - name: Native source identity and no Release side effects
         run: |
-          grep -Fq '0.5.5-pre1-dev' versions/0.5.5-pre1-dev/kernel/version.h
-          grep -Fq 'VERSION="0.5.5-pre1-dev"' versions/0.5.5-pre1-dev/scripts/linux.py
+          grep -Fq '0.5.4-beta.1-dev' versions/0.5.4-beta.1-dev/kernel/version.h
+          grep -Fq 'VERSION="0.5.4-beta.1-dev"' versions/0.5.4-beta.1-dev/scripts/linux.py
           test -f versions/0.5.4-dev/kernel/version.h
-          test -f versions/0.5.5-pre1-dev/RELEASE_GATE.md
-          python3 -m py_compile versions/0.5.5-pre1-dev/scripts/linux.py \
-            versions/0.5.5-pre1-dev/scripts/dual_boot_smoke.py \
-            versions/0.5.5-pre1-dev/scripts/modern_guest_test.py
+          test -f versions/0.5.4-beta.1-dev/RELEASE_GATE.md
+          python3 -m py_compile versions/0.5.4-beta.1-dev/scripts/linux.py \
+            versions/0.5.4-beta.1-dev/scripts/dual_boot_smoke.py \
+            versions/0.5.4-beta.1-dev/scripts/modern_guest_test.py
       - name: Install offline image fixture compiler
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
             build-essential libcurl4-openssl-dev libjpeg-dev pkg-config python3-pil
       - name: Verify JPEG RGB565 and preserve prior image on failure
-        run: python3 versions/0.5.5-pre1-dev/scripts/bing_wallpaper_test.py
+        run: python3 versions/0.5.4-beta.1-dev/scripts/bing_wallpaper_test.py
       - name: Run real wallpaper-service cache and symlink safety integration
-        run: python3 versions/0.5.5-pre1-dev/scripts/wallpaper_service_test.py
+        run: python3 versions/0.5.4-beta.1-dev/scripts/wallpaper_service_test.py
       - name: Verify default RAM-only and atomic profile snapshots
         run: |
-          cd versions/0.5.5-pre1-dev
+          cd versions/0.5.4-beta.1-dev
           gcc -std=c11 -O2 -Wall -Wextra -Werror -DMAYOS_LINUX \
-            scripts/linux_profile_test.c linux/profile_persist.c -o /tmp/mayos055-profile
-          /tmp/mayos055-profile --ram
-          /tmp/mayos055-profile --badmarker
-          /tmp/mayos055-profile --snapshot
+            scripts/linux_profile_test.c linux/profile_persist.c -o /tmp/mayos054-beta1-profile
+          /tmp/mayos054-beta1-profile --ram
+          /tmp/mayos054-beta1-profile --badmarker
+          /tmp/mayos054-beta1-profile --snapshot
           gcc -std=c11 -O2 -Wall -Wextra -Werror -DMAYOS_LINUX -DMAYOS_PROFILE_TESTING \
-            scripts/linux_profile_fault_test.c linux/profile_persist.c -o /tmp/mayos055-fault
+            scripts/linux_profile_fault_test.c linux/profile_persist.c -o /tmp/mayos054-beta1-fault
           for phase in temp_opened temp_written file_synced renamed directory_synced partial_enospc; do
-            /tmp/mayos055-fault "$phase"
+            /tmp/mayos054-beta1-fault "$phase"
           done
   real-dual-qemu:
-    name: Real 0.5.5-pre1 dual ISO, 3 NICs, TLS and persistent desktop
+    name: Real 0.5.4-beta.1 dual ISO, 3 NICs, TLS and persistent desktop
     runs-on: ubuntu-24.04
     timeout-minutes: 100
     steps:
@@ -76,36 +76,36 @@ jobs:
             openssl e2fsprogs
       - name: Build both actual kernel variants and same-version boot ISO
         run: |
-          make -C versions/0.5.5-pre1-dev build/font.h build/cat_image.h build/material_icons.h
-          make -C versions/0.5.5-pre1-dev dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+          make -C versions/0.5.4-beta.1-dev build/font.h build/cat_image.h build/material_icons.h
+          make -C versions/0.5.4-beta.1-dev dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
       - name: Inspect compiled NIC configuration and exact release identity
         run: |
-          grep -Fxq 'CONFIG_E1000=y' versions/0.5.5-pre1-dev/build/linux/kernel.config
-          grep -Fxq 'CONFIG_E1000E=y' versions/0.5.5-pre1-dev/build/linux/kernel.config
-          grep -Fxq 'CONFIG_VIRTIO_NET=y' versions/0.5.5-pre1-dev/build/linux/kernel.config
-          test -s versions/0.5.5-pre1-dev/build/mayos-dual.iso
-          sha256sum versions/0.5.5-pre1-dev/build/mayos-dual.iso
+          grep -Fxq 'CONFIG_E1000=y' versions/0.5.4-beta.1-dev/build/linux/kernel.config
+          grep -Fxq 'CONFIG_E1000E=y' versions/0.5.4-beta.1-dev/build/linux/kernel.config
+          grep -Fxq 'CONFIG_VIRTIO_NET=y' versions/0.5.4-beta.1-dev/build/linux/kernel.config
+          test -s versions/0.5.4-beta.1-dev/build/mayos-dual.iso
+          sha256sum versions/0.5.4-beta.1-dev/build/mayos-dual.iso
       - name: Verify real QEMU Linux DHCP, TLS1.3 and unknown-CA rejection on 3 NICs
         run: |
-          cd versions/0.5.5-pre1-dev
+          cd versions/0.5.4-beta.1-dev
           for nic in e1000 e1000e virtio-net-pci; do
             python3 scripts/modern_guest_test.py --nic "$nic"
           done
       - name: Boot both real kernels from same GRUB ISO and check wallpaper service
         run: |
-          cd versions/0.5.5-pre1-dev
+          cd versions/0.5.4-beta.1-dev
           python3 scripts/dual_boot_smoke.py --iso build/mayos-dual.iso
       - name: Preserve real ISO and QEMU serial tests for release review
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: MayOS-055-pre1-development-QEMU-evidence
+          name: MayOS-054-beta1-pre1-development-QEMU-evidence
           retention-days: 14
           if-no-files-found: warn
           path: |
-            versions/0.5.5-pre1-dev/build/mayos-dual.iso
-            versions/0.5.5-pre1-dev/build/test-modern-network-*.log
-            versions/0.5.5-pre1-dev/build/test-modern-network-*-qemu.log
-            versions/0.5.5-pre1-dev/build/test-dual*.log
-            versions/0.5.5-pre1-dev/build/test-dual*.png
-            versions/0.5.5-pre1-dev/build/dual-boot*.json
+            versions/0.5.4-beta.1-dev/build/mayos-dual.iso
+            versions/0.5.4-beta.1-dev/build/test-modern-network-*.log
+            versions/0.5.4-beta.1-dev/build/test-modern-network-*-qemu.log
+            versions/0.5.4-beta.1-dev/build/test-dual*.log
+            versions/0.5.4-beta.1-dev/build/test-dual*.png
+            versions/0.5.4-beta.1-dev/build/dual-boot*.json
