@@ -3229,7 +3229,11 @@ static void explorer_draw(Window *w) {
     int x = w->x, y = w->y;
     button(x + 18, y + 51, 34, "<", 0);
     button(x + 57, y + 51, 34, ">", 0);
-    button(x + 96, y + 51, 34, "↻", 0);
+    ui_card(x + 96, y + 51, 34, 30, 10, surface_high);
+    ring(x + 112, y + 66, 7, 2, ink);
+    rect(x + 113, y + 58, 9, 7, surface_high);
+    stroke(x + 116, y + 59, x + 120, y + 64, 1, ink);
+    stroke(x + 114, y + 64, x + 120, y + 64, 1, ink);
     ui_card(x + 140, y + 49, w->w - 240, 34, 11, bg);
     const char *address = explorer_query[0] ? explorer_query : explorer_home;
     while (*address && text_width(address) > w->w - 265) may_utf8_next(&address);
