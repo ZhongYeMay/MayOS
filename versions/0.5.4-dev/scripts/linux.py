@@ -95,7 +95,7 @@ REQUIRED_CONFIG = (
 REQUIRED_APPLETS = {
     "sh", "init", "cttyhack", "mount", "umount", "mkdir", "hostname",
     "uname", "sync", "reboot", "poweroff", "cat", "ls", "free",
-    "ip", "ifconfig", "udhcpc", "mv", "ping", "nslookup", "sleep",
+    "ip", "ifconfig", "udhcpc", "wget", "mv", "ping", "nslookup", "sleep",
 }
 
 
