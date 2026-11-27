@@ -37,6 +37,7 @@ FASTFETCH_URL = f"https://github.com/fastfetch-cli/fastfetch/releases/download/{
 FASTFETCH_SHA256 = "e680dd3752472d9042cc297424e80198cea9b258aeecaf8af140b3e48e92689d"
 VERSION_RE = re.compile(r"[1-9][0-9]*\.[0-9]+(?:\.[0-9]+)?\Z")
 INPUT_FILES = {
+    "desktop_version_sha256": ROOT / "kernel/version.h",
     "modern_network_builder_sha256": ROOT / "scripts/modern_network.py",
     "modern_network_source_sha256": ROOT / "linux/fetch.c",
     "wallpaper_worker_sha256": ROOT / "linux/wallpaper.c",

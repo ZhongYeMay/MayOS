@@ -30,7 +30,7 @@ menuentry "Linux @LINUX_VERSION@ - compatibility rescue (x86_64)" --id linux-saf
     initrd /boot/linux/initramfs.cpio.gz
     boot
 }
-menuentry "MayOS Live 0.5.4-dev - RAM only / no disk writes" --id mayos-live {
+menuentry "MayOS Live 0.5.5-pre1-dev - RAM only / no disk writes" --id mayos-live {
     # Exact same current development ELF as the installed kernel, RAM-only runtime.
     multiboot /boot/mayos.elf mayos.ram
     set gfxpayload=keep

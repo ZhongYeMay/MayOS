@@ -1,6 +1,6 @@
-# MayOS 0.5.4-dev · Linux64-first persistent desktop
+# MayOS 0.5.5-pre1-dev · Linux64-first persistent desktop
 
-**Development source only.** The released v0.5.2 and previous v0.5.3-dev directories remain unchanged. This branch does not claim a new stable release.
+**Development source only.** Previous version directories remain unchanged; this is an independent 0.5.5 development snapshot. This branch does not claim a new stable release.
 
 ## What changed
 
@@ -52,7 +52,7 @@ The Linux64 x86_64 desktop has been tested with a **disposable 128 MiB ext4 QEMU
 
 Source: `scripts/linux_persistence_qemu_smoke.py`; reproducible workflow: `.github/workflows/linux-persistence-powercut.yml`. The workflow reuses a SHA-256 verified Linux ISO when available and rebuilds from the local development sources after artifact expiration.
 
-**Boundaries:** This verifies one abrupt termination point **after a completed fsync**, not arbitrary interruption during every phase of filesystem writes or disk cache flush. A failed storage device, a full filesystem, partial writes, actual power loss on physical hardware, user isolation, large files, app packages, a browser, and broad hardware driver compatibility remain future work. The system is still a *0.5.4-dev preview*, not an upgrade to the published v0.5.2 ISO.
+**Boundaries:** This verifies one abrupt termination point **after a completed fsync**, not arbitrary interruption during every phase of filesystem writes or disk cache flush. A failed storage device, a full filesystem, partial writes, actual power loss on physical hardware, user isolation, large files, app packages, a browser, and broad hardware driver compatibility remain future work. The system is still a *0.5.5-pre1-dev development snapshot*, not an upgrade to the published v0.5.2 ISO.
 
 ## Bing 每日壁纸（开发中）
 
