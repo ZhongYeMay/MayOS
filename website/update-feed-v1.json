@@ -7,6 +7,34 @@
   "notice": "Source metadata only; verified ISO files are bootable previews, not self-installing packages. Never overwrite a live boot disk.",
   "items": [
     {
+      "tag": "v0.5.4-pre30",
+      "name": "MayOS 0.5.4-pre30",
+      "variant": "dual",
+      "arch": "x86_64",
+      "kernel": "MayKernel + Linux 7.3.1",
+      "bytes": 47544320,
+      "sha256": "516c05fa446709dae03415ba4e4655f429d0d75bc895cdb110a6c3ffe0cfd26a",
+      "published_at": "2026-11-27T13:56:22Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-pre30-DualKernel-Live-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/4e23534ac6cf07111f0b60eb97e66edf91aa7bd7/MayOS-0.5.4-pre30-DualKernel-Live-x86_64.iso",
+      "notes": "Wordmark-only boot screen on both kernels. Press Tab for the startup log."
+    },
+    {
+      "tag": "v0.5.4-pre30",
+      "name": "MayOS 0.5.4-pre30",
+      "variant": "maykernel",
+      "arch": "x86_64",
+      "kernel": "MayKernel x86_64",
+      "bytes": 26431488,
+      "sha256": "2daf60c48b0eec36b8daccc4b1d111cd348889f7eb6f88c429e6ddc2ec94ae13",
+      "published_at": "2026-11-27T13:56:22Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-pre30-MayKernel64-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/4e23534ac6cf07111f0b60eb97e66edf91aa7bd7/MayOS-0.5.4-pre30-MayKernel64-x86_64.iso",
+      "notes": "Wordmark-only boot screen with a separate Tab startup log."
+    },
+    {
       "tag": "v0.5.4-pre29",
       "name": "MayOS 0.5.4-pre29",
       "variant": "dual",
