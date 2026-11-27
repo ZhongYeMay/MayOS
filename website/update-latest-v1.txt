@@ -1,0 +1,4 @@
+MAYOS_UPDATE_FEED_V1
+v0.5.4-pre30|maykernel|MayOS 0.5.4-pre30|26431488|2daf60c48b0eec36b8daccc4b1d111cd348889f7eb6f88c429e6ddc2ec94ae13|2026-11-27|x86_64|MayKernel x86_64|https://raw.githubusercontent.com/ZhongYeMay/MayOS/4e23534ac6cf07111f0b60eb97e66edf91aa7bd7/MayOS-0.5.4-pre30-MayKernel64-x86_64.iso|Wordmark-only boot screen with a separate Tab startup log.
+v0.5.4-pre30|dual|MayOS 0.5.4-pre30|47544320|516c05fa446709dae03415ba4e4655f429d0d75bc895cdb110a6c3ffe0cfd26a|2026-11-27|x86_64|MayKernel + Linux 7.3.1|https://raw.githubusercontent.com/ZhongYeMay/MayOS/4e23534ac6cf07111f0b60eb97e66edf91aa7bd7/MayOS-0.5.4-pre30-DualKernel-Live-x86_64.iso|Wordmark-only boot screen on both kernels. Press Tab for the startup log.
+MAYOS_UPDATE_FEED_END

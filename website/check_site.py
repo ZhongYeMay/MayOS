@@ -183,3 +183,10 @@ for entry in history["releases"]:
     assert isinstance(entry["prerelease"], bool)
     assert isinstance(entry["body"], str)
 print("PASS: all published release notes present, including prereleases; safe navigation")
+
+from build_latest_feed import latest_feed
+
+assert (ROOT / "update-latest-v1.txt").read_text(encoding="ascii") == latest_feed(
+    (ROOT / "update-feed-v1.txt").read_text(encoding="utf-8")
+), "Regenerate update-latest-v1.txt after editing the update feed"
+print("PASS: latest update catalog is complete and fits the client transport")
