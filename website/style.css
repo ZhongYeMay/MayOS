@@ -182,3 +182,12 @@
 .update-entry-actions{align-items:flex-start}
 .update-entry-assets{margin-left:0}
 }
+
+.download-channel > h2 {
+  margin: 0 0 18px;
+  scroll-margin-top: 96px;
+}
+
+.download-channel + .download-channel {
+  margin-top: 48px;
+}
