@@ -114,7 +114,11 @@ def main():
                 press(vm, "esc")
                 command(vm, "cat /scratch.txt", "\nsession-data\n")
                 command(vm, "shutdown", PROMPT)
-                vm.click(792, 420)
+                vm.move(792, 420)
+                # The desktop acts on press, and QMP may close before release.
+                vm.q("input-send-event", {"events": [
+                    {"type": "btn", "data": {"button": "left", "down": True}}
+                ]})
                 assert vm.proc.wait(timeout=12) == 0
             finally:
                 vm.stop()
