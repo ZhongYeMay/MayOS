@@ -12,7 +12,11 @@ if [ "$MAYOS_PROFILE_DIR" = "/mnt/mayos-profile" ] &&
    [ -f /mnt/mayos-profile/.mayos-profile-enabled ] &&
    [ "$(cat /mnt/mayos-profile/.mayos-profile-enabled)" = "MayOS-Profile-v1" ]; then
     profile=/mnt/mayos-profile/bing-daily
-    mkdir -p "$profile"
+    # Never descend through a user-controlled cache-directory symlink,
+    # and never persist to a path that could not be created or validated.
+    if [ -L "$profile" ] || ! mkdir -p "$profile" || [ ! -d "$profile" ]; then
+        profile=
+    fi
 fi
 if [ -n "$profile" ] &&
    [ -f "$profile/current.r565" ] && [ ! -L "$profile/current.r565" ] &&
