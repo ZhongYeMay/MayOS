@@ -82,7 +82,7 @@ static int hex256_valid(const char *s) {
 
 typedef struct {
     u32 major, minor, patch, pre;
-    int is_final, is_dev;
+    int is_final, is_dev, channel; /* pre=0, beta=1; final above both */
 } ParsedVersion;
 
 static int next_number(const char **cursor, u32 *out) {
@@ -108,9 +108,15 @@ static int version_parse(const char *s, ParsedVersion *v) {
         v->is_final = 1;
         return 1;
     }
-    if (s[0] != '-' || s[1] != 'p' || s[2] != 'r' || s[3] != 'e')
+    if (s[0] == '-' && s[1] == 'p' && s[2] == 'r' && s[3] == 'e') {
+        s += 4;
+    } else if (s[0] == '-' && s[1] == 'b' && s[2] == 'e' &&
+               s[3] == 't' && s[4] == 'a' && s[5] == '.') {
+        s += 6;
+        v->channel = 1;
+    } else {
         return 0;
-    s += 4;
+    }
     if (!next_number(&s, &v->pre)) return 0;
     if (*s == 0) return 1;
     if (s[0] == '-' && s[1] == 'd' && s[2] == 'e' &&
@@ -132,8 +138,9 @@ static int compare_versions(const char *candidate, const char *current, int *res
     CMP(patch);
     CMP(is_final);
     if (!a.is_final) {
+        CMP(channel); /* pre31 < beta.1 < final within same core version */
         CMP(pre);
-        /* pre2-dev < pre2 < pre3 < final */
+        /* beta.1-dev < beta.1 < beta.2 < final */
         if (a.is_dev != b.is_dev) {
             *result = a.is_dev ? -1 : 1;
             return 1;

@@ -55,10 +55,10 @@ OBJECTS += build/security_tls_x509_fixture.o
 build/security_tls_x509_fixture.o: build/tls_x509_fixture.h
 endif
 
-# Optional Rust/C hybrid kernel build. Default C mode keeps all existing
-# release and QEMU workflows unchanged until the Rust path is fully accepted.
+# Beta builds include the native Rust+C task manager by default.
+# Explicit MAYOS_RUST=0 retains a C-only rescue build, NOT the full Beta feature set.
 # Requires rustup target add x86_64-unknown-none (no userspace, no allocator).
-MAYOS_RUST ?= 0
+MAYOS_RUST ?= 1
 MAYOS_RELEASE_SIGNATURE ?= 0
 # Combine the signed byte gate with physical ATA staging only on marker-guarded
 # 8MiB QEMU disks. No network connection or installation/bootloader writes.

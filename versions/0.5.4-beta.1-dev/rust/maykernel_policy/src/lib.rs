@@ -49,8 +49,13 @@ fn version_valid(v: &[u8]) -> bool {
         }
     }
     if pos == v.len() { return true; }
-    if !v[pos..].starts_with(b"-pre") { return false; }
-    pos += 4;
+    if v[pos..].starts_with(b"-pre") {
+        pos += 4;
+    } else if v[pos..].starts_with(b"-beta.") {
+        pos += 6;
+    } else {
+        return false;
+    }
     let first = pos;
     while pos < v.len() && v[pos].is_ascii_digit() { pos += 1; }
     if decimal(&v[first..pos], 1_000_000).is_none() { return false; }
@@ -205,6 +210,10 @@ mod tests {
     #[test]
     fn versions() {
         assert!(version_valid(b"0.5.0-pre3-dev"));
+        assert!(version_valid(b"0.5.4-beta.1-dev"));
+        assert!(version_valid(b"0.5.4-beta.1"));
+        assert!(!version_valid(b"0.5.4-beta.x"));
+        assert!(!version_valid(b"0.5.4-beta.1000001"));
         assert!(version_valid(b"1.0.0"));
         assert!(!version_valid(b"1.0"));
         assert!(!version_valid(b"1.0.0-preview"));

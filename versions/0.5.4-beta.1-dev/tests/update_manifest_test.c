@@ -34,6 +34,17 @@ static const char good[] =
     "eta_minutes=15\n"
     "changelog=Fix startup and storage\n";
 
+static const char beta_manifest[] =
+    "name=MayOS\n"
+    "version=0.5.4-beta.1\n"
+    "architecture=x86_64\n"
+    "kernel=MayKernel\n"
+    "release_date=2026-11-18\n"
+    "size_bytes=1048576\n"
+    "sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n"
+    "eta_minutes=15\n"
+    "changelog=Fix startup and storage\n";
+
 static void load(const char *manifest) {
     memset(files, 0, sizeof(files));
     files[4].used = 1;
@@ -66,6 +77,12 @@ int main(void) {
     if (!expect(MAY_UPDATE_CANDIDATE)) return 2;
     if (strcmp(may_update_info()->version, "0.5.3-pre1")) return 3;
     if (may_update_info()->size_bytes != 1048576u) return 4;
+    load(beta_manifest);
+    if (!expect(MAY_UPDATE_CANDIDATE)) return 19;
+    load(beta_manifest);
+    if (!change("0.5.4-beta.1", "0.5.4-beta.x") ||
+        !expect(MAY_UPDATE_INVALID)) return 20;
+    load(good);
 
     load(good);
     if (!change("0.5.3-pre1", "0.5.0-pre1") ||
