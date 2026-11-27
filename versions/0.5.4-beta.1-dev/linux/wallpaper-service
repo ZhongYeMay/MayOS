@@ -10,6 +10,7 @@ fi
 profile=
 if [ "$MAYOS_PROFILE_DIR" = "/mnt/mayos-profile" ] &&
    [ -f /mnt/mayos-profile/.mayos-profile-enabled ] &&
+   [ ! -L /mnt/mayos-profile/.mayos-profile-enabled ] &&
    [ "$(cat /mnt/mayos-profile/.mayos-profile-enabled)" = "MayOS-Profile-v1" ]; then
     profile=/mnt/mayos-profile/bing-daily
     # Never descend through a user-controlled cache-directory symlink,
@@ -23,7 +24,9 @@ if [ -n "$profile" ] &&
    [ "$(wc -c < "$profile/current.r565")" = 1843200 ]; then
     cp "$profile/current.r565" /run/mayos-wallpaper/current.r565
     [ ! -f "$profile/current.date" ] ||
-        cp "$profile/current.date" /run/mayos-wallpaper/current.date
+        { [ ! -L "$profile/current.date" ] &&
+          [ "$(wc -c < "$profile/current.date")" = 9 ] &&
+          cp "$profile/current.date" /run/mayos-wallpaper/current.date; }
 fi
 while :; do
     delay=1800

@@ -37,6 +37,11 @@ jobs:
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
             build-essential libcurl4-openssl-dev libjpeg-dev pkg-config python3-pil
+      - name: Validate opt-in ext4 mount script and reject symlinked marker
+        run: |
+          sh -n versions/0.5.4-beta.1-dev/linux/persistence-mount
+          grep -Fq '[ -L /mnt/mayos-profile/.mayos-profile-enabled ]' \
+            versions/0.5.4-beta.1-dev/linux/persistence-mount
       - name: Verify JPEG RGB565 and preserve prior image on failure
         run: python3 versions/0.5.4-beta.1-dev/scripts/bing_wallpaper_test.py
       - name: Run real wallpaper-service cache and symlink safety integration

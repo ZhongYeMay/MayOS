@@ -66,6 +66,15 @@ with tempfile.TemporaryDirectory(prefix="mayos-wallpaper-service-") as folder:
     run(service, mode="update", image=current, base=root)
     assert not cache.exists(), "Invalid profile marker enabled persistence"
 
+    # Even a symlink to a valid marker cannot authorize persistence.
+    (mount / ".mayos-profile-enabled").unlink()
+    external_marker = root / "marker-outside-profile"
+    external_marker.write_text("MayOS-Profile-v1\n")
+    (mount / ".mayos-profile-enabled").symlink_to(external_marker)
+    run(service, mode="update", image=current, base=root)
+    assert not cache.exists(), "Symlinked opt-in marker enabled persistent writes"
+    (mount / ".mayos-profile-enabled").unlink()
+
     # Marked opt-in ext4 equivalent: restore valid yesterday image offline.
     (mount / ".mayos-profile-enabled").write_text("MayOS-Profile-v1\n")
     cache.mkdir()
@@ -75,6 +84,17 @@ with tempfile.TemporaryDirectory(prefix="mayos-wallpaper-service-") as folder:
     assert (run_dir / "current.r565").read_bytes() == b"A" * SIZE
     assert (run_dir / "current.date").read_text() == "20261127\n"
     assert (cache / "current.r565").read_bytes() == b"A" * SIZE
+
+    # Refuse a cached date symlink; never read arbitrary file contents into /run.
+    (cache / "current.date").unlink()
+    outside_date = root / "untrusted-date"
+    outside_date.write_text("20261127\n")
+    (cache / "current.date").symlink_to(outside_date)
+    (run_dir / "current.date").unlink(missing_ok=True)
+    run(service, mode="fail", image=current, base=root)
+    assert not (run_dir / "current.date").exists(), "Followed cached date symlink"
+    (cache / "current.date").unlink()
+    (cache / "current.date").write_text("20261127\n")
 
     # Next successful daily picture is staged into the marked profile.
     run(service, mode="update", image=current, base=root)

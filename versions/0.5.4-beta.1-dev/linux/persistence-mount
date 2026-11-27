@@ -31,6 +31,7 @@ if ! mount -t ext4 -o ro,noload,nosuid,nodev,noexec "$device" /mnt/mayos-profile
     exit 0
 fi
 if [ ! -f /mnt/mayos-profile/.mayos-profile-enabled ] ||
+   [ -L /mnt/mayos-profile/.mayos-profile-enabled ] ||
    [ "$(cat /mnt/mayos-profile/.mayos-profile-enabled)" != 'MayOS-Profile-v1' ]; then
     echo 'MayOS Linux profile: explicit marker missing; will not write' > /dev/ttyS0
     umount /mnt/mayos-profile
