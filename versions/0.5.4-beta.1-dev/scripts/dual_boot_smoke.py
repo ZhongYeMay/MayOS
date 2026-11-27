@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import socket
 import subprocess
+import tempfile
 import time
 
 from PIL import Image
@@ -29,16 +30,22 @@ class BootVM:
                  nic_model: str = 'e1000'):
         if nic_model not in ('e1000', 'e1000e', 'virtio-net-pci'):
             raise ValueError(f'Unsupported test NIC model: {nic_model}')
+        if (ovmf_code is None) != (ovmf_vars is None):
+            raise ValueError('OVMF_CODE and an independent writable OVMF_VARS copy are both required')
+        if ovmf_code is not None and ovmf_code.resolve() == ovmf_vars.resolve():
+            raise ValueError('OVMF_CODE and OVMF_VARS must be distinct files')
         self.timeout = timeout
-        self.serial_path = BUILD / f'{tag}-serial.sock'
-        self.qmp_path = BUILD / f'{tag}-qmp.sock'
+        # AF_UNIX sun_path is limited to 108 bytes on Linux. Keep sockets
+        # independent of the checkout depth and NIC tag, with private permissions.
+        self._socket_dir = tempfile.TemporaryDirectory(prefix='mayos-qemu-', dir='/tmp')
+        self.serial_path = Path(self._socket_dir.name) / 'serial.sock'
+        self.qmp_path = Path(self._socket_dir.name) / 'qmp.sock'
         self.log = BUILD / f'{tag}.log'
         self.stderr_path = BUILD / f'{tag}-qemu.log'
-        for path in (self.serial_path, self.qmp_path):
-            path.unlink(missing_ok=True)
         self.transcript = bytearray()
         self.mx, self.my = 640, 360
         self.serial = self.qmp = self.qmp_file = None
+        self._serial_connected = False
         self.proc = None
         self._log_file = self.log.open('wb')
         self._stderr_file = self.stderr_path.open('w')
@@ -52,11 +59,7 @@ class BootVM:
         args.extend(extra_args)
         if iso is not None:
             args += ['-cdrom', str(iso)]
-        if (ovmf_code is None) != (ovmf_vars is None):
-            raise ValueError('OVMF_CODE and an independent writable OVMF_VARS copy are both required')
         if ovmf_code is not None:
-            if ovmf_code.resolve() == ovmf_vars.resolve():
-                raise ValueError('OVMF_CODE and OVMF_VARS must be distinct files')
             args += ['-drive', f'if=pflash,format=raw,readonly=on,file={ovmf_code}',
                      '-drive', f'if=pflash,format=raw,file={ovmf_vars}']
         if os.environ.get('QEMU_DATA_DIR'):
@@ -73,6 +76,7 @@ class BootVM:
                 time.sleep(.03)
             self.serial = socket.socket(socket.AF_UNIX)
             self.serial.connect(str(self.serial_path))
+            self._serial_connected = True
             self.serial.setblocking(False)
             self.qmp = socket.socket(socket.AF_UNIX)
             self.qmp.settimeout(10)
@@ -101,7 +105,7 @@ class BootVM:
                 return response['return']
 
     def pump(self):
-        if self.serial is None:
+        if self.serial is None or not self._serial_connected:
             return
         while True:
             try:
@@ -260,10 +264,10 @@ class BootVM:
             if connection is not None:
                 connection.close()
         self.qmp_file = self.qmp = self.serial = None
+        self._serial_connected = False
         self._log_file.close()
         self._stderr_file.close()
-        for path in (self.serial_path, self.qmp_path):
-            path.unlink(missing_ok=True)
+        self._socket_dir.cleanup()
 
 
 def main():
