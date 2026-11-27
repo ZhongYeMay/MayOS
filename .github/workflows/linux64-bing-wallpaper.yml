@@ -1,0 +1,40 @@
+name: MayOS Linux64 Bing daily wallpaper offline gates
+on:
+  push:
+    branches: [feat/linux-bing-daily-wallpaper-20261122]
+  pull_request:
+    paths:
+      - 'versions/0.5.4-dev/linux/wallpaper.c'
+      - 'versions/0.5.4-dev/linux/wallpaper-service'
+      - 'versions/0.5.4-dev/linux/desktop.c'
+      - 'versions/0.5.4-dev/kernel/gui.c'
+      - 'versions/0.5.4-dev/kernel/core.h'
+      - 'versions/0.5.4-dev/scripts/modern_network.py'
+      - 'versions/0.5.4-dev/scripts/bing_wallpaper_test.py'
+      - '.github/workflows/linux64-bing-wallpaper.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-wallpaper-and-native-kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install trusted native image libraries and MayKernel tools
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential gcc-multilib libcurl4-openssl-dev libjpeg-dev pkg-config \
+            python3-pil fonts-noto-cjk fonts-dejavu-core \
+            grub-common grub-pc-bin grub-efi-amd64-bin xorriso mtools
+      - name: Test bounded JPEG renderer and offline fallback without Bing network
+        run: |
+          python3 -m py_compile versions/0.5.4-dev/scripts/bing_wallpaper_test.py \
+            versions/0.5.4-dev/scripts/linux.py \
+            versions/0.5.4-dev/scripts/modern_network.py
+          python3 versions/0.5.4-dev/scripts/bing_wallpaper_test.py
+      - name: Verify original MayKernel still builds the shared desktop
+        run: make -C versions/0.5.4-dev all

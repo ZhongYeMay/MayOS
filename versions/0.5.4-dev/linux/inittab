@@ -6,3 +6,4 @@ ttyS0::respawn:/bin/cttyhack /bin/sh -l
 ::shutdown:/bin/umount -a -r
 
 ::respawn:/bin/mayos-network
+::respawn:/bin/mayos-wallpaper-service

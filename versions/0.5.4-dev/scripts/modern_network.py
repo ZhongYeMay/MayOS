@@ -16,18 +16,27 @@ import subprocess
 def runtime(root: Path, output: Path):
     output.mkdir(parents=True, exist_ok=True)
     binary = output / "mayos-fetch"
+    wallpaper = output / "mayos-wallpaper"
     flags = shlex.split(subprocess.check_output(
         ["pkg-config", "--cflags", "--libs", "libcurl"], text=True))
-    subprocess.run(["gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
-                    str(root / "linux/fetch.c"), *flags, "-o", str(binary)], check=True)
+    jpeg_flags = shlex.split(subprocess.check_output(
+        ["pkg-config", "--cflags", "--libs", "libjpeg"], text=True))
+    for source, target, libraries in (
+        ("fetch.c", binary, flags),
+        ("wallpaper.c", wallpaper, flags + jpeg_flags),
+    ):
+        subprocess.run(["gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+                        str(root / "linux" / source), *libraries, "-o", str(target)],
+                       check=True)
     capabilities = subprocess.check_output([str(binary), "--capabilities"], text=True).strip()
-    linked = subprocess.check_output(["ldd", str(binary)], text=True)
-    if "not found" in linked:
-        raise RuntimeError("Missing native network runtime dependency")
-    files = {"usr/bin/mayos-fetch": binary,
+    files = {"usr/bin/mayos-fetch": binary, "usr/bin/mayos-wallpaper": wallpaper,
              "etc/ssl/certs/ca-certificates.crt": Path("/etc/ssl/certs/ca-certificates.crt")}
-    for path in re.findall(r"(?<!\S)(/[^\s]+)", linked):
-        files[path.lstrip("/")] = Path(path)
+    for worker in (binary, wallpaper):
+        linked = subprocess.check_output(["ldd", str(worker)], text=True)
+        if "not found" in linked:
+            raise RuntimeError(f"Missing runtime dependency for {worker.name}")
+        for path in re.findall(r"(?<!\S)(/[^\s]+)", linked):
+            files[path.lstrip("/")] = Path(path)
     # Include Debian/Ubuntu packaging copyright texts for all linked libraries.
     packages = set()
     for file in list(files.values()):
@@ -61,6 +70,6 @@ def runtime(root: Path, output: Path):
     for name in sorted(directories, key=lambda d: (d.count("/"), d)):
         entries.append((name, stat.S_IFDIR | 0o755, b"", 0, 0))
     for name, path in sorted(files.items()):
-        mode = 0o755 if name == "usr/bin/mayos-fetch" or ".so" in name else 0o644
+        mode = 0o755 if name in ("usr/bin/mayos-fetch", "usr/bin/mayos-wallpaper") or ".so" in name else 0o644
         entries.append((name, stat.S_IFREG | mode, path.read_bytes(), 0, 0))
     return entries

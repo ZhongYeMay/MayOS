@@ -54,3 +54,10 @@ Source: `scripts/linux_persistence_qemu_smoke.py`; reproducible workflow: `.gith
 
 **Boundaries:** This verifies one abrupt termination point **after a completed fsync**, not arbitrary interruption during every phase of filesystem writes or disk cache flush. A failed storage device, a full filesystem, partial writes, actual power loss on physical hardware, user isolation, large files, app packages, a browser, and broad hardware driver compatibility remain future work. The system is still a *0.5.4-dev preview*, not an upgrade to the published v0.5.2 ISO.
 
+## Bing 每日壁纸（开发中）
+
+Linux64 新增 HTTPS Bing 每日图片下载器，支持 1280×720 RGB565 桌面缓存、图片日期去重、15 秒内的热更新检测、失败回退和仅在显式 opt-in ext4 标记卷上的跨重启缓存。默认 Live 会话全部驻留 RAM。视觉布局、Dock 与现有桌面图标不作修改。
+
+**双内核状态：** GUI 绘制接口共享，但 MayKernel 自主下载尚未实现；在安全的 TLS、可信时间与大图片持久化完成前保持原有黑灰壁纸，不能宣称双内核联网壁纸完整可用。详情见 [Bing 每日壁纸说明](docs/bing-daily-wallpaper.md)，MayKernel 后续验收追踪 [#60](https://github.com/ZhongYeMay/MayOS/issues/60)。
+
+图片仅在终端设备供个人使用时下载，不打包 Bing 图片进入 ISO 或 Release。Bing 元数据网页端点随时可能变更，完整真实联网及 QEMU 启动仍必须以同 SHA 的测试证据为准。

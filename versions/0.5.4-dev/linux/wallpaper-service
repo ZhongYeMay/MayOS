@@ -1,0 +1,49 @@
+#!/bin/sh
+# Optional daily Bing wallpaper for Linux64. Never touches arbitrary disks.
+# By default the cache is volatile; ext4 persistence requires the existing
+# explicit mayos.persist= device AND its verified MayOS-Profile-v1 marker.
+export PATH=/bin:/usr/bin
+mkdir -p /run/mayos-wallpaper
+if [ -f /run/mayos-profile-env ]; then
+    . /run/mayos-profile-env
+fi
+profile=
+if [ "$MAYOS_PROFILE_DIR" = "/mnt/mayos-profile" ] &&
+   [ -f /mnt/mayos-profile/.mayos-profile-enabled ] &&
+   [ "$(cat /mnt/mayos-profile/.mayos-profile-enabled)" = "MayOS-Profile-v1" ]; then
+    profile=/mnt/mayos-profile/bing-daily
+    mkdir -p "$profile"
+fi
+if [ -n "$profile" ] &&
+   [ -f "$profile/current.r565" ] && [ ! -L "$profile/current.r565" ] &&
+   [ "$(wc -c < "$profile/current.r565")" = 1843200 ]; then
+    cp "$profile/current.r565" /run/mayos-wallpaper/current.r565
+    [ ! -f "$profile/current.date" ] ||
+        cp "$profile/current.date" /run/mayos-wallpaper/current.date
+fi
+while :; do
+    delay=1800
+    if /usr/bin/mayos-wallpaper /run/mayos-wallpaper/current.r565 \
+                                /run/mayos-wallpaper/current.date; then
+        if [ -n "$profile" ] &&
+           { [ ! -f "$profile/current.date" ] ||
+             [ ! -f "$profile/current.r565" ] ||
+             [ ! "$(cat "$profile/current.date")" = "$(cat /run/mayos-wallpaper/current.date)" ]; }; then
+            # No repeat disk write when Bing reports the same daily picture.
+            # Never follow a pre-existing symlink at a temporary cache path.
+            if [ ! -L "$profile/current.r565.new" ] &&
+               [ ! -L "$profile/current.date.new" ] &&
+               cp /run/mayos-wallpaper/current.r565 "$profile/current.r565.new" &&
+               cp /run/mayos-wallpaper/current.date "$profile/current.date.new"; then
+                sync
+                mv -f "$profile/current.r565.new" "$profile/current.r565"
+                mv -f "$profile/current.date.new" "$profile/current.date"
+                sync
+            fi
+        fi
+    else
+        # Offline, transient DNS/TLS or quota failure: preserve the last image.
+        delay=60
+    fi
+    sleep "$delay"
+done

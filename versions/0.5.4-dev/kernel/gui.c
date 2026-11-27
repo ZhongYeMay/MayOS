@@ -1774,8 +1774,28 @@ static void document_symbol(int x, int y, int size, u32 color) {
     stroke(x0 + 6, y0 + size / 2 + 7, x1 - 5, y0 + size / 2 + 7, 2, color);
 }
 static void desktop_wallpaper(void) {
-    /* Pure-black monochrome with two thin silver arcs; native framebuffer only. */
+    /* Both kernels share this path. Linux can supply a verified Bing RGB565
+       cache; MayKernel keeps the approved local background until its own
+       trusted network transport and large-image persistence exist. */
     if (desktop_style == 0) {
+        const u16 *daily = platform_wallpaper_bitmap();
+        if (daily) {
+            /* Convert only when the backing mmap is swapped. Normal desktop
+               redraw uses one scanline-safe bulk copy, not 921600 shifts. */
+            static const u16 *last_bitmap;
+            static u32 daily_rgb[W * H];
+            if (last_bitmap != daily) {
+                for (int i = 0; i < W * H; i++) {
+                    u32 px = daily[i];
+                    daily_rgb[i] = (((px >> 11) & 31u) * 255u / 31u << 16) |
+                                   (((px >> 5) & 63u) * 255u / 63u << 8) |
+                                   ((px & 31u) * 255u / 31u);
+                }
+                last_bitmap = daily;
+            }
+            memcpy(pixels, daily_rgb, sizeof(daily_rgb));
+            return;
+        }
         for (int y = 0; y < H; y++)
             rect(0, y, W, 1, blend(dark ? 0x030304 : 0xf9f9fb,
                                    dark ? 0x151518 : 0xe7e7eb, (u32)y * 120 / H));
@@ -1871,9 +1891,20 @@ static void personalization(int x, int y, int width) {
     button(x, y + 33, 142, pointer_label("鼠标指针", "Mouse pointer"), !desktop_options);
     button(x + 154, y + 33, 142, pointer_label("桌面", "Desktop"), desktop_options);
     if (desktop_options) {
-        text(x, y + 81, pointer_label("桌面背景", "Background"), ink);
+#ifdef MAYOS_LINUX
+        text(x, y + 81, platform_wallpaper_bitmap()
+             ? pointer_label("桌面背景 · Bing 每日已缓存", "Background · Bing Daily cached")
+             : pointer_label("桌面背景 · 等待 Bing / 内置后备", "Background · Bing pending / fallback"), ink);
+#else
+        text(x, y + 81, pointer_label("桌面背景 · Bing 网络功能待支持", "Background · Bing requires HTTPS"), ink);
+#endif
+#ifdef MAYOS_LINUX
+        const char *styles[] = {pointer_label("Bing 每日", "Bing Daily"), pointer_label("纯色背景", "Solid"),
+                                pointer_label("网格背景", "Grid")};
+#else
         const char *styles[] = {pointer_label("柔和渐变", "Gradient"), pointer_label("纯色背景", "Solid"),
                                 pointer_label("网格背景", "Grid")};
+#endif
         for (int i = 0; i < 3; i++)
             button(x + i * 154, y + 108, 142, styles[i], desktop_style == i);
         text(x, y + 158, pointer_label("桌面版本标识", "Desktop version label"), ink);

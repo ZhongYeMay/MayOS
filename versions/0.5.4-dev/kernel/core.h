@@ -28,9 +28,13 @@ void platform_web_cancel(void);
 int platform_web_poll(char *destination, int capacity);
 int platform_network_status(char *destination, int capacity);
 int platform_fastfetch(char *destination, int capacity);
+/* Validated, read-only 1280x720 RGB565 Bing cache; NULL keeps local wallpaper. */
+const u16 *platform_wallpaper_bitmap(void);
 void platform_idle(void);
 #else
 static inline const char *platform_kernel(void) { return "MayKernel x86_64 (custom)"; }
+/* Native MayKernel needs authenticated HTTPS and a large-image cache first. */
+static inline const u16 *platform_wallpaper_bitmap(void) { return (const u16 *)0; }
 #ifdef MAYOS_RUST_CORE
 void platform_idle(void);
 #else

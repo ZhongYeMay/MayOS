@@ -334,6 +334,9 @@ def main():
         vm.shot('test-dual-linux-splash')
         vm.wait('MayOS-Linux# ')
         vm.wait('MayOS: desktop ready')
+        vm.shell_check("test -x /usr/bin/mayos-wallpaper && "
+                       "grep -q mayos-wallpaper-service /etc/inittab && "
+                       "test -d /run/mayos-wallpaper", "BING_WALLPAPER_SERVICE")
         version_output = vm.shell_check(f'test "$(uname -r)" = "{release}" && uname -r', 'VERSION')
         assert re.search(r'^' + re.escape(release) + r'\r?$', version_output, re.MULTILINE), version_output
         vm.shell_check('test -r /proc/cpuinfo && test -d /sys/class && test -c /dev/console '
