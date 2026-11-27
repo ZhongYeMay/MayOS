@@ -7,6 +7,34 @@
   "notice": "Source metadata only; verified ISO files are bootable previews, not self-installing packages. Never overwrite a live boot disk.",
   "items": [
     {
+      "tag": "v0.5.4-pre29",
+      "name": "MayOS 0.5.4-pre29",
+      "variant": "dual",
+      "arch": "x86_64",
+      "kernel": "MayKernel + Linux 7.3.1",
+      "bytes": 47646720,
+      "sha256": "4bde28509ec70a36e649207f87e62041edf4dbf6f8b2e606d8b3a2c1bec918f5",
+      "published_at": "2026-11-27T05:12:44Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-pre29-DualKernel-Live-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/c76cbce3b2eafb17b1dc6c8e245fc3f74b6eb5a4/MayOS-0.5.4-pre29-DualKernel-Live-x86_64.iso",
+      "notes": "MayOS logo and animated loading ring on both boot paths."
+    },
+    {
+      "tag": "v0.5.4-pre29",
+      "name": "MayOS 0.5.4-pre29",
+      "variant": "maykernel",
+      "arch": "x86_64",
+      "kernel": "MayKernel x86_64",
+      "bytes": 26525696,
+      "sha256": "abe666fb2b4b34da8acdfb496b487486f05893cc945f54030ba48ccaecdd0336",
+      "published_at": "2026-11-27T05:12:44Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-pre29-MayKernel64-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/c76cbce3b2eafb17b1dc6c8e245fc3f74b6eb5a4/MayOS-0.5.4-pre29-MayKernel64-x86_64.iso",
+      "notes": "MayKernel boot animation with a separate Tab startup log."
+    },
+    {
       "tag": "v0.5.4-pre28",
       "name": "MayOS 0.5.4-pre28",
       "variant": "dual",
