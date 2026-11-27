@@ -38,6 +38,8 @@ jobs:
             build-essential libcurl4-openssl-dev libjpeg-dev pkg-config python3-pil
       - name: Verify JPEG RGB565 and preserve prior image on failure
         run: python3 versions/0.5.5-pre1-dev/scripts/bing_wallpaper_test.py
+      - name: Run real wallpaper-service cache and symlink safety integration
+        run: python3 versions/0.5.5-pre1-dev/scripts/wallpaper_service_test.py
       - name: Verify default RAM-only and atomic profile snapshots
         run: |
           cd versions/0.5.5-pre1-dev
