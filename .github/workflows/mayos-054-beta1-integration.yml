@@ -1,0 +1,182 @@
+name: MayOS 0.5.4-beta.1 candidate dual-kernel integration
+on:
+  push:
+    branches:
+      - develop/0.5.4-beta.1
+  pull_request:
+    paths:
+      - 'versions/0.5.4-beta.1-dev/**'
+      - '.github/workflows/mayos-054-beta1-integration.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mayos-054-beta1-candidate-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+jobs:
+  source-and-safety:
+    name: 0.5.4-beta.1 version, wallpaper decoder and storage safety
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Native source identity and no Release side effects
+        run: |
+          grep -Fq '0.5.4-beta.1-dev' versions/0.5.4-beta.1-dev/kernel/version.h
+          test "$(cat versions/0.5.4-beta.1-dev/VERSION)" = '0.5.4-beta.1-dev'
+          grep -Fq 'VERSION="0.5.4-beta.1-dev"' versions/0.5.4-beta.1-dev/scripts/linux.py
+          test -f versions/0.5.4-dev/kernel/version.h
+          test -f versions/0.5.4-beta.1-dev/RELEASE_GATE.md
+          python3 -m py_compile versions/0.5.4-beta.1-dev/scripts/linux.py \
+            versions/0.5.4-beta.1-dev/scripts/dual_boot_smoke.py \
+            versions/0.5.4-beta.1-dev/scripts/modern_guest_test.py
+      - name: Install offline image fixture compiler
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential libcurl4-openssl-dev libjpeg-dev pkg-config python3-pil
+      - name: Validate opt-in ext4 mount script and reject symlinked marker
+        run: |
+          sh -n versions/0.5.4-beta.1-dev/linux/persistence-mount
+          grep -Fq '[ -L /mnt/mayos-profile/.mayos-profile-enabled ]' \
+            versions/0.5.4-beta.1-dev/linux/persistence-mount
+      - name: Verify JPEG RGB565 and preserve prior image on failure
+        run: python3 versions/0.5.4-beta.1-dev/scripts/bing_wallpaper_test.py
+      - name: Run real wallpaper-service cache and symlink safety integration
+        run: python3 versions/0.5.4-beta.1-dev/scripts/wallpaper_service_test.py
+      - name: Verify default RAM-only and atomic profile snapshots
+        run: |
+          cd versions/0.5.4-beta.1-dev
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -DMAYOS_LINUX \
+            scripts/linux_profile_test.c linux/profile_persist.c -o /tmp/mayos054-beta1-profile
+          /tmp/mayos054-beta1-profile --ram
+          /tmp/mayos054-beta1-profile --badmarker
+          /tmp/mayos054-beta1-profile --snapshot
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -DMAYOS_LINUX -DMAYOS_PROFILE_TESTING \
+            scripts/linux_profile_fault_test.c linux/profile_persist.c -o /tmp/mayos054-beta1-fault
+          for phase in temp_opened temp_written file_synced renamed directory_synced partial_enospc; do
+            /tmp/mayos054-beta1-fault "$phase"
+          done
+      - name: Verify Beta update ordering and Rust manifest security parser
+        run: |
+          set -euo pipefail
+          make -C versions/0.5.4-beta.1-dev test-update test-rust-host
+      - name: Protect pre31 Explorer history and automatic 4K display mode selection
+        run: |
+          set -euo pipefail
+          cd versions/0.5.4-beta.1-dev
+          gcc -std=c11 -O2 -Wall -Wextra -Werror scripts/explorer_history_test.c -o /tmp/mayos-beta-explorer-history
+          /tmp/mayos-beta-explorer-history
+          gcc -std=c11 -O2 -Wall -Wextra -Werror scripts/display_auto_test.c -o /tmp/mayos-beta-display-modes
+          /tmp/mayos-beta-display-modes
+  real-dual-qemu:
+    name: Real 0.5.4-beta.1 dual ISO, 3 NICs, TLS and persistent desktop
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare Ubuntu build mirrors
+        run: bash scripts/configure-ci-apt-mirror.sh
+      - name: Install real kernel builder, image codec and QEMU
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
+            build-essential gcc-multilib musl-tools linux-libc-dev \
+            grub-common grub-pc-bin grub-efi-amd64-bin xorriso mtools \
+            qemu-system-x86 ovmf ffmpeg python3-pil python3-h2 \
+            fonts-noto-cjk fonts-dejavu-core flex bison bc \
+            libelf-dev libssl-dev xz-utils busybox-static rsync \
+            libcurl4-openssl-dev libjpeg-dev pkg-config ca-certificates \
+            openssl e2fsprogs
+      - name: Build both actual kernel variants and same-version boot ISO
+        run: |
+          make -C versions/0.5.4-beta.1-dev build/font.h build/cat_image.h build/material_icons.h
+          rustc --version
+          rustup target add x86_64-unknown-none
+          make -C versions/0.5.4-beta.1-dev dual MAYOS_RUST=1 LINUX_VERSION=7.3.1 LINUX_JOBS=4
+      - name: Verify real host HTTP/2 TLS, IPv6, Explorer transport and redirect handling
+        run: |
+          set -euo pipefail
+          cd versions/0.5.4-beta.1-dev
+          test -x build/linux/mayos-fetch
+          ln -sfn linux/mayos-fetch build/mayos-fetch
+          gcc -std=c11 -O2 -Wall -Wextra -Werror scripts/network_transport_test.c -o build/network_transport_test
+          ./build/network_transport_test
+          python3 scripts/modern_network_test.py
+      - name: Inspect compiled NIC configuration and exact release identity
+        run: |
+          grep -Fxq 'CONFIG_E1000=y' versions/0.5.4-beta.1-dev/build/linux/kernel.config
+          grep -Fxq 'CONFIG_E1000E=y' versions/0.5.4-beta.1-dev/build/linux/kernel.config
+          grep -Fxq 'CONFIG_VIRTIO_NET=y' versions/0.5.4-beta.1-dev/build/linux/kernel.config
+          test -s versions/0.5.4-beta.1-dev/build/mayos-dual.iso
+          nm versions/0.5.4-beta.1-dev/build/mayos.elf | grep -Eq '[[:space:]]may_task_poll$'
+          nm versions/0.5.4-beta.1-dev/build/mayos.elf | grep -Eq '[[:space:]]may_task_draw$'
+          sha256sum versions/0.5.4-beta.1-dev/build/mayos-dual.iso
+      - name: Verify real QEMU Linux DHCP, TLS1.3 and unknown-CA rejection on 3 NICs
+        run: |
+          cd versions/0.5.4-beta.1-dev
+          for nic in e1000 e1000e virtio-net-pci; do
+            python3 scripts/modern_guest_test.py --nic "$nic"
+          done
+      - name: Boot both real kernels from same GRUB ISO and check wallpaper service
+        run: |
+          cd versions/0.5.4-beta.1-dev
+          python3 scripts/dual_boot_smoke.py --iso build/mayos-dual.iso
+      # Only preserve the normal Live ISO as candidate evidence. The QEMU
+      # persistence test temporarily inserts a /dev/sda opt-in GRUB entry,
+      # which must NEVER be uploaded or distributed as user installation media.
+      - name: Freeze normal ISO before any QEMU-only test menu injection
+        run: |
+          set -euo pipefail
+          cd versions/0.5.4-beta.1-dev
+          ! grep -Fq 'mayos-linux-persistent-qemu-test' boot/grub/dual.cfg.in
+          ! grep -Fq 'mayos.persist=/dev/sda' boot/grub/dual.cfg.in
+          cp build/mayos-dual.iso build/mayos-beta1-candidate.iso
+          sha256sum build/mayos-beta1-candidate.iso > build/mayos-beta1-candidate.sha256
+          xorriso -osirrox on -indev build/mayos-beta1-candidate.iso \
+            -extract /boot/grub/grub.cfg build/mayos-beta1-candidate-grub.cfg
+          ! grep -Fq 'mayos-linux-persistent-qemu-test' build/mayos-beta1-candidate-grub.cfg
+          ! grep -Fq 'mayos.persist=/dev/sda' build/mayos-beta1-candidate-grub.cfg
+      - name: Exercise both real Task Managers from untouched ISO (BIOS and UEFI)
+        run: |
+          set -euo pipefail
+          cd versions/0.5.4-beta.1-dev
+          python3 scripts/task_manager_smoke.py --iso build/mayos-beta1-candidate.iso
+      - name: Real QEMU persistence across cold reboot and abrupt power cuts
+        run: |
+          set -euo pipefail
+          cd versions/0.5.4-beta.1-dev
+          python3 -m py_compile scripts/inject_qemu_persist_menu.py \
+            scripts/linux_persistence_qemu_smoke.py
+          python3 scripts/inject_qemu_persist_menu.py
+          rm -f build/mayos-dual.iso
+          make dual MAYOS_RUST=1 LINUX_VERSION=7.3.1 LINUX_JOBS=4
+          # The disposable ISO has a deliberately hardcoded /dev/sda test entry.
+          # Both marked and unmarked disks are created in temporary directories.
+          python3 scripts/linux_persistence_qemu_smoke.py --iso build/mayos-dual.iso
+          sha256sum -c build/mayos-beta1-candidate.sha256
+      - name: Preserve real ISO and QEMU serial tests for release review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MayOS-054-beta1-development-QEMU-evidence
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            versions/0.5.4-beta.1-dev/build/mayos-beta1-candidate.iso
+            versions/0.5.4-beta.1-dev/build/mayos-beta1-candidate.sha256
+            versions/0.5.4-beta.1-dev/build/mayos-beta1-candidate-grub.cfg
+            versions/0.5.4-beta.1-dev/build/linux-persistence-qemu-results.json
+            versions/0.5.4-beta.1-dev/build/linux-persist-*.png
+            versions/0.5.4-beta.1-dev/build/task-manager-*.png
+            versions/0.5.4-beta.1-dev/build/task-manager-*.log
+            versions/0.5.4-beta.1-dev/build/linux-persist-*.log
+            versions/0.5.4-beta.1-dev/build/test-modern-network-*.log
+            versions/0.5.4-beta.1-dev/build/test-modern-network-*-qemu.log
+            versions/0.5.4-beta.1-dev/build/test-dual*.log
+            versions/0.5.4-beta.1-dev/build/test-dual*.png
+            versions/0.5.4-beta.1-dev/build/dual-boot*.json

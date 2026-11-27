@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "active_version": "0.5.0-pre2-dev",
-  "development_branch": "main",
+  "development_branch": "develop/0.5.4-beta.1",
   "legacy_symlink": "MayOS_0.3.0-pre1",
   "released": [
     {
@@ -72,6 +72,7 @@
   ],
   "development_snapshots": [
     "0.5.3-dev",
-    "0.5.4-dev"
+    "0.5.4-dev",
+    "0.5.4-beta.1-dev"
   ]
 }
