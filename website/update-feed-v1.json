@@ -7,6 +7,34 @@
   "notice": "Source metadata only; verified ISO files are bootable previews, not self-installing packages. Never overwrite a live boot disk.",
   "items": [
     {
+      "tag": "v0.5.4-pre28",
+      "name": "MayOS 0.5.4-pre28",
+      "variant": "dual",
+      "arch": "x86_64",
+      "kernel": "MayKernel + Linux 7.3.1",
+      "bytes": 47517696,
+      "sha256": "d4096039c0ad1339ddbac4ef7da1b42d90c5ec206cf867560cfc660ff20bbe0e",
+      "published_at": "2026-11-27T05:01:40Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-pre28-DualKernel-Live-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/84d01855a5aa47a2ee8d867734de97ea4be1ee3b/MayOS-0.5.4-pre28-DualKernel-Live-x86_64.iso",
+      "notes": "Protects unsaved documents before shutdown and restart on both desktops."
+    },
+    {
+      "tag": "v0.5.4-pre28",
+      "name": "MayOS 0.5.4-pre28",
+      "variant": "maykernel",
+      "arch": "x86_64",
+      "kernel": "MayKernel x86_64",
+      "bytes": 26402816,
+      "sha256": "6123cb413ed6a2618b0379dfb07c5c6022ed3aa2aba89a629c44d5e0b82b01f1",
+      "published_at": "2026-11-27T05:01:40Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-pre28-MayKernel64-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/84d01855a5aa47a2ee8d867734de97ea4be1ee3b/MayOS-0.5.4-pre28-MayKernel64-x86_64.iso",
+      "notes": "Warns if an editor draft or RAM-only file changes would be lost."
+    },
+    {
       "tag": "v0.5.4-pre27",
       "name": "MayOS 0.5.4-pre27",
       "variant": "dual",
