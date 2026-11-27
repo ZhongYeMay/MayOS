@@ -7,6 +7,34 @@
   "notice": "Source metadata only; verified ISO files are bootable previews, not self-installing packages. Never overwrite a live boot disk.",
   "items": [
     {
+      "tag": "v0.5.4-pre27",
+      "name": "MayOS 0.5.4-pre27",
+      "variant": "dual",
+      "arch": "x86_64",
+      "kernel": "MayKernel + Linux 7.3.1",
+      "bytes": 47517696,
+      "sha256": "d9c38173caf2cebf598a617a9c5d843e1d709267a9c546ae36815e93c7cf8b10",
+      "published_at": "2026-11-27T04:53:45Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-pre27-DualKernel-Live-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/5c8f11e1bc233f4f0e9af619ee2dd7754bb24bb7/MayOS-0.5.4-pre27-DualKernel-Live-x86_64.iso",
+      "notes": "MayKernel reacquires IPv4 after Ethernet reconnect and closes stale requests."
+    },
+    {
+      "tag": "v0.5.4-pre27",
+      "name": "MayOS 0.5.4-pre27",
+      "variant": "maykernel",
+      "arch": "x86_64",
+      "kernel": "MayKernel x86_64",
+      "bytes": 26402816,
+      "sha256": "bf8c76a150833f6fbf630f278adad012382f5af337cb01731cf9bdf3f1e917d9",
+      "published_at": "2026-11-27T04:53:45Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-pre27-MayKernel64-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/5c8f11e1bc233f4f0e9af619ee2dd7754bb24bb7/MayOS-0.5.4-pre27-MayKernel64-x86_64.iso",
+      "notes": "MayKernel clears stale IPv4 leases on Ethernet link loss."
+    },
+    {
       "tag": "v0.5.4-pre26",
       "name": "MayOS 0.5.4-pre26",
       "variant": "dual",
