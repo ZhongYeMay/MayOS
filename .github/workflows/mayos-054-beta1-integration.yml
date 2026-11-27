@@ -6,7 +6,7 @@ on:
   pull_request:
     paths:
       - 'versions/0.5.4-beta.1-dev/**'
-      - '.github/workflows/mayos-054-beta1-pre1-integration.yml'
+      - '.github/workflows/mayos-054-beta1-integration.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,6 +25,7 @@ jobs:
       - name: Native source identity and no Release side effects
         run: |
           grep -Fq '0.5.4-beta.1-dev' versions/0.5.4-beta.1-dev/kernel/version.h
+          test "$(cat versions/0.5.4-beta.1-dev/VERSION)" = '0.5.4-beta.1-dev'
           grep -Fq 'VERSION="0.5.4-beta.1-dev"' versions/0.5.4-beta.1-dev/scripts/linux.py
           test -f versions/0.5.4-dev/kernel/version.h
           test -f versions/0.5.4-beta.1-dev/RELEASE_GATE.md
@@ -99,7 +100,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: MayOS-054-beta1-pre1-development-QEMU-evidence
+          name: MayOS-054-beta1-development-QEMU-evidence
           retention-days: 14
           if-no-files-found: warn
           path: |
