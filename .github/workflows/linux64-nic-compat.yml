@@ -1,0 +1,72 @@
+name: MayOS Linux64 multi-NIC QEMU network gate
+on:
+  push:
+    branches: [main, feat/linux64-virtio-e1000e-network-20261122]
+    paths:
+      - 'versions/0.5.4-dev/linux/kernel.config'
+      - 'versions/0.5.4-dev/scripts/linux.py'
+      - 'versions/0.5.4-dev/scripts/dual_boot_smoke.py'
+      - 'versions/0.5.4-dev/scripts/modern_guest_test.py'
+      - '.github/workflows/linux64-nic-compat.yml'
+  pull_request:
+    paths:
+      - 'versions/0.5.4-dev/linux/kernel.config'
+      - 'versions/0.5.4-dev/scripts/linux.py'
+      - 'versions/0.5.4-dev/scripts/dual_boot_smoke.py'
+      - 'versions/0.5.4-dev/scripts/modern_guest_test.py'
+      - '.github/workflows/linux64-nic-compat.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-guest-nic-matrix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare Ubuntu build mirrors
+        run: bash scripts/configure-ci-apt-mirror.sh
+      - name: Install kernel, desktop and QEMU dependencies
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            -o Acquire::Retries=3 -o Acquire::ForceIPv4=true \
+            build-essential gcc-multilib musl-tools linux-libc-dev \
+            grub-common grub-pc-bin grub-efi-amd64-bin xorriso mtools \
+            qemu-system-x86 ovmf python3-pil python3-h2 \
+            fonts-noto-cjk fonts-dejavu-core flex bison bc \
+            libelf-dev libssl-dev xz-utils busybox-static rsync \
+            libcurl4-openssl-dev pkg-config ca-certificates openssl
+      - name: Run static Python and DHCP contract checks
+        run: |
+          python3 -m py_compile versions/0.5.4-dev/scripts/linux.py \
+            versions/0.5.4-dev/scripts/dual_boot_smoke.py \
+            versions/0.5.4-dev/scripts/modern_guest_test.py
+          python3 versions/0.5.4-dev/scripts/network_config_test.py
+      - name: Build real MayKernel and Linux64 dual boot ISO
+        run: |
+          make -C versions/0.5.4-dev build/font.h build/cat_image.h build/material_icons.h
+          make -C versions/0.5.4-dev dual LINUX_VERSION=7.3.1 LINUX_JOBS=4
+      - name: Assert compiled kernel includes all three network drivers
+        run: |
+          grep -Fxq 'CONFIG_E1000=y' versions/0.5.4-dev/build/linux/kernel.config
+          grep -Fxq 'CONFIG_E1000E=y' versions/0.5.4-dev/build/linux/kernel.config
+          grep -Fxq 'CONFIG_VIRTIO_NET=y' versions/0.5.4-dev/build/linux/kernel.config
+      - name: Boot and verify DHCP, route, TLS 1.3 and CA on three QEMU NICs
+        run: |
+          set -e
+          cd versions/0.5.4-dev
+          for nic in e1000 e1000e virtio-net-pci; do
+            python3 scripts/modern_guest_test.py --nic "$nic"
+          done
+      - name: Archive real QEMU serial output and network failure logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux64-qemu-nic-matrix-logs
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            versions/0.5.4-dev/build/test-modern-network-*.log
+            versions/0.5.4-dev/build/test-modern-network-*-qemu.log

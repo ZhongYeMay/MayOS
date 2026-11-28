@@ -89,13 +89,13 @@ REQUIRED_CONFIG = (
     "DEVTMPFS", "PROC_FS", "SYSFS", "TMPFS", "TTY", "VT_CONSOLE",
     "SERIAL_8250_CONSOLE", "VGA_CONSOLE", "KEYBOARD_ATKBD", "ACPI",
     "EFI", "EFI_STUB", "FB", "FB_DEVICE", "FRAMEBUFFER_CONSOLE", "MOUSE_PS2",
-    "INPUT_EVDEV", "NET", "INET", "IPV6", "RTC_HCTOSYS", "PACKET", "E1000", "VIRTIO_MENU", "VIRTIO",
+    "INPUT_EVDEV", "NET", "INET", "IPV6", "RTC_HCTOSYS", "PACKET", "NET_CORE", "E1000", "E1000E", "VIRTIO_NET", "VIRTIO_MENU", "VIRTIO",
     "VIRTIO_PCI",
 )
 REQUIRED_APPLETS = {
     "sh", "init", "cttyhack", "mount", "umount", "mkdir", "hostname",
     "uname", "sync", "reboot", "poweroff", "cat", "ls", "free",
-    "ip", "ifconfig", "udhcpc", "mv", "ping", "nslookup", "sleep",
+    "ip", "ifconfig", "udhcpc", "wget", "mv", "ping", "nslookup", "sleep",
 }
 
 
