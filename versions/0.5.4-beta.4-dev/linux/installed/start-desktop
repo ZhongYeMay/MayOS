@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+install -d -o root -g mayos -m 0750 /run/mayos-x11
+cookie=/run/mayos-x11/Xauthority
+umask 027
+rm -f "$cookie"
+touch "$cookie"
+xauth -f "$cookie" add :0 MIT-MAGIC-COOKIE-1 "$(mcookie)"
+chgrp mayos "$cookie"
+chmod 0640 "$cookie"
+/usr/lib/xorg/Xorg :0 vt1 -keeptty -nolisten tcp -auth "$cookie" &
+xorg=$!
+trap 'kill "$xorg" 2>/dev/null || true' EXIT
+for attempt in $(seq 1 30); do
+    [ ! -S /tmp/.X11-unix/X0 ] || break
+    kill -0 "$xorg"
+    sleep 1
+done
+[ -S /tmp/.X11-unix/X0 ]
+runuser -u mayos -- env DISPLAY=:0 XAUTHORITY="$cookie" \
+    MAYOS_PROFILE_DIR=/home/mayos/.mayos-desktop \
+    dbus-run-session -- /usr/lib/mayos/desktop-session

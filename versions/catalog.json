@@ -252,6 +252,7 @@
   ],
   "development_snapshots": [
     "0.5.3-dev",
-    "0.5.4-dev"
+    "0.5.4-dev",
+    "0.5.4-beta.4-dev"
   ]
 }

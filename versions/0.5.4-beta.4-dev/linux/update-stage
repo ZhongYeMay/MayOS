@@ -1,0 +1,149 @@
+#!/bin/sh
+# Invoked by the Settings worker after explicit disk opt-in at boot.
+export PATH=/bin:/usr/bin
+set -eu
+mode=$1
+disk=$2
+digest=${3:-}
+version=${6:-}
+fail() { printf '@FAILED %s\n' "$1"; exit 1; }
+
+if [ "$mode" = download-install ]; then
+    mkdir /run/mayos-online-update 2>/dev/null || fail 'Another download is running'
+    trap 'rmdir /run/mayos-online-update' EXIT
+    "$0" check "$disk" "$digest" "" "" "$version" || exit 1
+    umask 077
+    mkdir /tmp/mayos-online-update || fail 'Could not reserve temporary update space'
+    trap 'rm -f /tmp/mayos-online-update/update.elf; rmdir /tmp/mayos-online-update /run/mayos-online-update' EXIT
+    /usr/bin/mayos-fetch --kernel "$4" "$digest" "$5" || exit 1
+    "$0" stage "$disk" "$digest" "" "" "$version"
+    exit
+fi
+
+case "$disk" in
+    /dev/sd[a-z]) name=${disk#/dev/}; partition=${name}1 ;;
+    /dev/nvme[0-9]n[0-9]) name=${disk#/dev/}; partition=${name}p1 ;;
+    *) fail 'Unsupported target disk' ;;
+esac
+
+target=
+seen=0
+set -f
+for option in $(cat /proc/cmdline); do
+    case "$option" in
+        mayos.ram|mayos.live=1) fail 'Live trial prohibits disk updates' ;;
+        mayos.update=*)
+            [ "$seen" = 0 ] || fail 'Multiple update targets'
+            seen=1
+            target=${option#mayos.update=} ;;
+    esac
+done
+[ "$target" = "$disk" ] || fail 'Disk not enabled at boot'
+sys=/sys/class/block/$name
+[ -b "$disk" ] && [ -b "/dev/$partition" ] &&
+    [ "$(cat "$sys/removable")" = 0 ] && [ "$(cat "$sys/ro")" = 0 ] ||
+    fail 'Disk unavailable or read-only'
+
+mkdir /run/mayos-update-lock 2>/dev/null || fail 'Another update is running'
+mountpoint=/run/mayos-update-lock/esp
+mounted=0
+pending=
+cleanup() {
+    if [ "$mounted" = 1 ]; then
+        if [ -n "$pending" ]; then rm -f "$pending" "$mountpoint/mayos-trial.env.new"; fi
+        umount "$mountpoint" || return
+    fi
+    rmdir "$mountpoint" /run/mayos-update-lock
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+mkdir "$mountpoint"
+device_id=$(cat "$sys/dev")
+esp_id=$(cat "$sys/$partition/dev")
+if awk -v id="$esp_id" '$3 == id { found=1 } END { exit !found }' /proc/self/mountinfo; then
+    fail 'EFI partition is already mounted'
+fi
+/usr/bin/mayos-check-disk "$disk" "$device_id" check >/dev/null ||
+    fail 'Disk layout is not a MayOS installation'
+grep -Fxq "DEVNAME=$partition" "/sys/dev/block/$esp_id/uevent" ||
+    fail 'EFI device changed'
+if [ "$mode" = check ]; then
+    access=ro
+elif [ "$mode" = stage ]; then
+    access=rw
+else
+    fail 'Unknown update action'
+fi
+mount -t vfat -o "$access,nosuid,nodev,noexec,iocharset=iso8859-1" "/dev/$partition" "$mountpoint" ||
+    fail 'Could not mount MayOS EFI partition'
+mounted=1
+grep -Fxq 'MayOS EFI layout 1' "$mountpoint/mayos-installer-v1" ||
+    fail 'MayOS installation marker missing'
+if grep -Fxq active_slot=A "$mountpoint/mayos-active.env"; then
+    active=A; spare=B
+elif grep -Fxq active_slot=B "$mountpoint/mayos-active.env"; then
+    active=B; spare=A
+else
+    fail 'Confirmed slot is invalid'
+fi
+[ -s "$mountpoint/slots/$active.elf" ] || fail 'Confirmed kernel is missing'
+trial="$mountpoint/mayos-trial.env"
+[ -f "$trial" ] && [ "$(wc -c <"$trial")" = 1024 ] || fail 'Trial record is invalid'
+if grep -Eq '^(trial_slot|attempted_slot)=[AB]$' "$trial"; then
+    fail 'Resolve the previous trial using the recovery ISO'
+fi
+kernel_version() {
+    strings "$1" | sed -n 's@^MayOS Workstation \(.*\) / MayShell$@\1@p'
+}
+installed=$(kernel_version "$mountpoint/slots/$active.elf")
+awk -v current="$installed" -v candidate="${version#v}" 'BEGIN {
+    pattern = "^[0-9]+[.][0-9]+[.][0-9]+(-pre[0-9]+|-beta[.][0-9]+)?$"
+    if (current !~ pattern || candidate !~ pattern) exit 1
+    old_channel = current ~ /-pre/ ? 0 : (current ~ /-beta/ ? 1 : 2)
+    new_channel = candidate ~ /-pre/ ? 0 : (candidate ~ /-beta/ ? 1 : 2)
+    split(current, old, /-beta[.]|-pre|[.]/)
+    split(candidate, new, /-beta[.]|-pre|[.]/)
+    for (i=1; i<=3; i++)
+        if (old[i]+0 != new[i]+0) exit !(new[i]+0 > old[i]+0)
+    if (old_channel != new_channel) exit !(new_channel > old_channel)
+    exit !(new[4]+0 > old[4]+0)
+}' || fail 'Selected update is not newer than the installed MayKernel'
+[ "$mode" = stage ] || exit 0
+
+source=/tmp/mayos-online-update/update.elf
+case "$digest" in ''|*[!0-9a-f]*) fail 'Invalid SHA-256' ;; esac
+[ "${#digest}" = 64 ] || fail 'Invalid SHA-256'
+printf '%s  %s\n' "$digest" "$source" | sha256sum -c - >/dev/null ||
+    fail 'Downloaded kernel failed verification'
+[ "$(kernel_version "$source")" = "${version#v}" ] ||
+    fail 'Downloaded kernel version does not match the selected release'
+current=$(sha256sum "$mountpoint/slots/$active.elf")
+[ "${current%% *}" != "$digest" ] || fail 'This kernel is already installed'
+pending="$mountpoint/slots/$spare.elf.new"
+bytes=$(wc -c <"$source")
+[ "$bytes" -gt 0 ] || fail 'Downloaded kernel is empty'
+printf '@INSTALL 0\n'
+written=0
+while [ "$written" -lt "$bytes" ]; do
+    dd bs=1048576 count=1 <&3 >&4 2>/dev/null || fail 'Could not write the spare slot'
+    written=$((written + 1048576))
+    [ "$written" -le "$bytes" ] || written=$bytes
+    printf '@INSTALL %s\n' "$((written * 90 / bytes))"
+done 3<"$source" 4>"$pending"
+sync
+readback=$(sha256sum "$pending")
+[ "${readback%% *}" = "$digest" ] || fail 'Spare slot failed readback verification'
+mv -f "$pending" "$mountpoint/slots/$spare.elf" || fail 'Could not commit spare slot'
+sync
+{
+    printf '# GRUB Environment Block\ntrial_slot=%s\n' "$spare"
+    i=$(printf '# GRUB Environment Block\ntrial_slot=%s\n' "$spare" | wc -c)
+    while [ "$i" -lt 1024 ]; do printf '#'; i=$((i + 1)); done
+} >"$trial.new"
+[ "$(wc -c <"$trial.new")" = 1024 ] || fail 'Could not create trial record'
+sync
+mv -f "$trial.new" "$trial" || fail 'Could not schedule trial boot'
+sync
+umount "$mountpoint" || fail 'Could not flush the trial update'
+mounted=0
+printf '@INSTALL 100\n@STAGED\n'

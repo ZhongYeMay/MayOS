@@ -1,0 +1,18 @@
+#!/bin/bash
+# Build a Debian userspace with the Debian LTS kernel in an isolated build VM.
+set -euo pipefail
+if [[ $EUID != 0 || $# != 1 ]]; then
+    echo 'Usage (isolated Debian build VM): bootstrap-root NEW_ROOT' >&2
+    exit 2
+fi
+packages=systemd-sysv,udev,kmod,dbus,linux-image-amd64,initramfs-tools
+packages+=,xserver-xorg-core,xserver-xorg-input-libinput,xserver-xorg-video-fbdev,openbox,xauth
+packages+=,firefox-esr,fonts-dejavu-core,ca-certificates,python3,systemd-resolved,grub-common,e2fsprogs,curl
+packages+=,util-linux,util-linux-extra,fdisk,dosfstools,sudo
+exec mmdebstrap --mode=root --variant=minbase --architectures=amd64 \
+    --aptopt='APT::Install-Recommends "false"' \
+    --dpkgopt='path-exclude=/usr/share/man/*' --dpkgopt='path-exclude=/usr/share/doc/*' \
+    --dpkgopt='path-include=/usr/share/doc/*/copyright' \
+    --include="$packages" trixie "$1" \
+    "deb ${MAYOS_APT_MIRROR:-https://deb.debian.org/debian} trixie main" \
+    "deb ${MAYOS_APT_SECURITY:-https://security.debian.org/debian-security} trixie-security main"

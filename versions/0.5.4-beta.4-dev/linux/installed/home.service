@@ -1,0 +1,9 @@
+[Unit]
+Description=Mount the MayOS data partition
+After=local-fs.target systemd-udevd.service
+Before=mayos-desktop.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/mayos/mount-home
+RemainAfterExit=yes

@@ -1,0 +1,19 @@
+[Unit]
+Description=MayOS Linux graphical session
+After=mayos-home.service systemd-user-sessions.service
+Requires=mayos-home.service
+Conflicts=getty@tty1.service
+
+[Service]
+ExecStart=/usr/lib/mayos/start-desktop
+Restart=on-failure
+RestartSec=3s
+StandardOutput=journal+console
+StandardError=journal+console
+StandardInput=tty
+TTYPath=/dev/tty1
+UtmpIdentifier=tty1
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

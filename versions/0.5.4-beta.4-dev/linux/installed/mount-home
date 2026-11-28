@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+uuid=
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in mayos.data=*) uuid=${arg#*=} ;; esac
+done
+printf '%s\n' "$uuid" | grep -Eq '^[a-fA-F0-9-]{36}$'
+device=/dev/disk/by-partuuid/$uuid
+for attempt in $(seq 1 30); do
+    [ ! -b "$device" ] || break
+    sleep 1
+done
+[ -b "$device" ]
+mount -t ext4 -o nodev,nosuid "$device" /home
+if [ ! -e /home/mayos ] && [ ! -L /home/mayos ]; then
+    install -d -o 1000 -g 1000 -m 0700 /home/mayos
+fi
+[ ! -L /home/mayos ] && [ "$(stat -c '%u' /home/mayos)" = 1000 ]
+runuser -u mayos -- sh -eu -c '
+    umask 077
+    mkdir -p "$HOME/.mayos-desktop"
+    profile=$HOME/.mayos-desktop/.mayos-profile-enabled
+    if [ ! -e "$profile" ] && [ ! -L "$profile" ]; then
+        set -C
+        printf "MayOS-Profile-v1\n" >"$profile"
+    fi
+'
+state=/home/.mayos-system
+hash=$state/admin.hash
+if [ ! -L "$state" ] && [ "$(stat -c '%u:%a' "$state")" = 0:700 ] &&
+   [ -f "$hash" ] && [ ! -L "$hash" ] && [ "$(stat -c '%u:%a' "$hash")" = 0:600 ]; then
+    password=$(getent shadow mayos | cut -d: -f2)
+    case "$password" in
+        '!'*|'*')
+            stored=$(cat "$hash")
+            printf '%s\n' "$stored" | grep -Eq '^\$6\$[A-Za-z0-9./$]+$'
+            printf 'mayos:%s\n' "$stored" | chpasswd -e
+            ;;
+    esac
+fi
+echo 'MayOS Linux: mounted separate ext4 user data' >/dev/ttyS0

@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+openbox --sm-disable &
+manager=$!
+trap 'kill "$manager" 2>/dev/null || true' EXIT
+/usr/bin/mayos-desktop
