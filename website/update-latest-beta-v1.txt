@@ -1,0 +1,5 @@
+MAYOS_UPDATE_FEED_V1
+v0.5.4-beta.2|maykernel|MayOS 0.5.4-beta.2|26431488|94d66fd58deb309b2afd8b529dfb6a3e89f4b887a15af415b3db5a2b65a2485a|2026-11-28|x86_64|MayKernel x86_64|https://raw.githubusercontent.com/ZhongYeMay/MayOS/930c4d1436cc8c3083aa344dfb7c1b7029c80318/MayOS-0.5.4-beta.2-MayKernel64-x86_64.iso|Beta 2 MayKernel64 live image.
+v0.5.4-beta.2|dual|MayOS 0.5.4-beta.2|48160768|85d47818aa58e37309356b5f3cbc6c9f82904e8e3254c3503df6968a8fbfb467|2026-11-28|x86_64|MayKernel + Linux 7.3.1|https://raw.githubusercontent.com/ZhongYeMay/MayOS/930c4d1436cc8c3083aa344dfb7c1b7029c80318/MayOS-0.5.4-beta.2-DualKernel-Live-x86_64.iso|Beta 2 dual-kernel live image for BIOS and UEFI.
+v0.5.4-beta.2|maykernel-install|MayOS 0.5.4-beta.2|5482128|debb6044991adfbdeac4c869be2792f322a0dcd34d9e801bafe1c4d320277417|2026-11-28|x86_64|MayKernel x86_64|https://raw.githubusercontent.com/ZhongYeMay/MayOS/930c4d1436cc8c3083aa344dfb7c1b7029c80318/MayOS-0.5.4-beta.2-MayKernel64-x86_64.elf|Beta 2 MayKernel update for the spare boot slot.
+MAYOS_UPDATE_FEED_END

@@ -6,20 +6,22 @@ ROOT = Path(__file__).resolve().parent
 
 
 def release_key(tag):
-    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:-pre(\d+))?", tag)
+    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:(-pre|-beta\.)(\d+))?", tag)
     if match is None:
         return None
-    major, minor, patch, preview = match.groups()
-    return int(major), int(minor), int(patch), preview is None, int(preview or 0)
+    major, minor, patch, channel, number = match.groups()
+    return int(major), int(minor), int(patch), ("-pre", "-beta.", None).index(channel), int(number or 0)
 
 
-def latest_feed(feed):
+def latest_feed(feed, *, include_beta=False):
     newest = {}
     for line in feed.splitlines()[2:]:
         fields = line.split("|", 9)
         if len(fields) != 10 or fields[6] != "x86_64":
             continue
         version = release_key(fields[0])
+        if not include_beta and "-beta." in fields[0]:
+            continue
         variant = fields[1]
         if version is None or variant not in ("maykernel", "dual", "linux", "maykernel-install"):
             continue
@@ -39,5 +41,7 @@ def latest_feed(feed):
 
 
 if __name__ == "__main__":
-    (ROOT / "update-latest-v1.txt").write_text(
-        latest_feed((ROOT / "update-feed-v1.txt").read_text()), encoding="ascii")
+    feed = (ROOT / "update-feed-v1.txt").read_text(encoding="utf-8")
+    (ROOT / "update-latest-v1.txt").write_text(latest_feed(feed), encoding="ascii")
+    (ROOT / "update-latest-beta-v1.txt").write_text(
+        latest_feed(feed, include_beta=True), encoding="ascii")

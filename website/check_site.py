@@ -190,3 +190,7 @@ assert (ROOT / "update-latest-v1.txt").read_text(encoding="ascii") == latest_fee
     (ROOT / "update-feed-v1.txt").read_text(encoding="utf-8")
 ), "Regenerate update-latest-v1.txt after editing the update feed"
 print("PASS: latest update catalog is complete and fits the client transport")
+
+assert (ROOT / "update-latest-beta-v1.txt").read_text(encoding="ascii") == latest_feed(
+    (ROOT / "update-feed-v1.txt").read_text(encoding="utf-8"), include_beta=True
+), "Regenerate update-latest-beta-v1.txt after editing the update feed"

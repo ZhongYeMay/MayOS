@@ -7,6 +7,34 @@
   "notice": "Source metadata only; verified ISO files are bootable previews, not self-installing packages. Never overwrite a live boot disk.",
   "items": [
     {
+      "tag": "v0.5.4-beta.2",
+      "name": "MayOS 0.5.4-beta.2",
+      "variant": "dual",
+      "arch": "x86_64",
+      "kernel": "MayKernel + Linux 7.3.1",
+      "bytes": 48160768,
+      "sha256": "85d47818aa58e37309356b5f3cbc6c9f82904e8e3254c3503df6968a8fbfb467",
+      "published_at": "2026-11-28T04:12:34Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-beta.2-DualKernel-Live-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/930c4d1436cc8c3083aa344dfb7c1b7029c80318/MayOS-0.5.4-beta.2-DualKernel-Live-x86_64.iso",
+      "notes": "Beta 2 dual-kernel live image for BIOS and UEFI."
+    },
+    {
+      "tag": "v0.5.4-beta.2",
+      "name": "MayOS 0.5.4-beta.2",
+      "variant": "maykernel",
+      "arch": "x86_64",
+      "kernel": "MayKernel x86_64",
+      "bytes": 26431488,
+      "sha256": "94d66fd58deb309b2afd8b529dfb6a3e89f4b887a15af415b3db5a2b65a2485a",
+      "published_at": "2026-11-28T04:12:34Z",
+      "preview": true,
+      "asset_name": "MayOS-0.5.4-beta.2-MayKernel64-x86_64.iso",
+      "url": "https://raw.githubusercontent.com/ZhongYeMay/MayOS/930c4d1436cc8c3083aa344dfb7c1b7029c80318/MayOS-0.5.4-beta.2-MayKernel64-x86_64.iso",
+      "notes": "Beta 2 MayKernel64 live image."
+    },
+    {
       "tag": "v0.5.4-pre32",
       "name": "MayOS 0.5.4-pre32",
       "variant": "dual",
