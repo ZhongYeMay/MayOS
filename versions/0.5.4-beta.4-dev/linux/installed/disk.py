@@ -81,6 +81,7 @@ def copy_slot(payload, destination, expected, offset=0, *, sparse=False, compres
     """Write exactly one complete slot and verify its readback."""
     hasher = hashlib.sha256()
     count = 0
+    zero = bytes(MIB)
     with os.fdopen(os.dup(payload), "rb") as stream:
         checked = VerifiedStream(stream)
         with (gzip.GzipFile(fileobj=checked, mode="rb") if compressed else nullcontext(checked)) as image:
@@ -90,7 +91,7 @@ def copy_slot(payload, destination, expected, offset=0, *, sparse=False, compres
                 if count > SLOT_SIZE:
                     raise ValueError("system image exceeds the root slot size")
                 hasher.update(block)
-                if sparse and not block.strip(b"\0"):
+                if sparse and block == zero[:len(block)]:
                     destination.seek(len(block), os.SEEK_CUR)
                 else:
                     destination.write(block)
@@ -229,9 +230,10 @@ def data_image(work, password):
 
 def copy_small(source, destination, offset):
     destination.seek(offset)
+    zero = bytes(MIB)
     with source.open("rb") as stream:
         for block in iter(lambda: stream.read(MIB), b""):
-            if not block.strip(b"\0"):
+            if block == zero[:len(block)]:
                 destination.seek(len(block), os.SEEK_CUR)
             else:
                 destination.write(block)
@@ -298,8 +300,9 @@ def ensure_empty(disk, target):
     if not stat.S_ISBLK(os.fstat(disk.fileno()).st_mode):
         raise ValueError("destination is not a block device")
     print(f"Scanning {target} for existing data before installation", flush=True)
-    for block in iter(lambda: disk.read(4 * MIB), b""):
-        if block.strip(b"\0"):
+    zero = bytes(4 * MIB)
+    for block in iter(lambda: disk.read(len(zero)), b""):
+        if block != zero[:len(block)]:
             raise ValueError("destination has existing data; left untouched")
 
 
@@ -370,10 +373,9 @@ def provision(args):
             esp = build_esp(work, ids)
             home = data_image(work, password)
             descriptor = os.open(path, flags, 0o600)
-            os.close(descriptor)
             created = True
-            starts = partition_image(path, TOTAL, ids)
-            with path.open("r+b") as disk:
+            with os.fdopen(descriptor, "r+b") as disk:
+                starts = partition_image(path, TOTAL, ids)
                 copy_small(esp, disk, starts[0])
                 copy_slot(payload, disk, args.sha256, starts[1], sparse=True)
                 copy_small(home, disk, starts[3])
