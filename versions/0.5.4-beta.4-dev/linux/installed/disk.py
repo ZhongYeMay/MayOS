@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import sys
 import subprocess
 import tempfile
 import uuid
@@ -106,10 +107,11 @@ def copy_slot(payload, destination, expected, offset=0, *, sparse=False):
     print("MayOS Linux: root image written and verified", flush=True)
 
 
-def boot_config(ids):
+def boot_config(ids, themed=False):
     disk, esp, a, b, home = (str(v) for v in ids)
     serial_number = ids[1].hex[:8].upper()
     fat_uuid = f"{serial_number[:4]}-{serial_number[4:]}"
+    theme = 'source ($esp)/boot/grub/menu.cfg' if themed else ''
     return f"""insmod part_gpt
 insmod fat
 insmod ext2
@@ -120,7 +122,9 @@ terminal_input console serial
 terminal_output console serial
 search --fs-uuid --set=esp {fat_uuid}
 set root=$esp
+set timeout_style=menu
 set timeout=5
+{theme}
 set chosen=A
 regexp --set=1:drive '^(.*),gpt1$' "$esp"
 load_env -f ($esp)/{ENV_PATH}/active.env active_slot
@@ -134,11 +138,11 @@ if [ "$trial_slot" = A -o "$trial_slot" = B ]; then
     fi
 fi
 set default=$chosen
-menuentry 'MayOS Linux64 — system A' --id A {{
+menuentry 'MayOS Linux64 - system A' --id A {{
     linux ($drive,gpt2)/boot/mayos-linux root=PARTUUID={a} rw quiet rootwait console=tty0 console=ttyS0,115200 mayos.disk={disk} mayos.esp={esp} mayos.data={home} mayos.slot=A
     initrd ($drive,gpt2)/boot/mayos-initrd
 }}
-menuentry 'MayOS Linux64 — system B' --id B {{
+menuentry 'MayOS Linux64 - system B' --id B {{
     linux ($drive,gpt3)/boot/mayos-linux root=PARTUUID={b} rw quiet rootwait console=tty0 console=ttyS0,115200 mayos.disk={disk} mayos.esp={esp} mayos.data={home} mayos.slot=B
     initrd ($drive,gpt3)/boot/mayos-initrd
 }}
@@ -153,6 +157,18 @@ def create_env(path, **values):
         raise ValueError("invalid GRUB environment block")
 
 
+def stage_boot_theme(tree):
+    project = Path(__file__).resolve().parents[2]
+    if not (project / "boot/grub/menu.cfg").is_file():
+        return False
+    sys.path.insert(0, str(project / "scripts"))
+    from dual_iso import stage_menu
+    grub = tree / "boot" / "grub"
+    grub.mkdir(parents=True)
+    stage_menu(grub)
+    return True
+
+
 def build_esp(work, ids):
     tree = work / "esp"
     tables = tree / ENV_PATH
@@ -161,17 +177,24 @@ def build_esp(work, ids):
     boot.mkdir(parents=True)
     (tables / f"disk-{ids[0]}").write_text(f"{ids[0]}\n")
     config = work / "grub.cfg"
-    config.write_text(boot_config(ids))
+    themed = stage_boot_theme(tree)
+    config.write_text(boot_config(ids, themed))
     create_env(tables / "active.env", active_slot="A")
     create_env(tables / "trial.env")
+    modules = "part_gpt fat ext2 search_fs_uuid regexp loadenv linux serial"
+    if themed:
+        modules += " all_video gfxterm gfxmenu png cpuid test"
     run("grub-mkstandalone", "-O", "x86_64-efi", "--locales=", "--fonts=",
-        "--modules=part_gpt fat ext2 search_fs_uuid regexp loadenv linux serial",
+        f"--modules={modules}",
         "-o", boot / "BOOTX64.EFI", f"boot/grub/grub.cfg={config}")
     image = work / "esp.img"
     with image.open("xb") as stream:
         stream.truncate(ESP_SIZE)
     run("mkfs.fat", "-F", "32", "-i", ids[1].hex[:8], "-n", "MAYOSEFI", image, stdout=subprocess.DEVNULL)
-    run("mcopy", "-i", image, "-s", tree / "EFI", tables, "::/")
+    paths = [tree / "EFI", tables]
+    if themed:
+        paths.extend([tree / "boot", tree / "licenses"])
+    run("mcopy", "-i", image, "-s", *paths, "::/")
     return image
 
 

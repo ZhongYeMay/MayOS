@@ -1065,11 +1065,11 @@ enum DesktopMenu {
 #define DOCK_HEIGHT 70
 enum DockItem {
     DOCK_LAUNCHER, DOCK_FILES, DOCK_SETTINGS, DOCK_TERMINAL,
-    DOCK_EDITOR, DOCK_EXPLORER, DOCK_TASK, DOCK_TRASH
+    DOCK_EDITOR, DOCK_EXPLORER, DOCK_TASK, DOCK_TRASH, DOCK_FIREFOX
 };
-#define DOCK_SLOT_COUNT (WINDOW_COUNT + 2)
+#define DOCK_SLOT_COUNT (WINDOW_COUNT + 3)
 
-static int dock_level[DOCK_TRASH + 1], dock_popup = -1;
+static int dock_level[DOCK_FIREFOX + 1], dock_popup = -1;
 static int dock_layout(int items[DOCK_SLOT_COUNT]);
 static int dock_hit(int x, int y);
 static int dock_slot_x(int slot, int count) {
@@ -1093,7 +1093,7 @@ static int animation_step(int mx, int my) {
     for (int i = 0; i < WINDOW_COUNT; i++)
         if (animation_running[i]) changed = 1;
     int hovered = dock_hit(mx, my);
-    for (int i = 0; i <= DOCK_TRASH; i++) {
+    for (int i = 0; i <= DOCK_FIREFOX; i++) {
         int target = !high_contrast && i == hovered ? 256 : 0;
         int delta = target - dock_level[i];
         if (delta) {
@@ -3342,6 +3342,9 @@ static int dock_layout(int items[DOCK_SLOT_COUNT]) {
     for (int i = DOCK_LAUNCHER; i <= DOCK_TERMINAL; i++) items[count++] = i;
     for (int id = 3; id < WINDOW_COUNT; id++)
         if (windows[id].open) items[count++] = id + 1;
+#ifdef MAYOS_LINUX
+    if (platform_browser_ready()) items[count++] = DOCK_FIREFOX;
+#endif
     items[count++] = DOCK_TRASH;
     return count;
 }
@@ -3370,16 +3373,23 @@ static void taskbar(void) {
     soft_roundrect(left + 3, top + 8, width, DOCK_HEIGHT, 25, dark ? 0x010102 : 0xc0c0c6);
 #endif
     ui_card(left, top, width, DOCK_HEIGHT, 24, dark ? 0x0e0e11 : 0xf7f7f9);
-    const int kinds[] = {6, 0, 1, 2, 5, 4, 11, 3};
+    const int kinds[] = {6, 0, 1, 2, 5, 4, 11, 3, 4};
     const char *const labels[] = {pointer_label("应用启动台", "Launchpad"), L(FILES),
-        L(SETTINGS), L(TERMINAL), L(EDITOR), "MayOS Explorer", "MayOS Task Manager", L(TRASH)};
+        L(SETTINGS), L(TERMINAL), L(EDITOR), "MayOS Explorer", "MayOS Task Manager", L(TRASH), "Firefox"};
     int hovered = modal || egg_open || dock_popup >= 0 ? -1 : dock_hit(mx, my);
     for (int slot = 0; slot < count; slot++) {
         int i = items[slot], x = dock_slot_x(slot, count);
-        int window = i == DOCK_TRASH ? 0 : i - 1;
+        int window = (i == DOCK_TRASH || i == DOCK_FIREFOX) ? 0 : i - 1;
         int open = i == DOCK_LAUNCHER ? start_open :
             windows[window].open && (window != 0 || (folder == 3) == (i == DOCK_TRASH));
         int active = open && (i == DOCK_LAUNCHER || (focus == window && !windows[window].min));
+#ifdef MAYOS_LINUX
+        if (i == DOCK_FIREFOX) {
+            int state = platform_browser_state();
+            open = state != 0;
+            active = state == 2;
+        }
+#endif
         if (i == DOCK_TRASH) rect(x - 11, top + 15, 1, 39, line);
         if (active || i == hovered)
             soft_roundrect(x, top + 5, 50, 54, 15, active ? selected_fill : surface_high);
@@ -3396,13 +3406,18 @@ static void taskbar(void) {
     }
     int popup = dock_popup_left(dock_popup);
     if (popup >= 0) {
-        int id = dock_popup - 1;
+        int id = dock_popup == DOCK_FIREFOX ? 0 : dock_popup - 1;
         ui_card(popup, top - 108, 182, 97, 12, panel);
         const char *const rows[] = {pointer_label("打开或恢复", "Open or Restore"),
             pointer_label("最小化", "Minimize"), pointer_label("关闭窗口", "Close Window")};
         for (int row = 0; row < 3; row++) {
             int y = top - 104 + row * 30;
             int enabled = row == 0 || (windows[id].open && (row != 1 || !windows[id].min));
+#ifdef MAYOS_LINUX
+            if (dock_popup == DOCK_FIREFOX)
+                enabled = row == 0 || (platform_browser_state() && row == 2) ||
+                          (row == 1 && platform_browser_state());
+#endif
             if (enabled && inside(mx, my, popup + 4, y, 174, 29))
                 soft_roundrect(popup + 4, y, 174, 29, 6, selected_fill);
             text(popup + 12, y + 4, rows[row], enabled ? ink : muted);
@@ -3471,7 +3486,7 @@ static int contains(const char *a, const char *b) {
     return 0;
 }
 
-enum AppId { APP_FILES, APP_SETTINGS, APP_TERMINAL, APP_EDITOR, APP_EXPLORER, APP_TRASH, APP_TASK, APP_GAME };
+enum AppId { APP_FILES, APP_SETTINGS, APP_TERMINAL, APP_EDITOR, APP_EXPLORER, APP_TRASH, APP_TASK, APP_GAME, APP_FIREFOX };
 typedef struct {
     enum AppId id;
     int icon;
@@ -3485,6 +3500,9 @@ static int apps_list(AppEntry *result) {
         {APP_TERMINAL, 2, L(TERMINAL), "terminal shell 终端"},
         {APP_EDITOR, 5, L(EDITOR), "editor notes text 编辑器"},
         {APP_EXPLORER, 4, "MayOS Explorer", "browser explorer 浏览器"},
+#ifdef MAYOS_LINUX
+        {APP_FIREFOX, 4, "Firefox", "firefox browser 浏览器"},
+#endif
 #ifdef MAYOS_TASK_MANAGER
         {APP_TASK, 11, "MayOS Task Manager", "taskmgr task manager 任务管理器"},
 #endif
@@ -3497,10 +3515,8 @@ static int apps_list(AppEntry *result) {
     for (unsigned i = 0; i < sizeof(apps) / sizeof(apps[0]); i++) {
         AppEntry entry = apps[i];
 #ifdef MAYOS_LINUX
-        if (entry.id == APP_EXPLORER && platform_browser_ready()) {
-            entry.name = "Firefox";
-            entry.keywords = "firefox browser 浏览器";
-        }
+        if (entry.id == APP_FIREFOX && !platform_browser_ready()) continue;
+        if (entry.id == APP_EXPLORER && platform_browser_ready()) continue;
 #endif
         if (contains(entry.keywords, search) || contains(entry.name, search)) result[count++] = entry;
     }
@@ -3548,11 +3564,16 @@ static void launch_app(enum AppId id) {
     case APP_EXPLORER:
 #ifdef MAYOS_LINUX
         if (platform_browser_ready()) {
-            if (!platform_browser_open()) notify("Firefox 启动失败");
+            launch_app(APP_FIREFOX);
             break;
         }
 #endif
         raise_window(4);
+        break;
+    case APP_FIREFOX:
+#ifdef MAYOS_LINUX
+        if (!platform_browser_open()) notify(pointer_label("Firefox 启动失败", "Could not launch Firefox"));
+#endif
         break;
     case APP_TRASH:
         folder = 3;
@@ -4274,10 +4295,18 @@ static void left_click(void) {
         return;
     }
     if (dock_popup >= 0) {
-        int id = dock_popup - 1, x = dock_popup_left(dock_popup);
+        int item = dock_popup, x = dock_popup_left(dock_popup);
         dock_popup = -1;
         if (x >= 0 && inside(mx, my, x + 4, DOCK_TOP - 104, 174, 90)) {
             int row = (my - (DOCK_TOP - 104)) / 30;
+#ifdef MAYOS_LINUX
+            if (item == DOCK_FIREFOX) {
+                if (row == 0) launch_app(APP_FIREFOX);
+                else platform_browser_window_action(row == 2);
+                return;
+            }
+#endif
+            int id = item - 1;
             if (row == 0) raise_window(id);
             else if (windows[id].open && row == 1 && !windows[id].min) minimize_window(id);
             else if (windows[id].open && row == 2) close_window(id);
@@ -4297,6 +4326,7 @@ static void left_click(void) {
         case DOCK_EXPLORER: launch_app(APP_EXPLORER); break;
         case DOCK_TASK: launch_app(APP_TASK); break;
         case DOCK_TRASH: launch_app(APP_TRASH); break;
+        case DOCK_FIREFOX: launch_app(APP_FIREFOX); break;
         }
         return;
     }
@@ -4646,7 +4676,7 @@ static void right_click(void) {
         return;
     int item = dock_hit(mx, my);
     dock_popup = -1;
-    if (item > DOCK_LAUNCHER && item < DOCK_TRASH) {
+    if ((item > DOCK_LAUNCHER && item < DOCK_TRASH) || item == DOCK_FIREFOX) {
         dock_popup = item;
         active_menu = menu_row = -1;
         context_open = start_open = top_panel = 0;

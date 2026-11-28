@@ -7,7 +7,7 @@ if [[ $EUID != 0 || $# != 1 ]]; then
 fi
 packages=systemd-sysv,udev,kmod,dbus,linux-image-amd64,initramfs-tools
 packages+=,xserver-xorg-core,xserver-xorg-input-libinput,xserver-xorg-video-fbdev,openbox,xauth
-packages+=,firefox-esr,fonts-dejavu-core,ca-certificates,python3,systemd-resolved,grub-common,e2fsprogs,curl
+packages+=,fonts-dejavu-core,ca-certificates,python3,systemd-resolved,grub-common,e2fsprogs,curl
 packages+=,util-linux,util-linux-extra,fdisk,dosfstools,sudo
 exec mmdebstrap --mode=root --variant=minbase --architectures=amd64 \
     --aptopt='APT::Install-Recommends "false"' \

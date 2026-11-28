@@ -14,6 +14,7 @@ source_dir=$(dirname "$(realpath "$0")")
 [[ $release =~ ^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+|-pre[0-9]+)?$ ]]
 install -D -m 0755 "$desktop" "$root/usr/bin/mayos-desktop"
 install -D -m 0755 "$source_dir/disk.py" "$root/usr/sbin/mayos-linux-update"
+install -D -m 0755 "$source_dir/install-firefox" "$root/usr/sbin/mayos-install-firefox"
 for file in start-desktop desktop-session mount-home; do
     install -D -m 0755 "$source_dir/$file" "$root/usr/lib/mayos/$file"
 done

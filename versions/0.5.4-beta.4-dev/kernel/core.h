@@ -63,6 +63,9 @@ int platform_install_start(const char *url, const char *digest, u32 bytes, const
 int platform_fastfetch(char *destination, int capacity);
 int platform_browser_ready(void);
 int platform_browser_open(void);
+/* 0: closed, 1: running, 2: focused. */
+int platform_browser_state(void);
+void platform_browser_window_action(int close);
 void platform_idle(void);
 #else
 static inline const char *platform_kernel(void) { return "MayKernel x86_64 (custom)"; }

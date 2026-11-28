@@ -116,6 +116,8 @@ void serial(const char *text) {
 #else
 int platform_browser_ready(void) { return 0; }
 int platform_browser_open(void) { return 0; }
+int platform_browser_state(void) { return 0; }
+void platform_browser_window_action(int close) { (void)close; }
 #endif
 
 static void startup_kernel_log(void) {

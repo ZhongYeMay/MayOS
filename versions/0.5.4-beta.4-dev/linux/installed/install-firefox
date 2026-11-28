@@ -1,0 +1,19 @@
+#!/bin/sh
+# Install the Debian Firefox ESR system application on an installed MayOS Linux64.
+set -eu
+
+if [ "$(id -u)" != 0 ]; then
+    echo 'Run this installer with sudo.' >&2
+    exit 1
+fi
+if [ ! -s /etc/mayos-linux-release ] ||
+    ! grep -Eq '(^| )mayos\.slot=[AB]( |$)' /proc/cmdline ||
+    ! mountpoint -q /home; then
+    echo 'Firefox requires an installed MayOS Linux64 system with its user-data partition mounted.' >&2
+    exit 1
+fi
+
+apt-get -o APT::Update::Error-Mode=any update
+apt-get --no-install-recommends install -y firefox-esr
+test -x /usr/bin/firefox-esr
+echo 'Firefox ESR is installed. Open Firefox from Launchpad or the Dock.'
