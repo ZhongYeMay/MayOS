@@ -1,0 +1,59 @@
+#!/bin/busybox sh
+set -eu
+export PATH=/bin
+/bin/busybox --install -s /bin
+mount -t devtmpfs devtmpfs /dev
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+exec </dev/console >/dev/console 2>&1
+
+stop() {
+    printf '\n%s\n' "$1"
+    sync
+    poweroff -f
+    while :; do sleep 30; done
+}
+
+printf '\nMayOS Linux64  |  Offline installer\n'
+while IFS= read -r module; do
+    insmod "/modules/$module" || stop "Could not load installation driver $module."
+done </modules/order
+mkdir /media /payload /system
+found=
+for attempt in $(seq 1 20); do
+    for node in /sys/class/block/*; do
+        case "${node##*/}" in
+            ram*|loop*|fd*|zram*) continue ;;
+        esac
+        device=/dev/${node##*/}
+        if [ -b "$device" ] && mount -t iso9660 -o ro,nodev,nosuid,noexec "$device" /media 2>/dev/null; then
+            if [ -f /media/MAYOS_LINUX64_INSTALLER ] && [ -s /media/system.squashfs ]; then
+                found=1
+                break 2
+            fi
+            umount /media
+        fi
+    done
+    sleep 1
+done
+[ "$found" = 1 ] || stop 'MayOS installation media was not detected.'
+mount -t squashfs -o loop,ro,nodev,nosuid,noexec /media/system.squashfs /payload ||
+    stop 'Could not mount the compressed system payload.'
+[ -f /payload/root.img ] || stop 'The system image is missing from the payload.'
+loop=$(losetup -f) || stop 'No loop device is available for the system image.'
+losetup -r "$loop" /payload/root.img || stop 'Could not attach the system image.'
+if ! mount -t ext4 -o ro,noload,nodev,nosuid "$loop" /system; then
+    dmesg | tail -15
+    stop 'Could not mount the system image.'
+fi
+mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /system/tmp
+mount -o bind /payload /system/run
+mount -o bind /media /system/mnt
+mount -o bind /dev /system/dev
+mount -o bind /proc /system/proc
+mount -o bind /sys /system/sys
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+if /bin/busybox setsid /bin/busybox cttyhack /bin/busybox chroot /system /bin/sh /mnt/install; then
+    stop 'Installation complete. Remove the installation media, then power the computer on.'
+fi
+stop 'Installer closed. Power on to retry.'

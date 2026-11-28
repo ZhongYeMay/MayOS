@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+printf '\n  MayOS Linux64 %s\n' "$(cat /etc/mayos-linux-release)"
+printf '  Empty target disk only. Firefox ESR can be installed later.\n\n'
+lsblk -d -e 7,11 -o NAME,SIZE,MODEL,TRAN,RO
+printf '\nTarget disk path (for example /dev/vda), or Enter to exit: '
+IFS= read -r target
+[ -n "$target" ] || exit 1
+printf 'Type INSTALL %s to confirm: ' "$target"
+IFS= read -r confirmation
+[ "$confirmation" = "INSTALL $target" ] || exit 1
+IFS= read -r digest </mnt/root.sha256
+exec python3 /mnt/disk.py install-media --media /mnt --bundle /run/root.img \
+    --sha256 "$digest" --target "$target" --confirm "$target"

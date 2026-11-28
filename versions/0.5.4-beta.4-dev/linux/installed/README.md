@@ -40,3 +40,21 @@ sudo mayos-linux-update confirm
 ```
 
 在试启动的系统内确认才会切换默认槽。不确认时，下一次启动回到旧槽。若要清除未确认的试用状态，从旧槽启动并运行 `sudo mayos-linux-update discard`。升级写入并校验备用系统分区，用户数据位于独立的 `/home` 分区。暂存要求可信发布页提供的 SHA-256。
+
+## 构建离线安装 ISO
+
+先用上面的打包步骤生成未压缩的 `root.img`。安装构建依赖
+`grub-efi-amd64-bin`、`grub-common`、`xorriso`、`mtools`、
+`squashfs-tools`、`e2fsprogs` 及 GRUB 主题所需字体，然后运行：
+
+```sh
+python3 scripts/linux_installed_iso.py --root-image /path/to/root.img \
+  --busybox /path/to/static-x86_64-busybox \
+  --output MayOS-Linux64-No-Firefox.iso
+```
+
+ISO 面向 x86_64 UEFI（关闭 Secure Boot），内含离线安装程序和 Linux64
+系统。安装程序只接受完全空白的整块目标磁盘，要求 512 字节逻辑扇区和至少
+4.1 GiB 容量。QEMU 可使用 OVMF，从光驱启动 ISO 并挂载另一块空白虚拟硬盘。
+输入磁盘路径，再输入安装确认和自设的本地管理员密码。安装完成后移除 ISO，
+从目标硬盘启动。浏览器可在启动后按需安装。

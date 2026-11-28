@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Provision a fresh UEFI MayOS Linux disk or manage its A/B upgrade."""
 import argparse
+from contextlib import nullcontext
 import fcntl
 import getpass
 import gzip
@@ -9,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import stat
 import sys
 import subprocess
@@ -45,14 +47,15 @@ def version(path):
     return tuple(map(int, (major, minor, patch))) + (("pre", "beta.", None).index(kind), int(number or 0))
 
 
-def verified(bundle, expected):
+def verified(bundle, expected, *, compressed=True):
     if not re.fullmatch("[0-9a-f]{64}", expected):
         raise ValueError("expected a lowercase SHA-256 from the release")
     fd = os.open(bundle, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size < SLOT_SIZE:
-            raise ValueError("expected a regular gzip-compressed system image")
+        valid_size = 0 < info.st_size < SLOT_SIZE if compressed else info.st_size == SLOT_SIZE
+        if not stat.S_ISREG(info.st_mode) or not valid_size:
+            raise ValueError("unexpected system image type or size")
         with os.fdopen(os.dup(fd), "rb") as stream:
             if hashlib.file_digest(stream, "sha256").hexdigest() != expected:
                 raise ValueError("system image SHA-256 mismatch")
@@ -74,13 +77,13 @@ class VerifiedStream:
         return data
 
 
-def copy_slot(payload, destination, expected, offset=0, *, sparse=False):
+def copy_slot(payload, destination, expected, offset=0, *, sparse=False, compressed=True):
     """Write exactly one complete slot and verify its readback."""
     hasher = hashlib.sha256()
     count = 0
     with os.fdopen(os.dup(payload), "rb") as stream:
         checked = VerifiedStream(stream)
-        with gzip.GzipFile(fileobj=checked, mode="rb") as image:
+        with (gzip.GzipFile(fileobj=checked, mode="rb") if compressed else nullcontext(checked)) as image:
             destination.seek(offset)
             for block in iter(lambda: image.read(MIB), b""):
                 count += len(block)
@@ -234,6 +237,124 @@ def copy_small(source, destination, offset):
                 destination.write(block)
 
 
+def partition_image(path, capacity, ids):
+    starts = []
+    start = MIB
+    table = ["label: gpt", f"label-id: {ids[0]}", "unit: sectors", ""]
+    for name, length, guid, kind in zip(NAMES, (ESP_SIZE, SLOT_SIZE, SLOT_SIZE, DATA_SIZE),
+                                         ids[1:], (ESP_TYPE, LINUX_TYPE, LINUX_TYPE, LINUX_TYPE)):
+        table.append(f"start={start // SECTOR},size={length // SECTOR},type={kind},uuid={guid},name={name}")
+        starts.append(start)
+        start += length
+    with path.open("r+b") as image:
+        image.truncate(capacity)
+    run("sfdisk", path, input="\n".join(table) + "\n", text=True, stdout=subprocess.DEVNULL)
+    run("sfdisk", "--verify", path, stdout=subprocess.DEVNULL)
+    return starts
+
+
+def media_esp(work, ids, media):
+    volume = work / "esp.img"
+    with volume.open("xb") as image:
+        image.truncate(ESP_SIZE)
+    run("mkfs.fat", "-F", "32", "-i", ids[1].hex[:8], "-n", "MAYOSEFI",
+        volume, stdout=subprocess.DEVNULL)
+    mount = work / "esp"
+    mount.mkdir()
+    run("mount", "-o", "loop,nosuid,nodev,noexec", volume, mount)
+    try:
+        shutil.copytree(media / "disk-efi", mount / "EFI")
+        shutil.copytree(media / "boot" / "grub" / "fonts", mount / "boot" / "grub" / "fonts")
+        shutil.copytree(media / "boot" / "grub" / "themes", mount / "boot" / "grub" / "themes")
+        shutil.copyfile(media / "boot" / "grub" / "menu.cfg", mount / "boot" / "grub" / "menu.cfg")
+        tables = mount / ENV_PATH
+        tables.mkdir()
+        (tables / f"disk-{ids[0]}").write_text(f"{ids[0]}\n")
+        (tables / "grub.cfg").write_text(boot_config(ids, themed=True))
+        create_env(tables / "active.env", active_slot="A")
+        create_env(tables / "trial.env")
+    finally:
+        run("umount", mount)
+    return volume
+
+
+def empty_target(name, confirmed):
+    if os.geteuid() != 0:
+        raise ValueError("writing a physical disk requires local administrator access")
+    target = Path(name).resolve(strict=True)
+    if str(target) != confirmed or target.parent != Path("/dev"):
+        raise ValueError("confirm the exact resolved whole-disk device path")
+    if output("lsblk", "-nr", "-o", "TYPE", target) != "disk":
+        raise ValueError("destination must be a whole disk with no partitions")
+    if output("blockdev", "--getss", target) != str(SECTOR):
+        raise ValueError("the preview requires 512-byte logical sectors")
+    capacity = int(output("blockdev", "--getsize64", target))
+    if capacity < TOTAL:
+        raise ValueError("destination needs at least 4.1 GiB")
+    return target, capacity
+
+
+def ensure_empty(disk, target):
+    if not stat.S_ISBLK(os.fstat(disk.fileno()).st_mode):
+        raise ValueError("destination is not a block device")
+    print(f"Scanning {target} for existing data before installation", flush=True)
+    for block in iter(lambda: disk.read(4 * MIB), b""):
+        if block.strip(b"\0"):
+            raise ValueError("destination has existing data; left untouched")
+
+
+def verify_partition(source, disk, offset):
+    disk.seek(offset)
+    with source.open("rb") as image:
+        for block in iter(lambda: image.read(MIB), b""):
+            if disk.read(len(block)) != block:
+                raise OSError(f"{source.name} readback failed")
+
+
+def install_media(args):
+    target, capacity = empty_target(args.target, args.confirm)
+    payload = verified(args.bundle, args.sha256, compressed=False)
+    ids = [uuid.uuid4() for _ in range(5)]
+    try:
+        fd = os.open(target, os.O_RDWR | os.O_EXCL | os.O_CLOEXEC)
+        with os.fdopen(fd, "r+b") as disk, tempfile.TemporaryDirectory() as scratch:
+            ensure_empty(disk, target)
+            password = admin_hash()
+            work = Path(scratch)
+            table = work / "gpt.img"
+            table.touch()
+            starts = partition_image(table, capacity, ids)
+            esp = media_esp(work, ids, args.media)
+            home = data_image(work, password)
+            print("Writing and verifying the MayOS Linux64 system", flush=True)
+            copy_slot(payload, disk, args.sha256, starts[1], sparse=True, compressed=False)
+            copy_small(esp, disk, starts[0])
+            copy_small(home, disk, starts[3])
+            disk.flush()
+            os.fsync(fd)
+            verify_partition(esp, disk, starts[0])
+            verify_partition(home, disk, starts[3])
+            # Publish the partition table after the contents have been verified.
+            with table.open("rb") as image:
+                front = image.read(MIB)
+                image.seek(-MIB, os.SEEK_END)
+                back = image.read(MIB)
+            disk.seek(-MIB, os.SEEK_END)
+            disk.write(back)
+            disk.seek(0)
+            disk.write(front)
+            disk.flush()
+            os.fsync(fd)
+            for offset, block in ((0, front), (capacity - MIB, back)):
+                disk.seek(offset)
+                if disk.read(len(block)) != block:
+                    raise OSError("GPT readback failed")
+    finally:
+        os.close(payload)
+    run("sfdisk", "--verify", target, stdout=subprocess.DEVNULL)
+    print(f"MayOS Linux installed on {target}", flush=True)
+
+
 def provision(args):
     path = Path(args.output).absolute()
     if path.exists() or path.is_symlink():
@@ -249,19 +370,10 @@ def provision(args):
             esp = build_esp(work, ids)
             home = data_image(work, password)
             descriptor = os.open(path, flags, 0o600)
+            os.close(descriptor)
             created = True
-            with os.fdopen(descriptor, "r+b") as disk:
-                disk.truncate(TOTAL)
-                starts, lengths = [], (ESP_SIZE, SLOT_SIZE, SLOT_SIZE, DATA_SIZE)
-                start = MIB
-                table = ["label: gpt", f"label-id: {ids[0]}", "unit: sectors", ""]
-                for name, length, guid, kind in zip(NAMES, lengths, ids[1:],
-                                                     (ESP_TYPE, LINUX_TYPE, LINUX_TYPE, LINUX_TYPE)):
-                    table.append(f"start={start // SECTOR},size={length // SECTOR},type={kind},uuid={guid},name={name}")
-                    starts.append(start)
-                    start += length
-                disk.flush()
-                run("sfdisk", path, input="\n".join(table) + "\n", text=True, stdout=subprocess.DEVNULL)
+            starts = partition_image(path, TOTAL, ids)
+            with path.open("r+b") as disk:
                 copy_small(esp, disk, starts[0])
                 copy_slot(payload, disk, args.sha256, starts[1], sparse=True)
                 copy_small(home, disk, starts[3])
@@ -278,16 +390,7 @@ def provision(args):
 
 
 def deploy(args):
-    if os.geteuid() != 0:
-        raise ValueError("writing a physical disk requires local administrator access")
-    target = Path(args.target).resolve(strict=True)
-    if str(target) != args.confirm or target.parent != Path("/dev"):
-        raise ValueError("confirm the exact resolved whole-disk device path")
-    if output("lsblk", "-nr", "-o", "TYPE", target) != "disk":
-        raise ValueError("destination must be a whole disk with no partitions")
-    if output("blockdev", "--getss", target) != str(SECTOR):
-        raise ValueError("the preview requires 512-byte logical sectors")
-    capacity = int(output("blockdev", "--getsize64", target))
+    target, capacity = empty_target(args.target, args.confirm)
     source = Path(args.image)
     with source.open("rb") as image:
         info = os.fstat(image.fileno())
@@ -300,12 +403,7 @@ def deploy(args):
             raise ValueError("installer disk SHA-256 mismatch")
         fd = os.open(target, os.O_RDWR | os.O_EXCL | os.O_CLOEXEC)
         with os.fdopen(fd, "r+b") as disk:
-            if not stat.S_ISBLK(os.fstat(fd).st_mode):
-                raise ValueError("destination is not a block device")
-            print(f"Scanning {target} for existing data before installation", flush=True)
-            for block in iter(lambda: disk.read(4 * MIB), b""):
-                if block.strip(b"\0"):
-                    raise ValueError("destination has existing data; left untouched")
+            ensure_empty(disk, target)
             disk.seek(0)
             image.seek(0)
             actual = hashlib.sha256()
@@ -477,14 +575,18 @@ def main():
     target.add_argument("--target", required=True)
     target.add_argument("--confirm", required=True)
     target.add_argument("--sha256", required=True)
+    media = actions.add_parser("install-media", help="install the booted Linux64 ISO onto an empty disk")
+    media.add_argument("--media", type=Path, required=True)
+    media.add_argument("--target", required=True)
+    media.add_argument("--confirm", required=True)
     for name in ("status", "confirm", "discard", "stage"):
         actions.add_parser(name)
-    for command in (create, actions.choices["stage"]):
+    for command in (create, media, actions.choices["stage"]):
         command.add_argument("--bundle", type=Path, required=True)
         command.add_argument("--sha256", required=True)
     args = parser.parse_args()
     try:
-        {"create": provision, "deploy": deploy}.get(args.action, upgrade)(args)
+        {"create": provision, "deploy": deploy, "install-media": install_media}.get(args.action, upgrade)(args)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"MayOS Linux: {error}\n")
 
