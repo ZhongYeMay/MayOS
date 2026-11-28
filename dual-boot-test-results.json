@@ -1,0 +1,29 @@
+{
+  "iso": "mayos-dual.iso",
+  "iso_sha256": "241c6ab90b4887bcdf4820b07b71fc746042e078f0c9c4ac2099882090d5603b",
+  "tested_at_utc": "2026-11-28T10:28:48.382258+00:00",
+  "kernel_release": "7.3.1",
+  "qemu": "QEMU emulator version 10.0.13 (Debian 1:10.0.13+ds-0+deb13u1)",
+  "tests": [
+    "grub_default_custom",
+    "custom_desktop",
+    "custom_allocator",
+    "custom_mayfs_write",
+    "custom_mayfs_cold_boot",
+    "grub_linux_selection",
+    "linux_uname",
+    "linux_mounts",
+    "linux_ram_files",
+    "linux_pid1_init",
+    "linux_gui_process",
+    "linux_gui_ps2_keyboard",
+    "linux_gui_ram_files",
+    "linux_gui_mouse",
+    "linux_gui_editor_ctrl_s",
+    "linux_shell_respawn",
+    "linux_clean_shutdown",
+    "mayfs_unchanged_by_linux"
+  ],
+  "mayfs_sha256_before_linux": "11217ab9318082968c393a15d731452f390270d068ba29bb6c10f8da60b9ee8b",
+  "mayfs_sha256_after_linux": "11217ab9318082968c393a15d731452f390270d068ba29bb6c10f8da60b9ee8b"
+}

@@ -1,0 +1,1 @@
+241c6ab90b4887bcdf4820b07b71fc746042e078f0c9c4ac2099882090d5603b  MayOS-0.5.4-beta.3-DualKernel-Live-x86_64.iso

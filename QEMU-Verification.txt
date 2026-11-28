@@ -1,0 +1,15 @@
+MayOS-0.5.4-beta.3-DualKernel-Live-x86_64.iso: OK
+PASS: Dark terminal has a single-pixel border, intact rounded bottom corners and unchanged pixels outside
+PASS: Light terminal has no shadow and preserves both bottom corners
+PASS: Maximize, restore, minimize and close remain functional; Settings, Files and Task Manager use the updated frame
+PASS: five Dock shortcuts, first click through an open menu, application restore/minimize/close
+PASS: same ISO boots the custom kernel by default; desktop and MayFS writes work
+PASS: custom-kernel cold boot reads the persisted test file
+PASS: GRUB Linux selection boots 7.3.1; native GUI/PS2, serial shell, proc/sys/dev, GUI and Linux RAM files, init respawn and shutdown work
+PASS: Linux leaves the complete attached MayFS disk byte-for-byte unchanged
+All dual-boot tests passed.
+PASS: OVMF -> EFI GRUB -> native x86_64 custom desktop; memory map, allocation, input and MayFS
+PASS: independent UEFI cold boot reads persisted custom-kernel file
+PASS: EFI GRUB -> Linux 7.3.1; real framebuffer desktop, input, serial shell and shutdown
+PASS: EFI rescue entry starts a usable shell without the desktop process
+All requested UEFI tests passed.
