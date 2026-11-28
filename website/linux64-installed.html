@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#050506">
-<meta name="description" content="MayOS Linux64 硬盘预览版。观看 QEMU 实录，下载 UEFI 安装包和升级指南。">
+<meta name="description" content="MayOS Linux64 硬盘预览版。获取 UEFI 安装包、Firefox ESR 按需安装命令和 QEMU 实录。">
 <title>Linux64 硬盘版 · MayOS</title>
 <link rel="stylesheet" href="style.css"><script src="site.js" defer></script>
 
@@ -12,7 +12,7 @@
 <meta property="og:site_name" content="MayOS">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:title" content="Linux64 硬盘版 · MayOS">
-<meta property="og:description" content="MayOS Linux64 硬盘预览版。观看 QEMU 实录，下载 UEFI 安装包和升级指南。">
+<meta property="og:description" content="MayOS Linux64 硬盘预览版。获取 UEFI 安装包、Firefox ESR 按需安装命令和 QEMU 实录。">
 <meta property="og:url" content="https://zhongyemay.github.io/MayOS/linux64-installed.html">
 <meta property="og:image" content="https://zhongyemay.github.io/MayOS/media/mayos-share-wordmark.png">
 <meta property="og:image:type" content="image/png">
@@ -21,7 +21,7 @@
 <meta property="og:image:alt" content="黑色背景上的白色 MayOS 字标">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Linux64 硬盘版 · MayOS">
-<meta name="twitter:description" content="MayOS Linux64 硬盘预览版。观看 QEMU 实录，下载 UEFI 安装包和升级指南。">
+<meta name="twitter:description" content="MayOS Linux64 硬盘预览版。获取 UEFI 安装包、Firefox ESR 按需安装命令和 QEMU 实录。">
 <meta name="twitter:image" content="https://zhongyemay.github.io/MayOS/media/mayos-share-wordmark.png">
 <meta name="twitter:image:alt" content="黑色背景上的白色 MayOS 字标">
 </head>
@@ -30,12 +30,33 @@
 <main id="main">
 <section class="page-hero container">
 <h1>MayOS Linux64 硬盘版</h1>
-<p class="lead">0.5.4 Beta 4 开发预览。直接从 ext4 系统分区启动，桌面应用可从启动台打开 Firefox ESR。</p>
-<div class="specs"><span class="chip">x86_64 UEFI</span><span class="chip">Linux 6.12.118 LTS</span><span class="chip">Firefox ESR 153.8.0</span><span class="chip">A/B 原地升级</span></div>
-<div class="actions"><a class="btn blue" href="#install">获取硬盘安装包</a><a class="btn secondary" href="#recording">观看 QEMU 实录</a></div>
+<p class="lead">0.5.4 Beta 4 开发预览。直接从 ext4 系统分区启动，支持 A/B 原地升级。本页提供 Firefox ESR 按需安装命令与最新 QEMU 实录。</p>
+<div class="specs"><span class="chip">x86_64 UEFI</span><span class="chip">Linux 6.12.118 LTS</span><span class="chip">Firefox ESR 按需安装</span><span class="chip">A/B 原地升级</span></div>
+<div class="actions"><a class="btn blue" href="#install">获取硬盘安装包</a><a class="btn secondary" href="#firefox">安装 Firefox ESR</a><a class="btn secondary" href="#recording">观看 QEMU 实录</a></div>
 </section>
 <section class="container">
+<article class="download-panel" id="firefox">
+<h2>按需安装 Firefox ESR</h2>
+<p>先启动已安装的 MayOS Linux64 硬盘系统。按 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F2</kbd>，登录本地账户并执行以下两条命令。</p>
+<pre><code>curl -fLo install-firefox \
+  https://raw.githubusercontent.com/ZhongYeMay/MayOS/32dd4032f9044656cbe4d96bc0a3a6d241d0e520/versions/0.5.4-beta.4-dev/linux/installed/install-firefox
+sudo sh ./install-firefox</code></pre>
+<p>安装脚本从 GitHub 下载，Firefox 软件包由 APT 从 Debian 签名仓库获取。开发分支构建的基础镜像按需安装 Firefox。下方可下载的 Beta 4 硬盘镜像已经包含 Firefox ESR，可直接从启动台打开。</p>
+<p>开发分支构建安装后，Firefox 会出现在启动台和 Dock。浏览器在当前的 Linux64 桌面运行，窗口可还原并拖动边缘调整大小。引导菜单里的 A/B 是同一个 Linux64 系统的升级与回退槽，两个槽共用 <code>/home</code> 中的浏览器配置。切换到尚未安装 Firefox 的槽时可以重新执行安装命令。</p>
+<div class="actions"><a class="btn secondary" href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/32dd4032f9044656cbe4d96bc0a3a6d241d0e520/versions/0.5.4-beta.4-dev/linux/installed/install-firefox">下载安装脚本</a><a class="link" href="https://github.com/ZhongYeMay/MayOS/blob/32dd4032f9044656cbe4d96bc0a3a6d241d0e520/versions/0.5.4-beta.4-dev/linux/installed/README.md#安装-firefox">阅读开发分支说明</a></div>
+</article>
 <article class="video-card" id="recording">
+<div class="video-wrap video-wrap-linux64"><video controls playsinline preload="metadata" poster="media/MayOS-Firefox-Launchpad.png" aria-label="MayOS Linux64 Firefox 按需安装的 QEMU 实录"><source src="media/MayOS-Beta4-Firefox-QEMU.mp4" type="video/mp4"></video></div>
+<div class="video-body"><h2>Firefox 按需安装实录</h2>
+<p>2 分 38 秒的 QEMU 实录。可看到 MayOS GRUB 菜单的 5 秒倒计时、Linux64 从硬盘启动、命令行安装 Firefox、启动台打开浏览器，以及从 Dock 恢复窗口。测试网页由宿主机提供。</p>
+<div class="video-foot"><a class="btn secondary" href="media/MayOS-Beta4-Firefox-QEMU.mp4" download>下载 MP4</a><a class="link" href="#upgrade-recording">观看此前的原地升级实录</a></div></div>
+</article>
+<div class="image-gallery" aria-label="Firefox 按需安装实测截图">
+<a href="media/MayOS-Firefox-GRUB.png"><img src="media/MayOS-Firefox-GRUB.png" alt="黑底 MayOS GRUB 菜单，列出 Linux64 系统 A 与 B" width="800" height="600" loading="lazy"><span>GRUB 引导菜单</span></a>
+<a href="media/MayOS-Firefox-Launchpad.png"><img src="media/MayOS-Firefox-Launchpad.png" alt="MayOS 应用启动台与 Dock 中的 Firefox 应用" width="1280" height="800" loading="lazy"><span>启动台与 Dock</span></a>
+<a href="media/MayOS-Firefox-Web.png"><img src="media/MayOS-Firefox-Web.png" alt="Firefox 在 MayOS Linux64 中显示本地测试网页" width="1280" height="800" loading="lazy"><span>Firefox 网页实测</span></a>
+</div>
+<article class="video-card" id="upgrade-recording">
 <div class="video-wrap video-wrap-linux64"><video controls playsinline preload="metadata" poster="media/MayOS-Linux64-Beta4-Firefox.png" aria-label="MayOS Linux64 硬盘启动与升级实录"><source src="media/MayOS-Linux64-Beta4-Disk-Boot-Firefox-Upgrade.mp4" type="video/mp4"></video></div>
 <div class="video-body"><h2>硬盘启动、Firefox 与原地升级实录</h2>
 <p>视频使用 QEMU 和 OVMF，从同一块虚拟硬盘记录。升级演示使用验收专用的 Beta 5 测试包，包含试启动、自动回退及确认后的冷启动。为便于观看，视频剪去了部分等待时间。</p>
@@ -78,7 +99,7 @@ qemu-system-x86_64 -machine pc -m 2048 -smp 4 -vga std -boot c \
 sudo mayos-linux-update stage --bundle /path/to/new-root.img.gz --sha256 &lt;发布页的 SHA-256&gt;
 sudo reboot
 sudo mayos-linux-update confirm</code></pre>
-<p>在试启动的新系统中确认后，才会切换默认启动槽。试用后直接重启会返回旧槽。Beta 4 是当前公开的安装镜像，视频中的 Beta 5 仅用于验收。</p>
+<p>在试启动的新系统中确认后，才会切换默认启动槽。试用后直接重启会返回旧槽。Beta 4 是当前公开的安装镜像，原地升级实录中的 Beta 5 仅用于验收。</p>
 </article>
 </section>
 
