@@ -1,0 +1,26 @@
+MayOS 0.5.4-beta.2 QEMU release verification
+Source commit 73a0d3aa3b2a3d1d57a2de4d0f840c815dda198c
+
+85d47818aa58e37309356b5f3cbc6c9f82904e8e3254c3503df6968a8fbfb467  MayOS-0.5.4-beta.2-DualKernel-Live-x86_64.iso
+fd32bc175e17b546425d3c7f6a8642f7b91a3afcf7deb02df827034ef2c65c00  MayOS-0.5.4-beta.2-Installer-x86_64.iso
+94d66fd58deb309b2afd8b529dfb6a3e89f4b887a15af415b3db5a2b65a2485a  MayOS-0.5.4-beta.2-MayKernel64-x86_64.iso
+debb6044991adfbdeac4c869be2792f322a0dcd34d9e801bafe1c4d320277417  MayOS-0.5.4-beta.2-MayKernel64-x86_64.elf
+
+PASS: same ISO boots the custom kernel by default; desktop and MayFS writes work
+PASS: custom-kernel cold boot reads the persisted test file
+PASS: GRUB Linux selection boots 7.3.1; native GUI/PS2, serial shell, proc/sys/dev, GUI and Linux RAM files, init respawn and shutdown work
+PASS: Linux leaves the complete attached MayFS disk byte-for-byte unchanged
+All dual-boot tests passed.
+PASS: OVMF -> EFI GRUB -> native x86_64 custom desktop; memory map, allocation, input and MayFS
+PASS: independent UEFI cold boot reads persisted custom-kernel file
+PASS: EFI GRUB -> Linux 7.3.1; real framebuffer desktop, input, serial shell and shutdown
+PASS: EFI rescue entry starts a usable shell without the desktop process
+All requested UEFI tests passed.
+PASS: installed to AHCI at 512 bytes per sector while the other disk remained byte-identical
+PASS: AHCI installed system cold-booted twice without ISO and retained its file
+PASS: cloned GPT disk identity fell back to RAM with neither drive mounted
+PASS: installed to NVMe at 512 bytes per sector while the other disk remained byte-identical
+PASS: NVMe installed system cold-booted twice without ISO and retained its file
+PASS: real Linux release worker downloaded Beta ELF over HTTPS and staged it without writing MayFS
+PASS: Beta trial booted once and the next boot returned to pre32; document and MayFS hash preserved
+PASS: Beta offline installer confirmed the verified slot and permanent boot preserved MayFS

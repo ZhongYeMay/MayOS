@@ -1,0 +1,31 @@
+{
+  "tested_at_utc": "2026-11-28T04:08:36.667524+00:00",
+  "iso": "mayos-dual.iso",
+  "iso_sha256": "85d47818aa58e37309356b5f3cbc6c9f82904e8e3254c3503df6968a8fbfb467",
+  "firmware": "x86_64 OVMF; Secure Boot disabled",
+  "ovmf_code_sha256": "624e06de18b4fa535e90db7160d00d3d07d206422b89999bf1e27d920264e4e0",
+  "ovmf_vars_template_sha256": "5d2ac383371b408398accee7ec27c8c09ea5b74a0de0ceea6513388b15be5d1e",
+  "private_vars_per_vm": true,
+  "memory_mib": 512,
+  "kernel_release": "7.3.1",
+  "tests": [
+    "uefi_grub_custom",
+    "uefi_framebuffer",
+    "uefi_memory_map",
+    "uefi_custom_allocator",
+    "uefi_ps2_keyboard",
+    "uefi_mayfs_write",
+    "uefi_mayfs_cold_boot",
+    "uefi_grub_linux",
+    "linux_efi_runtime",
+    "linux_gop_framebuffer",
+    "linux_desktop_process",
+    "linux_desktop_keyboard",
+    "uefi_linux_shutdown",
+    "uefi_linux_rescue_shell",
+    "uefi_linux_preserves_mayfs"
+  ],
+  "qemu": "QEMU emulator version 10.0.13 (Debian 1:10.0.13+ds-0+deb13u1)",
+  "mayfs_sha256_before_linux": "34dc7ecfabded70bb1bb57befa0f5fdb2bec9c78f644bf90488e4b6a96d1cf49",
+  "mayfs_sha256_after_linux": "34dc7ecfabded70bb1bb57befa0f5fdb2bec9c78f644bf90488e4b6a96d1cf49"
+}
