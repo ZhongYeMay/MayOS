@@ -1,0 +1,61 @@
+name: Stage verified Linux64 Beta 4 ISO
+on:
+  push:
+    branches: [publish/linux64-beta4-offline-iso]
+permissions:
+  contents: write
+concurrency:
+  group: linux64-beta4-offline-iso
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'ZhongYeMay/MayOS'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v0.5.4-beta.4
+      ISO: MayOS-0.5.4-beta.4-Linux64-No-Firefox.iso
+      ASSETS: 3d4a863fd712cb99c02db517a89295fb4c7df922
+      ISO_SHA: c71b0580272a22969b65076823af0b93c9f3584cccf9235947efb216805230e2
+    steps:
+      - name: Assemble the tested ISO and verify every download
+        run: |
+          set -eu
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from urllib.request import urlopen
+
+          repository = os.environ["GITHUB_REPOSITORY"]
+          url = f"https://raw.githubusercontent.com/{repository}/{os.environ['ASSETS']}"
+          filename = os.environ["ISO"]
+          checksum = os.environ["ISO_SHA"]
+          with urlopen(f"{url}/manifest.json", timeout=45) as response:
+              manifest = json.load(response)
+          assert manifest["name"] == filename and manifest["sha256"] == checksum
+          total = hashlib.sha256()
+          with open(filename, "xb") as image:
+              for index, part in enumerate(manifest["parts"], 1):
+                  name = f"{filename}.part{index:02}"
+                  assert part["name"] == name
+                  digest = hashlib.sha256()
+                  length = 0
+                  with urlopen(f"{url}/{name}", timeout=90) as response:
+                      for block in iter(lambda: response.read(2**20), b""):
+                          image.write(block)
+                          total.update(block)
+                          digest.update(block)
+                          length += len(block)
+                  assert length == part["bytes"] and digest.hexdigest() == part["sha256"]
+              assert image.tell() == manifest["bytes"] and total.hexdigest() == checksum
+          with open(filename + ".sha256", "w") as sums:
+              sums.write(f"{checksum}  {filename}\n")
+          PY
+          sha256sum -c "$ISO.sha256"
+      - name: Upload to the existing Beta 4 draft
+        run: |
+          set -eu
+          test "$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true
+          gh release upload "$TAG" "$ISO" "$ISO.sha256" --clobber -R "$GITHUB_REPOSITORY"
