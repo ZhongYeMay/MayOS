@@ -1,0 +1,37 @@
+{
+  "name": "MayOS-0.5.4-beta.4-Linux64-No-Firefox.iso",
+  "bytes": 377159680,
+  "parts": [
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-No-Firefox.iso.part01",
+      "bytes": 62914560,
+      "sha256": "d07e6fe38768c3737b918e6998183d400102aba2e44fc274f12ad5e702a4b0e6"
+    },
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-No-Firefox.iso.part02",
+      "bytes": 62914560,
+      "sha256": "76861f5fe8fc94dbc81be1e8234ee425cf520886853bd8f7cfc1710045bfbb82"
+    },
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-No-Firefox.iso.part03",
+      "bytes": 62914560,
+      "sha256": "deda0d9a0cf3adc8c10afb520875642c865c7138e14d345c7ba6449631bca4c2"
+    },
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-No-Firefox.iso.part04",
+      "bytes": 62914560,
+      "sha256": "258331865b4a9237f5517f3e20b776e43e4949ccfd0d39fdb2e39c87e22bf59c"
+    },
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-No-Firefox.iso.part05",
+      "bytes": 62914560,
+      "sha256": "0102ebd3827449d7e5f6ab2d34690a6be7ac369865c519f00a2a0937e2c2f87f"
+    },
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-No-Firefox.iso.part06",
+      "bytes": 62586880,
+      "sha256": "9cd9703eefc4d125d61ce56f848fd4af6053cbb036665711312b7a2d15bed494"
+    }
+  ],
+  "sha256": "d11f02d0a8919215ad91cc21b9090e78beafd2f0eaa29225666f226fe2bd49b0"
+}
