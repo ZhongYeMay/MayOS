@@ -1248,7 +1248,7 @@ static const char *window_menu_name(int id) {
     case 2: return L(TERMINAL);
     case 3: return L(EDITOR);
     case 4: return "MayOS Explorer";
-    default: return id < 0 ? pointer_label("桌面", "Desktop") : windows[id].title;
+    default: return id >= 0 && id < WINDOW_COUNT ? windows[id].title : pointer_label("桌面", "Desktop");
     }
 }
 
