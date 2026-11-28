@@ -21,17 +21,18 @@ def latest_feed(feed):
             continue
         version = release_key(fields[0])
         variant = fields[1]
-        if version is None or variant not in ("maykernel", "dual", "linux"):
+        if version is None or variant not in ("maykernel", "dual", "linux", "maykernel-install"):
             continue
-        target = "maykernel" if variant == "maykernel" else "linux"
+        target = "linux" if variant == "dual" else variant
         if target not in newest or version > newest[target][0]:
             if len(line.encode("ascii")) >= 512:
                 raise ValueError(f"Release line too long: {fields[0]}")
             newest[target] = (version, line)
-    if newest.keys() != {"maykernel", "linux"}:
+    if not {"maykernel", "linux"} <= newest.keys():
         raise ValueError("Missing a MayKernel or Linux release")
-    catalog = "\n".join(("MAYOS_UPDATE_FEED_V1", newest["maykernel"][1],
-                         newest["linux"][1], "MAYOS_UPDATE_FEED_END", ""))
+    variants = ("maykernel", "linux", "maykernel-install")
+    rows = [newest[variant][1] for variant in variants if variant in newest]
+    catalog = "\n".join(("MAYOS_UPDATE_FEED_V1", *rows, "MAYOS_UPDATE_FEED_END", ""))
     if len(catalog.encode("ascii")) > 1700:
         raise ValueError("Latest feed exceeds the smallest fetch budget")
     return catalog
