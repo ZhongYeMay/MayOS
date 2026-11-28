@@ -1,0 +1,4 @@
+85d47818aa58e37309356b5f3cbc6c9f82904e8e3254c3503df6968a8fbfb467  MayOS-0.5.4-beta.2-DualKernel-Live-x86_64.iso
+fd32bc175e17b546425d3c7f6a8642f7b91a3afcf7deb02df827034ef2c65c00  MayOS-0.5.4-beta.2-Installer-x86_64.iso
+94d66fd58deb309b2afd8b529dfb6a3e89f4b887a15af415b3db5a2b65a2485a  MayOS-0.5.4-beta.2-MayKernel64-x86_64.iso
+debb6044991adfbdeac4c869be2792f322a0dcd34d9e801bafe1c4d320277417  MayOS-0.5.4-beta.2-MayKernel64-x86_64.elf
