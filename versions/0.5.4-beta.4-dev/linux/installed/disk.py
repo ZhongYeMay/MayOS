@@ -158,8 +158,9 @@ def create_env(path, **values):
 
 
 def stage_boot_theme(tree):
-    project = Path(__file__).resolve().parents[2]
-    if not (project / "boot/grub/menu.cfg").is_file():
+    project = Path(__file__).resolve().parent.parent.parent
+    if not ((project / "boot/grub/menu.cfg").is_file() and
+            (project / "scripts/dual_iso.py").is_file()):
         return False
     sys.path.insert(0, str(project / "scripts"))
     from dual_iso import stage_menu
