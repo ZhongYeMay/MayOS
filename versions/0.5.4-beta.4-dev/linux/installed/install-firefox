@@ -13,7 +13,18 @@ if [ ! -s /etc/mayos-linux-release ] ||
     exit 1
 fi
 
-apt-get -o APT::Update::Error-Mode=any update
-apt-get --no-install-recommends install -y firefox-esr
+# Keep temporary indexes and package archives on the separate data volume.
+# Only the installed package consumes space in the system slot.
+work=$(mktemp -d /home/.mayos-firefox.XXXXXXXX)
+trap 'rm -rf -- "$work"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+chmod 0755 "$work"
+mkdir -m 0755 "$work/lists" "$work/archives"
+set -- -o "Dir::State::lists=$work/lists" -o "Dir::Cache::archives=$work/archives" \
+    -o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= -o Acquire::Languages=none
+
+apt-get "$@" -o APT::Update::Error-Mode=any update
+DEBIAN_FRONTEND=noninteractive apt-get "$@" --no-install-recommends install -y firefox-esr
 test -x /usr/bin/firefox-esr
 echo 'Firefox ESR is installed. Open Firefox from Launchpad or the Dock.'

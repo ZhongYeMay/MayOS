@@ -28,7 +28,7 @@ curl -fLo install-firefox https://raw.githubusercontent.com/ZhongYeMay/MayOS/fea
 sudo sh ./install-firefox
 ```
 
-脚本通过 APT 安装 Debian 签名仓库中的 Firefox ESR。安装成功后可从启动台或 Dock 打开 Firefox，右键点击 Dock 图标可恢复、最小化或关闭窗口。每个系统槽的应用包各自独立，切换到未安装 Firefox 的槽后可以重新运行脚本。浏览器配置继续保存在共用的 `/home` 中。
+脚本通过 APT 安装 Debian 签名仓库中的 Firefox ESR，临时下载使用独立的用户数据分区，安装完成后自动清理。安装成功后可从启动台或 Dock 打开 Firefox，右键点击 Dock 图标可恢复、最小化或关闭窗口。每个系统槽的应用包各自独立，切换到未安装 Firefox 的槽后可以重新运行脚本。浏览器配置继续保存在共用的 `/home` 中。
 
 ## 原地升级
 
