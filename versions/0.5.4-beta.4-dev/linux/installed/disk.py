@@ -108,10 +108,17 @@ def copy_slot(payload, destination, expected, offset=0, *, sparse=False):
 
 def boot_config(ids):
     disk, esp, a, b, home = (str(v) for v in ids)
-    return f"""serial --unit=0 --speed=115200
+    serial_number = ids[1].hex[:8].upper()
+    fat_uuid = f"{serial_number[:4]}-{serial_number[4:]}"
+    return f"""insmod part_gpt
+insmod fat
+insmod ext2
+insmod regexp
+insmod loadenv
+serial --unit=0 --speed=115200
 terminal_input console serial
 terminal_output console serial
-search --file --set=esp /{ENV_PATH}/disk-{disk}
+search --fs-uuid --set=esp {fat_uuid}
 set root=$esp
 set timeout=5
 set chosen=A
@@ -158,11 +165,12 @@ def build_esp(work, ids):
     create_env(tables / "active.env", active_slot="A")
     create_env(tables / "trial.env")
     run("grub-mkstandalone", "-O", "x86_64-efi", "--locales=", "--fonts=",
+        "--modules=part_gpt fat ext2 search_fs_uuid regexp loadenv linux serial",
         "-o", boot / "BOOTX64.EFI", f"boot/grub/grub.cfg={config}")
     image = work / "esp.img"
     with image.open("xb") as stream:
         stream.truncate(ESP_SIZE)
-    run("mkfs.fat", "-F", "32", "-n", "MAYOSEFI", image, stdout=subprocess.DEVNULL)
+    run("mkfs.fat", "-F", "32", "-i", ids[1].hex[:8], "-n", "MAYOSEFI", image, stdout=subprocess.DEVNULL)
     run("mcopy", "-i", image, "-s", tree / "EFI", tables, "::/")
     return image
 
