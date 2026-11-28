@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#050506">
+<meta name="description" content="MayOS Linux64 硬盘预览版。观看 QEMU 实录，下载 UEFI 安装包和升级指南。">
+<title>Linux64 硬盘版 · MayOS</title>
+<link rel="stylesheet" href="style.css"><script src="site.js" defer></script>
+
+<link rel="canonical" href="https://zhongyemay.github.io/MayOS/linux64-installed.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="MayOS">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:title" content="Linux64 硬盘版 · MayOS">
+<meta property="og:description" content="MayOS Linux64 硬盘预览版。观看 QEMU 实录，下载 UEFI 安装包和升级指南。">
+<meta property="og:url" content="https://zhongyemay.github.io/MayOS/linux64-installed.html">
+<meta property="og:image" content="https://zhongyemay.github.io/MayOS/media/mayos-share-wordmark.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="800">
+<meta property="og:image:alt" content="黑色背景上的白色 MayOS 字标">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Linux64 硬盘版 · MayOS">
+<meta name="twitter:description" content="MayOS Linux64 硬盘预览版。观看 QEMU 实录，下载 UEFI 安装包和升级指南。">
+<meta name="twitter:image" content="https://zhongyemay.github.io/MayOS/media/mayos-share-wordmark.png">
+<meta name="twitter:image:alt" content="黑色背景上的白色 MayOS 字标">
+</head>
+<body><a class="skip" href="#main">跳到主要内容</a>
+<header class="site-header"><div class="container nav-inner"><a class="brand" href="index.html" aria-label="MayOS 首页"><span class="brand-mark">M</span>MayOS</a><nav id="nav" class="nav-links" aria-label="主导航"><a href="index.html">概览</a><a href="download.html">下载</a><a href="deployment.html">部署指南</a><a href="requirements.html">硬件要求</a><a href="demos.html">运行演示</a><a href="changelog.html">更新日志</a><a href="https://github.com/ZhongYeMay/MayOS">GitHub</a></nav><div class="nav-actions"><button type="button" id="theme" class="icon-btn" aria-label="切换主题">◐</button><button type="button" id="menu" class="icon-btn menu-toggle" aria-controls="nav" aria-expanded="false" aria-label="展开导航">☰</button></div></div></header>
+<main id="main">
+<section class="page-hero container">
+<h1>MayOS Linux64 硬盘版</h1>
+<p class="lead">0.5.4 Beta 4 开发预览。直接从 ext4 系统分区启动，桌面应用可从启动台打开 Firefox ESR。</p>
+<div class="specs"><span class="chip">x86_64 UEFI</span><span class="chip">Linux 6.12.118 LTS</span><span class="chip">Firefox ESR 153.8.0</span><span class="chip">A/B 原地升级</span></div>
+<div class="actions"><a class="btn blue" href="#install">获取硬盘安装包</a><a class="btn secondary" href="#recording">观看 QEMU 实录</a></div>
+</section>
+<section class="container">
+<article class="video-card" id="recording">
+<div class="video-wrap video-wrap-linux64"><video controls playsinline preload="metadata" poster="media/MayOS-Linux64-Beta4-Firefox.png" aria-label="MayOS Linux64 硬盘启动与升级实录"><source src="media/MayOS-Linux64-Beta4-Disk-Boot-Firefox-Upgrade.mp4" type="video/mp4"></video></div>
+<div class="video-body"><h2>硬盘启动、Firefox 与原地升级实录</h2>
+<p>视频使用 QEMU 和 OVMF，从同一块虚拟硬盘记录。升级演示使用验收专用的 Beta 5 测试包，包含试启动、自动回退及确认后的冷启动。为便于观看，视频剪去了部分等待时间。</p>
+<div class="video-foot"><a class="btn secondary" href="media/MayOS-Linux64-Beta4-Disk-Boot-Firefox-Upgrade.mp4" download>下载 MP4</a><a class="link" href="media/MayOS-Linux64-Beta4-QEMU.txt">验收记录</a></div></div>
+</article>
+<article class="download-panel" id="install">
+<h2>创建可启动的 Linux64 硬盘</h2>
+<p>下载程序会获取约 491 MiB 的根镜像并校验 SHA-256。安装工具生成新磁盘文件，创建时请设置自己的本地管理员密码。</p>
+<div class="actions"><a class="btn blue" href="media/fetch-mayos-linux64-beta4.py" download>下载安装包获取工具</a><a class="btn secondary" href="media/mayos-linux64-beta4-disk.py" download>下载安装工具 mayos-linux64-beta4-disk.py</a><a class="link" href="media/mayos-linux64-beta4-payload.json">文件清单与 SHA-256</a></div>
+<p>在 Debian 或兼容的 Linux 主机安装 Python 3、<code>fdisk</code>、<code>grub-efi-amd64-bin</code>、<code>mtools</code>、<code>dosfstools</code>、<code>e2fsprogs</code> 和 <code>openssl</code>。将下载程序和 <code>mayos-linux64-beta4-disk.py</code> 放到同一目录后执行。</p>
+<pre><code>python3 fetch-mayos-linux64-beta4.py
+python3 mayos-linux64-beta4-disk.py create --bundle MayOS-0.5.4-beta.4-Linux64-Root.img.gz \
+  --sha256 b8a92293fabe887b4c6b43fbae0444453eeb4a0d4517655805c8c730eb3555c3 \
+  --output MayOS-Linux64.raw</code></pre>
+<p>新磁盘文件的逻辑容量约为 4.1 GiB。QEMU 启动时使用 x86_64 UEFI（OVMF），挂载该文件为原始硬盘，建议分配至少 2 GiB 内存。实体机部署要求空白整盘、512 字节逻辑扇区。当前验收范围是 QEMU，测试时关闭了 Secure Boot。</p>
+<details><summary>QEMU 启动命令（Linux 主机）</summary>
+<p>安装 <code>qemu-system-x86</code> 和 <code>ovmf</code>，确认本机固件路径，再用刚创建的磁盘启动。</p>
+<pre><code>cp -n /usr/share/OVMF/OVMF_VARS_4M.fd mayos-vars.fd
+qemu-system-x86_64 -machine pc -m 2048 -smp 4 -vga std -boot c \
+  -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
+  -drive if=pflash,format=raw,file=mayos-vars.fd \
+  -drive file=MayOS-Linux64.raw,format=raw,if=virtio \
+  -nic user,model=virtio-net-pci</code></pre></details>
+<div class="actions"><a class="link" href="https://github.com/ZhongYeMay/MayOS/blob/9c733b221e0dde929f4f14f505d89d942e6021b5/versions/0.5.4-beta.4-dev/linux/installed/README.md">完整安装与部署说明</a></div>
+<details><summary>查看分卷下载链接</summary><ol>
+<li><a href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/7377e253021f6b5a614e3462e994933604c2317f/MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part01">下载第 1 卷</a> · 64.0 MiB</li>
+<li><a href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/7377e253021f6b5a614e3462e994933604c2317f/MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part02">下载第 2 卷</a> · 64.0 MiB</li>
+<li><a href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/7377e253021f6b5a614e3462e994933604c2317f/MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part03">下载第 3 卷</a> · 64.0 MiB</li>
+<li><a href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/7377e253021f6b5a614e3462e994933604c2317f/MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part04">下载第 4 卷</a> · 64.0 MiB</li>
+<li><a href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/7377e253021f6b5a614e3462e994933604c2317f/MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part05">下载第 5 卷</a> · 64.0 MiB</li>
+<li><a href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/7377e253021f6b5a614e3462e994933604c2317f/MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part06">下载第 6 卷</a> · 64.0 MiB</li>
+<li><a href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/7377e253021f6b5a614e3462e994933604c2317f/MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part07">下载第 7 卷</a> · 64.0 MiB</li>
+<li><a href="https://raw.githubusercontent.com/ZhongYeMay/MayOS/7377e253021f6b5a614e3462e994933604c2317f/MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part08">下载第 8 卷</a> · 43.4 MiB</li>
+</ol><p>将八个分卷按编号依次拼接成 <code>MayOS-0.5.4-beta.4-Linux64-Root.img.gz</code>，然后用上面的 SHA-256 校验。</p></details>
+</article>
+<article class="download-panel" id="upgrade">
+<h2>原地升级和回退</h2>
+<p>安装完成后，从虚拟终端登录 <code>mayos</code>。升级工具将通过校验的新版写入备用系统分区。用户文件和 Firefox 配置留在独立的 <code>/home</code> 分区。</p>
+<pre><code>sudo mayos-linux-update status
+sudo mayos-linux-update stage --bundle /path/to/new-root.img.gz --sha256 &lt;发布页的 SHA-256&gt;
+sudo reboot
+sudo mayos-linux-update confirm</code></pre>
+<p>在试启动的新系统中确认后，才会切换默认启动槽。试用后直接重启会返回旧槽。Beta 4 是当前公开的安装镜像，视频中的 Beta 5 仅用于验收。</p>
+</article>
+</section>
+
+</main>
+<footer class="site-footer"><div class="container"><div class="footer-bottom"><span>© 2023–2026 MayOS Team</span><span>Experimental OS · QEMU validation before installation</span></div></div></footer>
+</body></html>

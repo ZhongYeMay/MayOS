@@ -1,0 +1,48 @@
+{
+  "commit": "7377e253021f6b5a614e3462e994933604c2317f",
+  "name": "MayOS-0.5.4-beta.4-Linux64-Root.img.gz",
+  "bytes": 515242230,
+  "sha256": "b8a92293fabe887b4c6b43fbae0444453eeb4a0d4517655805c8c730eb3555c3",
+  "parts": [
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part01",
+      "bytes": 67108864,
+      "sha256": "89a54df5ae6c446a1a237d34fc544b9924abb31ca0723a896727c47d9c1d3167"
+    },
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part02",
+      "bytes": 67108864,
+      "sha256": "563ab761872a373f4964db24ec172bf5619eac88bb2384635379cc20f56890e6"
+    },
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part03",
+      "bytes": 67108864,
+      "sha256": "0910adcdac745f66c1972467473d14b6f8482a138c2aad73364dc0333f7aff58"
+    },
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part04",
+      "bytes": 67108864,
+      "sha256": "033f6920b5eec42abd6088c047115bf47f28be57776b54c514b73fec900e611a"
+    },
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part05",
+      "bytes": 67108864,
+      "sha256": "6389caa429d2c53b247d6859668b39c71744963d1c49f9e097b1edca920ea850"
+    },
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part06",
+      "bytes": 67108864,
+      "sha256": "5b6f4804ce15a310a4f940a06036bdbd87c32311f7749e30d44d43918b1745df"
+    },
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part07",
+      "bytes": 67108864,
+      "sha256": "75dc2bb035d3fb3fd13a72ddf724902e18a22804f104054fc7938a5ad45037e7"
+    },
+    {
+      "name": "MayOS-0.5.4-beta.4-Linux64-Root.img.gz.part08",
+      "bytes": 45480182,
+      "sha256": "d61ea2dd7ab447fc068da60703ad17a6cee1e2bf5e9651755830169134ae904f"
+    }
+  ]
+}

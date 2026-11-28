@@ -1,0 +1,22 @@
+MayOS Linux64 0.5.4 Beta 4 · QEMU / OVMF acceptance
+
+firefox-esr	153.8.0esr-1~deb13u1
+linux-image-amd64	6.12.118-1
+
+PASS: installed desktop and unprivileged sandboxed Firefox from disk loaded the local test page
+PASS: linux64-trial-B-first booted 0.5.4-beta.5 from B with the existing data and Firefox profile
+PASS: linux64-rollback-A booted 0.5.4-beta.4 from A with the existing data and Firefox profile
+PASS: linux64-trial-B-confirm booted 0.5.4-beta.5 from B with the existing data and Firefox profile
+PASS: linux64-confirmed-B booted 0.5.4-beta.5 from B with the existing data and Firefox profile
+Firefox rendered the real local HTML test page
+01-hard-disk: cold booted 0.5.4-beta.4 on A; user file verified
+01-hard-disk: real update image written and reread successfully
+02-trial: cold booted 0.5.4-beta.5 on B; user file verified
+03-rollback: cold booted 0.5.4-beta.4 on A; user file verified
+03-rollback: real update image written and reread successfully
+04-confirm: cold booted 0.5.4-beta.5 on B; user file verified
+Trial slot confirmed from the installed system
+05-confirmed: cold booted 0.5.4-beta.5 on B; user file verified
+
+PASS all public parts reproduced the exact tested installer payload b8a92293fabe887b4c6b43fbae0444453eeb4a0d4517655805c8c730eb3555c3
+Recording SHA-256 490bfd9dc1935942bab2606cf92d19330910d590b464f9e8316be09836feb451
