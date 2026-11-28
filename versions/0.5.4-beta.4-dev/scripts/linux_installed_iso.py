@@ -16,7 +16,7 @@ from dual_iso import ROOT, sha256, stage_menu
 from linux import cpio_member
 
 MODULES = (
-    "loop", "isofs", "squashfs", "crc32c_generic", "ext4", "vfat", "nls_cp437", "nls_iso8859-1",
+    "loop", "isofs", "squashfs", "crc32c_generic", "ext4", "vfat", "nls_cp437", "nls_iso8859_1", "nls_ascii", "nls_utf8",
     "ata_piix", "ahci", "nvme", "vmd", "virtio_pci", "virtio_blk", "virtio_scsi",
     "sd_mod", "sr_mod", "xhci_pci", "ehci_pci", "uhci_hcd", "usb_storage", "uas",
     "usbhid", "hid_generic", "atkbd", "bochs", "virtio_gpu", "evdev",

@@ -263,7 +263,8 @@ def media_esp(work, ids, media):
         volume, stdout=subprocess.DEVNULL)
     mount = work / "esp"
     mount.mkdir()
-    run("mount", "-o", "loop,nosuid,nodev,noexec", volume, mount)
+    run("mount", "-t", "vfat", "-o",
+        "loop,nosuid,nodev,noexec,iocharset=iso8859-1,codepage=437,quiet", volume, mount)
     try:
         shutil.copytree(media / "disk-efi", mount / "EFI")
         shutil.copytree(media / "boot" / "grub" / "fonts", mount / "boot" / "grub" / "fonts")
